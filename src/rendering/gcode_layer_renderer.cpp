@@ -7,6 +7,7 @@
 #include "gcode_parser.h"
 #include "memory_monitor.h"
 #include "memory_utils.h"
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -460,7 +461,12 @@ bool GCodeLayerRenderer::has_support_detection() const {
 void GCodeLayerRenderer::destroy_cache() {
     if (cache_buf_) {
         if (lv_is_initialized()) {
+            // Mechanism B (#929): cache_buf_ is referenced by parallel-render-thread
+            // draw tasks via dsc.src in blit_cache(); freeing it while a task is
+            // in flight UAFs in argb8888_image_blend.
+            crash_handler::breadcrumb::note("cache_buf", "destroy_pre");
             lv_draw_buf_destroy(cache_buf_);
+            crash_handler::breadcrumb::note("cache_buf", "destroy_post");
         }
         cache_buf_ = nullptr;
     }
