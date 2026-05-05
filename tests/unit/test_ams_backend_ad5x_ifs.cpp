@@ -110,6 +110,14 @@ class Ad5xIfsTestAccess {
     static bool has_per_port_sensors(const AmsBackendAd5xIfs& b) {
         return b.has_per_port_sensors_;
     }
+    static size_t external_sync_count(const AmsBackendAd5xIfs& b) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        return b.external_sync_count_;
+    }
+    static void set_var_prefix(AmsBackendAd5xIfs& b, const std::string& prefix) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.var_prefix_ = prefix;
+    }
     static bool has_ifs_vars(const AmsBackendAd5xIfs& b) {
         std::lock_guard<std::mutex> lock(b.mutex_);
         return b.has_ifs_vars_;
@@ -193,20 +201,19 @@ class Ad5xIfsTestAccess {
                                       std::unique_ptr<helix::ams::FilamentSlotOverrideStore> s) {
         b.override_store_ = std::move(s);
     }
-    // Drive check_hardware_event_clear directly with a caller-chosen observed
+    // Drive check_external_color_change directly with a caller-chosen observed
     // color. The only way observed_color == 0 ever reaches the check site in
     // production is through a parse path whose output color literally parses
     // to 0 — parse_adventurer_json never produces that (empty hex becomes
     // 0x808080 gray). Exposing the check lets us assert the "empty reading
-    // must not update baseline" contract unambiguously. Uses a throwaway
-    // SlotInfo so tests don't have to materialize an entry just to probe the
-    // guard; tests that care about the SlotInfo reset go through the parse
-    // path instead.
-    static void check_hardware_event_clear(AmsBackendAd5xIfs& b, int slot_index,
-                                           uint32_t observed_color) {
+    // must not update baseline" contract unambiguously. `slot_has_filament`
+    // defaults to true so existing call sites that just want to drive the
+    // baseline-update path don't need to think about presence semantics.
+    static void check_external_color_change(AmsBackendAd5xIfs& b, int slot_index,
+                                            uint32_t observed_color,
+                                            bool slot_has_filament = true) {
         std::lock_guard<std::mutex> lock(b.mutex_);
-        SlotInfo scratch;
-        b.check_hardware_event_clear(slot_index, observed_color, scratch);
+        b.check_external_color_change(slot_index, observed_color, slot_has_filament);
     }
     static std::optional<uint32_t> last_firmware_color(const AmsBackendAd5xIfs& b, int slot_index) {
         std::lock_guard<std::mutex> lock(b.mutex_);
@@ -2608,16 +2615,20 @@ TEST_CASE("AD5X IFS set_slot_info(persist=true) with pre-existing override repla
 }
 
 // ==========================================================================
-// Task 11: hardware-event override clear. When the firmware-reported color
-// for a slot changes (user physically swapped spool), the stored override
-// must be cleared so stale brand / spool_name / spoolman_id from the previous
-// spool don't bleed onto the new one. Initial startup observations are a
-// baseline and must NEVER trigger a clear.
+// External color/material edits (Mainsail console, AD5X LCD, native zmod
+// dialog, CHANGE_ZCOLOR from any non-Helix source) must REFRESH the Moonraker
+// DB lane_data entry that Orca's MoonrakerPrinterAgent reads — they must NOT
+// wipe the brand/spool_name/spoolman_id metadata. (compulsivejohnny on
+// Discord: lane_data went stale after every external CHANGE_ZCOLOR because
+// the previous "color change = physical swap" heuristic cleared the record.)
+// Initial startup observations are a baseline and never trigger a sync.
+// Genuine spool removal is detected by the eject path (presence true→false
+// in parse_adventurer_json) and clears the override there.
 // ==========================================================================
 
-TEST_CASE("AD5X IFS firmware color change clears the override (hardware swap detected)",
+TEST_CASE("AD5X IFS external color change syncs lane_data, preserves brand metadata",
           "[ams][ad5x_ifs][filament_slot_override][slow]") {
-    Ad5xIfsTmpCacheDir tmp("task11_hw_swap_clears");
+    Ad5xIfsTmpCacheDir tmp("ext_color_change_syncs");
     MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
     helix::PrinterState state;
     state.init_subjects(false);
@@ -2629,15 +2640,15 @@ TEST_CASE("AD5X IFS firmware color change clears the override (hardware swap det
     FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
     Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
 
-    // Seed a lane_data entry in the mock DB so we can verify clear_async
-    // actually deletes it from Moonraker.
+    // Seed a lane_data entry in the mock DB plus a matching in-memory override
+    // — what the override store load would produce after a Helix-initiated edit.
     api.mock_set_db_value("lane_data", "lane1",
                           nlohmann::json{{"vendor", "Polymaker"},
                                          {"spool_id", 42},
+                                         {"spool_name", "PolyLite Orange"},
                                          {"material", "PLA"},
                                          {"color", "#FF5500"}});
 
-    // Seed the in-memory override to match (simulating post-on_started() load).
     helix::ams::FilamentSlotOverride ovr;
     ovr.brand = "Polymaker";
     ovr.spool_name = "PolyLite Orange";
@@ -2646,39 +2657,301 @@ TEST_CASE("AD5X IFS firmware color change clears the override (hardware swap det
     ovr.color_rgb = 0xFF5500;
     Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
 
-    // First parse: firmware reports color FF5500 — this is the BASELINE. No
-    // clear even though it's the first observation; override still wins.
+    // First parse: firmware reports color FF5500 — establishes BASELINE. No
+    // sync (first observation), override still wins.
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
         "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
     })");
 
     {
         auto info = backend.get_slot_info(0);
-        CHECK(info.brand == "Polymaker"); // override still present
+        CHECK(info.brand == "Polymaker");
         CHECK(info.color_rgb == 0xFF5500u);
     }
     CHECK(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
-    // DB entry untouched.
     CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
 
-    // Second parse: firmware reports DIFFERENT color — physical swap detected.
-    // Override must be cleared (in-memory map + MR DB lane_data entry).
+    // Second parse: firmware reports a DIFFERENT color (and material). This is
+    // an external edit — sync override + lane_data, KEEP brand/spool/spoolman.
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
-        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PLA"}
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
     })");
 
     {
         auto info = backend.get_slot_info(0);
-        // Override cleared — brand now blank (no override to layer).
-        CHECK(info.brand.empty());
-        CHECK(info.spool_name.empty());
-        CHECK(info.spoolman_id == 0);
-        // Firmware's new color flows through untouched.
+        // Brand metadata preserved.
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spool_name == "PolyLite Orange");
+        CHECK(info.spoolman_id == 42);
+        // Color + material reflect firmware truth.
         CHECK(info.color_rgb == 0x0055FFu);
+        CHECK(info.material == "PETG");
+    }
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->spoolman_id == 42);
+    CHECK(staged->color_rgb == 0x0055FFu);
+    CHECK(staged->material == "PETG");
+
+    // Moonraker DB lane1 entry refreshed by save_async — Orca now sees the
+    // new color/material plus the preserved vendor + spool_id.
+    auto db = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!db.is_null());
+    CHECK(db.value("color", "") == "#0055FF");
+    CHECK(db.value("material", "") == "PETG");
+    CHECK(db.value("vendor", "") == "Polymaker");
+    CHECK(db.value("spool_id", 0) == 42);
+}
+
+TEST_CASE("AD5X IFS external color change with no override creates minimal lane_data record",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // When zmod owns slot color/material truth and the user has never touched
+    // the slot via Helix, lane_data was previously empty → Orca had no way to
+    // see the slot's color from MoonrakerPrinterAgent. Now we publish a
+    // minimal record (color + material) so Orca's view stays useful.
+    Ad5xIfsTmpCacheDir tmp("ext_color_change_creates_minimal");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // No seeded override. lane_data starts empty.
+    REQUIRE(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // First parse: establishes baseline at FF5500. No sync (baseline).
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Second parse: external color change. Minimal override created + lane_data
+    // record published.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
+    })");
+
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->color_rgb == 0x0055FFu);
+    CHECK(staged->material == "PETG");
+    // brand etc. left at defaults — no synthetic vendor name.
+    CHECK(staged->brand.empty());
+    CHECK(staged->spoolman_id == 0);
+
+    auto db = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!db.is_null());
+    CHECK(db.value("color", "") == "#0055FF");
+    CHECK(db.value("material", "") == "PETG");
+    // vendor field absent (to_lane_data_record omits empty strings).
+    CHECK_FALSE(db.contains("vendor"));
+}
+
+TEST_CASE("AD5X IFS eject (empty Adventurer5M.json color) clears the override",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Genuine spool removal: zmod sets ffmColor to "" when the user ejects.
+    // parse_adventurer_json must clear the override (brand/spool_name/spoolman
+    // describe the gone spool) and delete the lane_data entry.
+    Ad5xIfsTmpCacheDir tmp("eject_clears_override");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    api.mock_set_db_value("lane_data", "lane1",
+                          nlohmann::json{{"vendor", "Polymaker"},
+                                         {"spool_id", 42},
+                                         {"material", "PLA"},
+                                         {"color", "#FF5500"}});
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spoolman_id = 42;
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Loaded state: presence becomes true via the non-empty color.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    REQUIRE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+
+    // Eject: ffmColor1 empty. parse_adventurer_json's eject branch clears
+    // the override (and the MR DB lane_data entry) directly.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "", "ffmType1": ""}
+    })");
+
+    {
+        auto info = backend.get_slot_info(0);
+        CHECK(info.brand.empty());
+        CHECK(info.spoolman_id == 0);
     }
     CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
-    // Moonraker DB lane1 entry was deleted by clear_async.
     CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+}
+
+// ==========================================================================
+// _IFS_VARS mirror: when an external CHANGE_ZCOLOR fires, parse_adventurer_json
+// must mirror the new colors_/materials_ snapshot into the lessWaste/bambufy
+// plugin's <prefix>_colors / <prefix>_types save_variables. Audited 2026-05-04
+// against Hrybmo/lesswaste and function3d/bambufy: neither plugin self-syncs
+// in response to CHANGE_ZCOLOR, so without this mirror the plugin's runout-
+// recovery alternate-port lookup, smart-purge skip decision, and
+// _IFS_COLORS_ASSIGN dialog all run against stale color data and silently
+// print the wrong color or skip the wrong purge.
+// ==========================================================================
+
+namespace {
+class GcodeCapturingBackend : public AmsBackendAd5xIfs {
+  public:
+    using AmsBackendAd5xIfs::AmsBackendAd5xIfs;
+    std::vector<std::string> captured_gcodes;
+    AmsError execute_gcode(const std::string& gcode) override {
+        captured_gcodes.push_back(gcode);
+        return AmsErrorHelper::success();
+    }
+    bool any_gcode_starts_with(const std::string& prefix) const {
+        for (const auto& g : captured_gcodes) {
+            if (g.rfind(prefix, 0) == 0) return true;
+        }
+        return false;
+    }
+};
+} // namespace
+
+TEST_CASE("AD5X IFS external color change mirrors colors+types into _IFS_VARS",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    Ad5xIfsTmpCacheDir tmp("ifs_vars_mirror_external");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    GcodeCapturingBackend backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    Ad5xIfsTestAccess::set_var_prefix(backend, "less_waste");
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // First parse establishes baseline — no sync, no mirror.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    CHECK_FALSE(backend.any_gcode_starts_with("_IFS_VARS colors="));
+    CHECK_FALSE(backend.any_gcode_starts_with("_IFS_VARS types="));
+
+    // External color change → sync fires, _IFS_VARS mirror dispatches.
+    backend.captured_gcodes.clear();
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
+    })");
+    REQUIRE(backend.any_gcode_starts_with("_IFS_VARS colors="));
+    REQUIRE(backend.any_gcode_starts_with("_IFS_VARS types="));
+
+    // Find the actual payloads — should reflect the new firmware truth.
+    bool found_color_payload = false;
+    bool found_type_payload = false;
+    for (const auto& g : backend.captured_gcodes) {
+        if (g.find("_IFS_VARS colors=") == 0 && g.find("'0055FF'") != std::string::npos)
+            found_color_payload = true;
+        if (g.find("_IFS_VARS types=") == 0 && g.find("'PETG'") != std::string::npos)
+            found_type_payload = true;
+    }
+    CHECK(found_color_payload);
+    CHECK(found_type_payload);
+
+    // lessWaste prefix → no SHOW=0 suffix (lessWaste's _IFS_VARS doesn't
+    // accept it — adding the param would break the macro call).
+    for (const auto& g : backend.captured_gcodes) {
+        if (g.rfind("_IFS_VARS ", 0) == 0) {
+            CHECK(g.find("SHOW=0") == std::string::npos);
+        }
+    }
+}
+
+TEST_CASE("AD5X IFS bambufy prefix gets SHOW=0 to suppress _IFS_VARS echo",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    Ad5xIfsTmpCacheDir tmp("ifs_vars_mirror_bambufy_show0");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    GcodeCapturingBackend backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    Ad5xIfsTestAccess::set_var_prefix(backend, "bambufy");
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // Establish baseline + drive an external change.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    backend.captured_gcodes.clear();
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
+    })");
+
+    // bambufy's _IFS_VARS macro accepts SHOW=0 to skip the RESPOND echo
+    // (lesswaste does not). Both colors+types pushes get the suffix.
+    bool colors_has_show0 = false;
+    bool types_has_show0 = false;
+    for (const auto& g : backend.captured_gcodes) {
+        if (g.rfind("_IFS_VARS colors=", 0) == 0 && g.find("SHOW=0") != std::string::npos)
+            colors_has_show0 = true;
+        if (g.rfind("_IFS_VARS types=", 0) == 0 && g.find("SHOW=0") != std::string::npos)
+            types_has_show0 = true;
+    }
+    CHECK(colors_has_show0);
+    CHECK(types_has_show0);
+}
+
+TEST_CASE("AD5X IFS mirror skipped when has_ifs_vars_ is false (stock zmod)",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Stock zmod (no lessWaste/bambufy plugin) has no _IFS_VARS macro to call.
+    // Sync still fires (lane_data still updates for Orca) but the mirror push
+    // is skipped — calling _IFS_VARS on a printer without the macro just
+    // produces a "Unknown command" gcode error.
+    Ad5xIfsTmpCacheDir tmp("ifs_vars_mirror_stock_zmod");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    GcodeCapturingBackend backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, false); // stock zmod
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    backend.captured_gcodes.clear();
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
+    })");
+
+    // Sync counter bumped (lane_data still sync'd via save_async).
+    CHECK(Ad5xIfsTestAccess::external_sync_count(backend) > 0);
+    // ...but no _IFS_VARS dispatched.
+    CHECK_FALSE(backend.any_gcode_starts_with("_IFS_VARS"));
 }
 
 // Regression: bundle AQ6DALWG, raza616 v0.99.51, "filament type changing on
@@ -2776,19 +3049,29 @@ TEST_CASE("AD5X IFS empty colors_[] on boot does NOT establish phantom baseline"
     CHECK(Ad5xIfsTestAccess::last_firmware_color(backend, 0) == 0x898989u);
 
     // Boot path step 3: a SUBSEQUENT firmware parse with a different color
-    // must still detect the swap correctly — the fix must not break the
-    // legitimate hardware-swap path.
+    // is an external edit — sync override + lane_data, KEEP brand metadata.
+    // (Pre-lane_data-sync rework, this branch interpreted the color delta as
+    // a physical-swap signal and wiped the override entirely; that behavior
+    // is what caused the lane_data sync regression compulsivejohnny hit.)
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
         "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
     })");
     {
         auto info = backend.get_slot_info(0);
-        // Override cleared — brand blank, firmware truth flows through.
-        CHECK(info.brand.empty());
-        CHECK(info.spoolman_id == 0);
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spoolman_id == 42);
         CHECK(info.color_rgb == 0xFF5500u);
+        // External edit changed material to firmware truth — override.material
+        // is synced too, since material is firmware-owned for AD5X-IFS (it has
+        // to be in zmod's whitelist or the firmware errors). Brand metadata
+        // is the only thing the user owns independently and it persists.
+        CHECK(info.material == "PLA");
     }
-    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    auto staged3 = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged3.has_value());
+    CHECK(staged3->brand == "Polymaker");
+    CHECK(staged3->color_rgb == 0xFF5500u);
+    CHECK(staged3->material == "PLA");
 }
 
 TEST_CASE("AD5X IFS first firmware color observation does NOT clear override",
@@ -2855,7 +3138,7 @@ TEST_CASE("AD5X IFS first firmware color observation does NOT clear override",
 // ------------------------------------------------------------------
 // Task 11 bug fix regression coverage: set_slot_info must not wipe the
 // override it just staged. Before the fix, set_slot_info staged the
-// new override, then update_slot_from_state -> check_hardware_event_clear
+// new override, then update_slot_from_state -> check_external_color_change
 // compared the user's new color against the prior firmware baseline and
 // wiped the freshly-staged override.
 // ------------------------------------------------------------------
@@ -2994,12 +3277,16 @@ TEST_CASE("AD5X IFS firmware color unchanged across parses does NOT clear",
     CHECK(staged->brand == "Polymaker");
 }
 
-TEST_CASE("AD5X IFS firmware color change with no override is a no-op",
+TEST_CASE("AD5X IFS firmware color change with no override creates a minimal one",
           "[ams][ad5x_ifs][filament_slot_override]") {
-    // No override seeded. A color change must not crash, must not error,
-    // and get_slot_info should simply reflect the new firmware color.
+    // No override seeded and no override store wired up — sync_override_to_
+    // firmware_locked still creates the in-memory minimal override (and
+    // skips save_async cleanly when override_store_ is null). This proves
+    // the helper is null-safe and that lane_data publication doesn't gate
+    // the in-memory sync.
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
+    // First parse establishes baseline only — no sync.
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
         "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
     })");
@@ -3008,18 +3295,24 @@ TEST_CASE("AD5X IFS firmware color change with no override is a no-op",
         CHECK(info.color_rgb == 0xFF5500u);
         CHECK(info.brand.empty());
     }
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
 
+    // Second parse: external color change. Minimal override created (carries
+    // color + material only; brand etc. left at defaults).
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
-        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PLA"}
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
     })");
     {
         auto info = backend.get_slot_info(0);
         CHECK(info.color_rgb == 0x0055FFu);
+        CHECK(info.material == "PETG");
         CHECK(info.brand.empty());
     }
-
-    // No override was ever created — still nothing staged.
-    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->color_rgb == 0x0055FFu);
+    CHECK(staged->material == "PETG");
+    CHECK(staged->brand.empty());
 }
 
 TEST_CASE("AD5X IFS empty firmware color does not update the baseline",
@@ -3029,7 +3322,7 @@ TEST_CASE("AD5X IFS empty firmware color does not update the baseline",
     // subsequent swap (the next non-empty poll would look like "0 -> new"
     // which would wrongly clear), OR worse, clear on every unread poll.
     //
-    // Drive check_hardware_event_clear directly — the Adventurer5M.json parse
+    // Drive check_external_color_change directly — the Adventurer5M.json parse
     // path can't produce firmware_color==0 (empty hex becomes 0x808080 gray),
     // so a direct call is the only way to exercise the guard unambiguously.
     AmsBackendAd5xIfs backend(nullptr, nullptr);
@@ -3039,20 +3332,20 @@ TEST_CASE("AD5X IFS empty firmware color does not update the baseline",
     Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
 
     // Firmware reports FF5500 — baseline established.
-    Ad5xIfsTestAccess::check_hardware_event_clear(backend, 0, 0xFF5500);
+    Ad5xIfsTestAccess::check_external_color_change(backend, 0, 0xFF5500);
     REQUIRE(Ad5xIfsTestAccess::last_firmware_color(backend, 0) == 0xFF5500u);
     REQUIRE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
 
     // Firmware reports color 0 (empty/unread). Must NOT update baseline and
     // must NOT clear the override.
-    Ad5xIfsTestAccess::check_hardware_event_clear(backend, 0, 0);
+    Ad5xIfsTestAccess::check_external_color_change(backend, 0, 0);
     CHECK(Ad5xIfsTestAccess::last_firmware_color(backend, 0) == 0xFF5500u);
     CHECK(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
 
     // Firmware reports FF5500 again — still matches baseline, still no clear.
     // (If the zero-reading had wrongly overwritten the baseline, this would
     // look like "0 -> FF5500" and trigger a spurious clear.)
-    Ad5xIfsTestAccess::check_hardware_event_clear(backend, 0, 0xFF5500);
+    Ad5xIfsTestAccess::check_external_color_change(backend, 0, 0xFF5500);
     auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
     REQUIRE(staged.has_value());
     CHECK(staged->brand == "Polymaker");

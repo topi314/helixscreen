@@ -565,24 +565,25 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
     // Reverse tool mapping: find first tool that maps to this port
     entry->info.mapped_tool = find_first_tool_for_port(slot_index + 1);
 
-    // Hardware-event detection MUST run BEFORE apply_overrides. At this point
-    // entry->info.color_rgb is firmware-truth IF colors_[idx] was non-empty
-    // above; after apply_overrides it may be masked by a stale override and
-    // we'd miss the swap signal. Pass entry->info so the helper can reset
-    // override-exclusive fields in place when a clear fires (apply_overrides
-    // below is then a no-op on the cleared slot).
+    // External-edit detection MUST run BEFORE apply_overrides. entry->info
+    // .color_rgb is firmware-truth here IF colors_[idx] was non-empty above;
+    // after apply_overrides it would be masked by the (possibly stale)
+    // override and we'd miss the delta vs. the prior firmware baseline.
     //
-    // When colors_[idx] is empty we have NO firmware reading yet — entry->info
-    // .color_rgb is whatever was left there by the SlotInfo default
-    // (AMS_DEFAULT_SLOT_COLOR / 0x808080) or a prior apply_overrides leak. Pass
-    // 0 (the helper's "no signal" sentinel) so we don't establish a phantom
-    // baseline that would later be misread as a physical spool swap. Boot path:
-    // parse_save_variables / handle_status_update call update_slot_from_state
-    // BEFORE parse_adventurer_json fills in colors_[]; pre-fix this populated
-    // a 0x808080 baseline, then the first real parse triggered a bogus clear
-    // and wiped the user's saved overrides on every boot.
+    // When colors_[idx] is empty we have NO firmware reading yet —
+    // entry->info.color_rgb is whatever was left there by the SlotInfo
+    // default (AMS_DEFAULT_SLOT_COLOR / 0x808080) or a prior apply_overrides
+    // leak. Pass 0 (the helper's "no signal" sentinel) so we don't establish
+    // a phantom baseline that would later be misread as an external edit.
+    // Boot path: parse_save_variables / handle_status_update call
+    // update_slot_from_state BEFORE parse_adventurer_json fills in colors_[];
+    // pre-fix this populated a 0x808080 baseline, then the first real parse
+    // triggered a bogus sync.
     const uint32_t observed_color = colors_[idx].empty() ? 0u : entry->info.color_rgb;
-    check_hardware_event_clear(slot_index, observed_color, entry->info);
+    // Pass slot_has_filament so the helper skips creating a phantom override
+    // when a slot read came back as the empty-placeholder #808080 — the eject
+    // path in parse_adventurer_json clears the override explicitly.
+    check_external_color_change(slot_index, observed_color, port_presence_[idx]);
 
     // Layer user-configured overrides on top of firmware-reported data. Called
     // last so overrides win for any non-default field. Callers hold mutex_,
@@ -632,8 +633,8 @@ void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
         slot.material = o.material;
 }
 
-void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t observed_color,
-                                                   SlotInfo& slot) {
+bool AmsBackendAd5xIfs::check_external_color_change(int slot_index, uint32_t observed_color,
+                                                    bool slot_has_filament) {
     // observed_color is whatever color this parse (or caller) believes is
     // currently in the slot — typically firmware-truth from the parse path,
     // but set_slot_info() also pre-updates the baseline with the user's
@@ -642,51 +643,92 @@ void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t obse
     // from what we last saw?" contract is the same.
     //
     // observed_color == 0 is "no reading" (empty slot, unread, transient JSON
-    // parse race). Treat as non-signal: don't update the baseline, don't clear.
+    // parse race). Treat as non-signal: don't update the baseline, don't sync.
     // Otherwise every empty-slot poll would overwrite a real prior color and
-    // mask a genuine hardware swap on the next non-empty poll.
+    // mask a genuine subsequent edit on the next non-empty poll.
     if (observed_color == 0)
-        return;
+        return false;
 
     auto it = last_firmware_color_.find(slot_index);
     if (it == last_firmware_color_.end()) {
         // First observation for this slot — establish baseline. Even if the
         // override's color_rgb differs from firmware, the initial startup
-        // observation is NEVER a "swap" signal. apply_overrides will still
-        // run after us and the override wins.
+        // observation is NEVER an external-edit signal. apply_overrides will
+        // still run after us and the override wins.
         last_firmware_color_[slot_index] = observed_color;
         spdlog::debug("{} Slot {} baseline color: #{:06X}", backend_log_tag(), slot_index,
                       observed_color);
-        return;
+        return false;
     }
     if (it->second == observed_color)
-        return; // unchanged — no swap signal
+        return false; // unchanged — no edit signal
 
     // Observed color changed. Record the new color as the baseline before
-    // doing anything else so a failed clear_async doesn't make us re-fire
+    // doing anything else so a failed save_async doesn't make us re-fire
     // every poll.
     const uint32_t old_color = it->second;
     it->second = observed_color;
 
-    auto ovr_it = overrides_.find(slot_index);
-    if (ovr_it == overrides_.end()) {
+    if (!slot_has_filament) {
+        // Empty slot reads back as the placeholder #808080 in parse_adventurer_json
+        // — that's not an "edit," it's the absence of a reading. Eject is
+        // handled separately by parse_adventurer_json calling
+        // clear_override_locked when presence flips false. Just update the
+        // baseline so we don't repeat this branch every poll.
         spdlog::debug("{} Slot {} firmware color changed #{:06X} -> #{:06X} "
-                      "(no override to clear)",
+                      "(slot empty — sync skipped, eject handled by parse path)",
                       backend_log_tag(), slot_index, old_color, observed_color);
-        return;
+        return false;
     }
 
     spdlog::info("{} Slot {} firmware color changed #{:06X} -> #{:06X}, "
-                 "clearing override (physical spool swap detected)",
+                 "syncing override + Moonraker DB lane_data (external edit detected)",
                  backend_log_tag(), slot_index, old_color, observed_color);
 
-    // Delegate the erase + field reset + clear_async to the public method so
-    // explicit user-initiated clears and hardware-event clears share one
-    // field-reset policy. Caller holds mutex_ and the public method is
-    // designed to be called with mutex_ held (it locks internally but the
-    // lock is reentrant-free by contract — the helper below runs the locked
-    // work inline when the caller already owns the lock).
-    clear_override_locked(slot_index, slot);
+    // External edit (Mainsail console, AD5X LCD, native zmod dialog,
+    // CHANGE_ZCOLOR from any non-Helix path). Refresh the override's
+    // color_rgb + material — preserving brand/spool_name/spoolman_id —
+    // and push the result to lane_data so OrcaSlicer's MoonrakerPrinterAgent
+    // sees the new state. The caller's next apply_overrides() call lays the
+    // refreshed override back over entry->info; since color_rgb + material
+    // now match firmware-truth, that's a no-op for those fields.
+    sync_override_to_firmware_locked(slot_index, observed_color,
+                                     materials_[static_cast<size_t>(slot_index)]);
+    return true;
+}
+
+bool AmsBackendAd5xIfs::sync_override_to_firmware_locked(int slot_index,
+                                                         uint32_t firmware_color,
+                                                         const std::string& firmware_material) {
+    auto& ovr = overrides_[slot_index]; // creates a default-constructed entry if absent
+    const bool color_changed = ovr.color_rgb != firmware_color;
+    const bool material_changed = ovr.material != firmware_material;
+    if (!color_changed && !material_changed)
+        return false; // already in sync; don't churn lane_data
+
+    ovr.color_rgb = firmware_color;
+    ovr.material = firmware_material;
+    // updated_at left as-is — save_async stamps a fresh value so the on-disk
+    // record's scan_time wins over any local clock skew.
+    //
+    // parse_adventurer_json reads external_sync_count_ before/after its loop
+    // to decide whether to also push an _IFS_VARS mirror to the
+    // lessWaste/bambufy plugin's save_variables — see the comment block
+    // there for why that's required (the plugins don't self-sync).
+    ++external_sync_count_;
+
+    if (override_store_) {
+        helix::ams::FilamentSlotOverride snapshot = ovr;
+        const std::string tag = backend_log_tag();
+        override_store_->save_async(
+            slot_index, snapshot,
+            [tag, slot_index](bool success, const std::string& err) {
+                if (!success) {
+                    spdlog::warn("{} lane_data sync failed for slot {}: {}", tag, slot_index, err);
+                }
+            });
+    }
+    return true;
 }
 
 void AmsBackendAd5xIfs::clear_override_locked(int slot_index, SlotInfo& slot) {
@@ -1132,19 +1174,19 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
         }
 
         // Treat the user's chosen color as the new "firmware truth" baseline
-        // so check_hardware_event_clear() doesn't interpret the upcoming
-        // update_slot_from_state() call as a physical spool swap and wipe
-        // the override we just staged. The semantics match user intent:
-        // "I'm telling the system this IS the current color." The next
-        // *real* firmware swap will then be detected against the user's
-        // chosen color.
+        // so check_external_color_change() doesn't interpret the upcoming
+        // update_slot_from_state() call as a foreign edit and fire a
+        // redundant lane_data sync. The semantics match user intent: "I'm
+        // telling the system this IS the current color." A subsequent
+        // genuinely-external CHANGE_ZCOLOR will be detected against the
+        // user's chosen color.
         //
         // Applies to both persist=true (override just staged above) and
-        // persist=false (preview must not wipe a PREVIOUSLY saved override
-        // when the preview color differs from last_firmware_color_). Guard
-        // on color_rgb != 0 — 0 means "no color change" here and must not
-        // overwrite the baseline (same contract as check_hardware_event_clear
-        // treats a 0 reading as "no signal").
+        // persist=false (preview must not retrigger a sync against
+        // last_firmware_color_). Guard on color_rgb != 0 — 0 means "no
+        // color change" here and must not overwrite the baseline (same
+        // contract as check_external_color_change treats a 0 reading as
+        // "no signal").
         if (info.color_rgb != 0) {
             last_firmware_color_[slot_index] = info.color_rgb;
         }
@@ -2185,9 +2227,14 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
     const auto& ffm = *ffm_it;
 
     int parsed_count = 0;
+    bool needs_ifs_vars_push = false;
+    std::string ifs_colors_payload;
+    std::string ifs_types_payload;
+    std::string ifs_var_prefix_snapshot;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        const size_t pre_sync_count = external_sync_count_;
 
         // Ports 1-4 in JSON map to slots 0-3
         for (int port = 1; port <= NUM_PORTS; ++port) {
@@ -2242,13 +2289,61 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
                                  "Adventurer5M.json)",
                                  backend_log_tag(), idx);
                     presence = false;
+                    // Spool was physically removed: clear the user override
+                    // so brand/spool_name/spoolman_id from the now-gone spool
+                    // don't haunt the empty slot or get re-applied to whatever
+                    // is loaded next. update_slot_from_state below would
+                    // otherwise see the placeholder #808080 read and create a
+                    // phantom override — sync_override_to_firmware_locked
+                    // skips slots where port_presence is false.
+                    if (auto* eject_entry = slots_.get_mut(idx)) {
+                        clear_override_locked(idx, eject_entry->info);
+                    }
+                    needs_ifs_vars_push = true;
                 }
             }
 
             update_slot_from_state(idx);
             ++parsed_count;
         }
-    } // release lock before emit_event (which also takes mutex_)
+
+        // sync_override_to_firmware_locked (called via update_slot_from_state →
+        // check_external_color_change) bumps external_sync_count_ on every
+        // accepted external edit. If anything synced or anything ejected,
+        // mirror the new colors_/materials_ snapshot into the
+        // lessWaste/bambufy plugin's _IFS_VARS save_variables — those don't
+        // self-sync against zmod's truth (audited 2026-05-04: neither
+        // Hrybmo/lesswaste nor function3d/bambufy listen for CHANGE_ZCOLOR).
+        // Without this push, the plugin's runout-recovery alternate-port
+        // lookup, smart-purge skip decision, and color-assign dialog all run
+        // against stale data and silently print the wrong color or skip the
+        // wrong purge.
+        needs_ifs_vars_push = needs_ifs_vars_push || (external_sync_count_ > pre_sync_count);
+        if (needs_ifs_vars_push && has_ifs_vars_) {
+            ifs_colors_payload = build_color_list_value();
+            ifs_types_payload = build_type_list_value();
+            ifs_var_prefix_snapshot = var_prefix_;
+        }
+    } // release lock before emit_event + write_ifs_var (both take mutex_)
+
+    if (needs_ifs_vars_push && has_ifs_vars_) {
+        // Suppress the noisy `// Colors : [...]` / `// Types : [...]` echo on
+        // bambufy (bambufy's _IFS_VARS macro accepts SHOW=0 to skip the
+        // RESPOND line; lessWaste does not). Echo on lessWaste is debounced
+        // by kJsonPollInterval (5s).
+        const std::string suffix = (ifs_var_prefix_snapshot == "bambufy") ? " SHOW=0" : "";
+        auto colors_err =
+            execute_gcode("_IFS_VARS colors=" + ifs_colors_payload + suffix);
+        if (!colors_err.success()) {
+            spdlog::warn("{} _IFS_VARS colors mirror failed: {}", backend_log_tag(),
+                         colors_err.technical_msg);
+        }
+        auto types_err = execute_gcode("_IFS_VARS types=" + ifs_types_payload + suffix);
+        if (!types_err.success()) {
+            spdlog::warn("{} _IFS_VARS types mirror failed: {}", backend_log_tag(),
+                         types_err.technical_msg);
+        }
+    }
 
     if (parsed_count > 0) {
         spdlog::info("{} Loaded {} slots from Adventurer5M.json (native ZMOD)", backend_log_tag(),

@@ -124,8 +124,9 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // in the AMS edit modal). Erases overrides_[slot_index], resets the
     // override-exclusive fields on the live SlotInfo, and kicks off
     // override_store_->clear_async so the Moonraker lane_data entry is deleted.
-    // The hardware-event detector calls this internally once it has confirmed
-    // a physical spool swap, so the field-reset policy stays in one place.
+    // The eject path (parse_adventurer_json detecting an empty ffmColor while
+    // port_presence was true) shares this routine so the field-reset policy
+    // stays in one place.
     void clear_slot_override(int slot_index) override;
 
     AmsError enable_bypass() override;
@@ -207,36 +208,54 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // parse path (save_variables, Adventurer5M.json, GET_ZCOLOR SILENT=1) picks
     // up the override before the SlotInfo is exposed via events.
     void apply_overrides(SlotInfo& slot, int slot_index);
-    // Hardware-event detection: if the firmware-reported color for `slot_index`
-    // changes vs. the previously observed value, assume the user physically
-    // swapped the spool without HelixScreen's involvement and clear the stored
-    // override so the new spool's metadata starts blank instead of carrying
-    // stale brand/spool_name/spoolman_id from the previous user.
+    // External-edit sync: if the firmware-reported color for `slot_index`
+    // differs from the previously observed value, treat it as an external
+    // color/material edit (Mainsail console, AD5X LCD, native zmod dialog,
+    // CHANGE_ZCOLOR from any non-Helix path) and refresh the stored override
+    // so Moonraker DB lane_data stays in sync with zmod truth. This is what
+    // OrcaSlicer's MoonrakerPrinterAgent reads. The sync ONLY writes to
+    // Moonraker DB via override_store_->save_async — it does NOT issue
+    // CHANGE_ZCOLOR or write Adventurer5M.json, so it cannot trigger zmod's
+    // material-confirmation popup.
     //
-    // `slot` is `entry->info` — when a clear fires, override-exclusive fields
-    // (brand/spool_name/spoolman_*/weights/color_name) are zeroed on `slot` so
-    // the very next get_slot_info() call reflects the cleared state. (The
-    // subsequent apply_overrides() sees no override and is a no-op, so without
-    // this reset the stale values would linger until the struct is rebuilt.)
+    // Sync policy (NOT clear — color change alone is NOT a physical-swap
+    // signal, and treating it as one wiped lane_data every time the user
+    // retitled a color via the printer LCD; bug surfaced via compulsivejohnny
+    // on Discord):
+    //   - Existing override: update color_rgb + material in place, fire save_async.
+    //     brand/spool_name/spoolman_*/weights/color_name are PRESERVED.
+    //   - No existing override: create a minimal one carrying just color +
+    //     material (so lane_data has a record for Orca even when the user has
+    //     never edited the slot via Helix), fire save_async.
+    //   - Slot is empty (no filament — placeholder #808080 read from JSON):
+    //     update baseline only, no sync. Eject is handled separately by
+    //     parse_adventurer_json calling clear_override_locked directly.
     //
     // Called from update_slot_from_state BEFORE apply_overrides, so the check
     // sees firmware-truth (not the override-masked value). First observation
-    // on a given slot is a baseline and NEVER triggers a clear.
-    //
-    // `observed_color` is the color observed on this parse, whatever its
-    // source: firmware-truth from the Adventurer5M.json parse path OR a
-    // user-chosen color pre-staged by set_slot_info() before its
-    // update_slot_from_state() call. Both feed the same "did it change from
-    // the last-observed value?" check.
+    // on a given slot is a baseline and never fires a sync.
     //
     // `observed_color == 0` is treated as "no color reading" (empty slot,
     // unread, transient) and is ignored — it must not update the baseline.
-    void check_hardware_event_clear(int slot_index, uint32_t observed_color, SlotInfo& slot);
-    // Shared helper for every override-clear path (hardware event and explicit
-    // user request). Caller must hold mutex_. Erases overrides_[slot_index],
-    // resets override-exclusive fields on the provided SlotInfo (brand,
-    // spool_name, spoolman_*, weights, color_name), and fires clear_async on
-    // the override store. Firmware-sourced fields are left untouched.
+    // Returns true if a sync was actually triggered (color delta detected,
+    // slot has filament). Caller uses this to decide whether to push the
+    // updated colors_/materials_ snapshot through _IFS_VARS so the
+    // lessWaste/bambufy plugin's private save_variables track zmod truth.
+    bool check_external_color_change(int slot_index, uint32_t observed_color,
+                                     bool slot_has_filament);
+    // Sync helper used by check_external_color_change. Caller must hold mutex_.
+    // Updates an existing override's color_rgb + material, or creates a
+    // minimal one if none exists. Fires save_async to push the result to the
+    // Moonraker DB lane_data namespace. Returns true if anything actually
+    // changed (i.e. save_async was issued); false on the in-sync short-circuit.
+    bool sync_override_to_firmware_locked(int slot_index, uint32_t firmware_color,
+                                          const std::string& firmware_material);
+    // Shared helper for every override-clear path (eject detected in
+    // parse_adventurer_json and explicit user request via clear_slot_override).
+    // Caller must hold mutex_. Erases overrides_[slot_index], resets
+    // override-exclusive fields on the provided SlotInfo (brand, spool_name,
+    // spoolman_*, weights, color_name), and fires clear_async on the override
+    // store. Firmware-sourced fields are left untouched.
     void clear_override_locked(int slot_index, SlotInfo& slot);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
@@ -416,23 +435,35 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     std::string local_adventurer_json_path_;
 
     // Per-slot previous firmware color (NOT the override-masked value).
-    // Used to detect hardware-event "user swapped physical spool" and clear
-    // the override so stale brand/spool_name/spoolman_id from the previous
-    // physical spool don't bleed onto the new one. Empty = first observation
-    // (baseline, never triggers a clear). observed_color == 0 is ignored as
-    // "no reading" and does not update the baseline.
+    // Used to detect external color/material edits (Mainsail console, AD5X
+    // LCD, native zmod dialog) so we can refresh the Moonraker DB lane_data
+    // entry that OrcaSlicer reads. Empty = first observation (baseline,
+    // never triggers a sync). observed_color == 0 is ignored as "no reading"
+    // and does not update the baseline.
     //
     // Startup safety: on_started() loads overrides_ from Moonraker DB BEFORE
     // any firmware parse runs, and last_firmware_color_ stays empty until the
     // first parse — so the startup window can't flag the initial observation
-    // as a swap. set_slot_info() also pre-updates this map with the user's
-    // chosen color before calling update_slot_from_state() so a color edit
-    // isn't misread as a physical swap on the same call.
+    // as an external edit. set_slot_info() also pre-updates this map with the
+    // user's chosen color before calling update_slot_from_state() so a Helix-
+    // initiated color edit isn't misread as a foreign one on the same call.
     //
     // Access is always under mutex_ (written/read from update_slot_from_state
-    // -> check_hardware_event_clear and from set_slot_info's pre-update, all
+    // -> check_external_color_change and from set_slot_info's pre-update, all
     // of which run under the lock).
     std::unordered_map<int, uint32_t> last_firmware_color_;
+
+    // Bumped by sync_override_to_firmware_locked on every accepted external
+    // edit (color or material delta detected for a present slot, lane_data
+    // save_async issued). parse_adventurer_json snapshots the count around
+    // its per-slot loop and uses the delta to decide whether to also mirror
+    // colors_/materials_ into the lessWaste/bambufy plugin's _IFS_VARS
+    // save_variables — those don't self-sync against zmod's
+    // Adventurer5M.json, so without the mirror the plugin's runout-recovery
+    // and smart-purge logic operate on stale data. Wraps on overflow which
+    // is fine — the comparison is `>`, not equality. Always accessed under
+    // mutex_.
+    size_t external_sync_count_ = 0;
 
     // Note: uses inherited lifetime_ from AmsSubscriptionBackend (not shadowed).
 };
