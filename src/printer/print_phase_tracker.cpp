@@ -369,6 +369,12 @@ bool PrintPhaseTracker::try_match_mesh_begin(const std::string& line) {
 
 // ----- [K2/CFS] mesh end + timing -------------------------------------------
 // "// [G29_TIME]Execution time: 266.435 seconds, Time spent at each point: 3.2"
+//
+// Snap progress to 100% on this line. The K2's "Mesh X,Y: 25,25" announces
+// the *interpolated* grid (625 cells), not the probed grid (81 on a K2 Plus).
+// The actual probe count is reflected in mesh_probes_seen_ at this point, so
+// adopt it as the canonical total — guarantees the bar reads exactly 100%
+// at mesh-done regardless of the printer's mesh density.
 bool PrintPhaseTracker::try_match_g29_time(const std::string& line) {
     if (!contains(line, "[G29_TIME]")) return false;
 
@@ -378,8 +384,17 @@ bool PrintPhaseTracker::try_match_g29_time(const std::string& line) {
             mesh_seconds_per_probe_ = per_pt;
         }
     }
-    // Mesh complete — let the next observed signal (heating, box, print_duration)
-    // drive the transition. Don't force a phase here; we don't know what's next.
+
+    // Snap to canonical totals so any subscribed UI pins to 100%.
+    if (mesh_probes_seen_ > 0) {
+        mesh_probes_total_ = mesh_probes_seen_;
+        if (current_phase_ == PrintPhase::BED_MESH) {
+            lv_subject_set_int(&print_phase_progress_, 1000);
+            lv_subject_set_int(&print_phase_eta_seconds_, 0);
+        }
+    }
+    // Don't force a phase here — let the next observed signal (heating, box,
+    // print_duration) drive the transition.
     mesh_active_ = false;
     return true;
 }
@@ -403,35 +418,54 @@ bool PrintPhaseTracker::try_match_filament_load(const std::string& line) {
 }
 
 // ----- [K2/CFS] purge / flush percent ---------------------------------------
-// "// num: 0, velocity: 23.0, percent: 50"
+// "// num: 0, velocity: 575.000000, percent 1.000000"
+//
+// Real-world K2 format: "percent" (no colon!) followed by a float in 0..1
+// (i.e. fraction, not %). Single-color prints emit one line per flush
+// (`num: 0` = first flush). Tolerate both colon and non-colon form, and
+// both float-fraction and integer-percent representations, so we don't
+// regress if Creality fixes the format on a future firmware.
 bool PrintPhaseTracker::try_match_purge_percent(const std::string& line) {
-    auto p = line.find("percent:");
+    auto p = line.find("percent");
     if (p == std::string::npos) return false;
     if (!contains(line, "num:") && !contains(line, "velocity:")) return false;
 
-    int pct = 0;
-    if (std::sscanf(line.c_str() + p, "percent: %d", &pct) != 1) return false;
+    // Skip "percent" + optional ":" + whitespace, then parse a number.
+    const char* cursor = line.c_str() + p + 7; // past "percent"
+    while (*cursor == ':' || *cursor == ' ') cursor++;
+
+    float frac = -1.0f;
+    if (std::sscanf(cursor, "%f", &frac) != 1 || frac < 0.0f) return false;
+
+    // Accept both 0..1 (K2 firmware fraction form) and 0..100 (legacy/integer).
+    int per_mille = (frac <= 1.5f) ? static_cast<int>(frac * 1000.0f + 0.5f)
+                                   : static_cast<int>(frac * 10.0f + 0.5f);
+    per_mille = std::max(0, std::min(1000, per_mille));
 
     if (current_phase_ != PrintPhase::PURGE && current_phase_ != PrintPhase::PRINTING) {
         set_phase(PrintPhase::PURGE);
     }
-    purge_percent_ = pct;
-    lv_subject_set_int(&print_phase_progress_, std::max(0, std::min(1000, pct * 10)));
+    purge_percent_ = per_mille / 10;
+    lv_subject_set_int(&print_phase_progress_, per_mille);
 
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%d%%", pct);
+    std::snprintf(buf, sizeof(buf), "%d%%", per_mille / 10);
     lv_subject_copy_string(&print_phase_detail_, buf);
     return true;
 }
 
 // ----- [K2/CFS] heating hint ------------------------------------------------
 // "// [WHY_DEBUG]…target_temp:220.00 G28_temp:139.94"
-// Phase 1: any WHY_DEBUG target during PREPARING is a strong heating signal.
-// Phase 3 will split HEATING_BED vs HEATING_NOZZLE off this same line.
+// On K2 the line fires both during G28 homing (target ≈ G28_temp) and during
+// post-mesh print-temp ramp (target = first-layer temp). Either way the
+// printer is past PREPARING/BED_MESH and now actively heating, so we advance
+// from any earlier pre-print phase. Phase 3 will split HEATING_BED vs
+// HEATING_NOZZLE off this same line.
 bool PrintPhaseTracker::try_match_heating_hint(const std::string& line) {
     if (!contains(line, "[WHY_DEBUG]") || !contains(line, "target_temp:")) return false;
 
-    if (current_phase_ == PrintPhase::PREPARING) {
+    if (current_phase_ == PrintPhase::PREPARING ||
+        current_phase_ == PrintPhase::BED_MESH) {
         set_phase(PrintPhase::HEATING);
     }
     return true;

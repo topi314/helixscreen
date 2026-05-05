@@ -155,6 +155,17 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     // Callback lifetime management
     helix::AsyncLifetimeGuard lifetime_;
 
+    /// Dispatch a load/unload/swap CR_BOX_* script with proper completion
+    /// semantics: ensures the toolhead is homed, sends the gcode, and flips
+    /// `system_info_.action` back to IDLE *only when Klipper finishes the
+    /// entire script* (success or error). The previous design relied on the
+    /// `filament_switch_sensor` flipping to declare "done" — but that sensor
+    /// triggers at the toolhead extruder, which is reached at the *end of
+    /// CR_BOX_EXTRUDE* (step 2 of 5). The remaining `CR_BOX_WASTE` and
+    /// `CR_BOX_FLUSH` (~3 min of nozzle-at-240 °C extrusion) ran while the
+    /// UI told the user the load was idle.
+    AmsError dispatch_action_script(std::string gcode);
+
     /// Layer a configured FilamentSlotOverride for `slot_index` over `slot`,
     /// mutating `slot` in place. Override wins for every non-default field;
     /// default sentinels (empty strings, spoolman_id 0, weights -1, color_rgb 0)

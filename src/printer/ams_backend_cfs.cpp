@@ -603,16 +603,13 @@ void AmsBackendCfs::handle_status_update(const nlohmann::json& notification) {
             bool detected = sensor["filament_detected"].get<bool>();
             system_info_.filament_loaded = detected;
 
-            // Detect load/unload completion from filament sensor state change
-            if (system_info_.action == AmsAction::LOADING && detected) {
-                spdlog::info("[AMS CFS] Load complete (filament sensor triggered)");
-                system_info_.action = AmsAction::IDLE;
-                PostOpCooldownManager::instance().schedule();
-            } else if (system_info_.action == AmsAction::UNLOADING && !detected) {
-                spdlog::info("[AMS CFS] Unload complete (filament sensor cleared)");
-                system_info_.action = AmsAction::IDLE;
-                PostOpCooldownManager::instance().schedule();
-            }
+            // The filament_switch_sensor sits at the toolhead extruder. It
+            // trips at the END of CR_BOX_EXTRUDE — long before the load
+            // sequence's CR_BOX_WASTE + CR_BOX_FLUSH (~109 mm @ 240 °C, ~3
+            // min) actually finishes. Don't flip `action` here: completion
+            // semantics live in `dispatch_action_script`'s gcode-script
+            // success callback, which fires when Klipper drains the *entire*
+            // script. We just mirror the live filament-present flag.
         }
         changed = true;
     }
@@ -709,7 +706,7 @@ AmsError AmsBackendCfs::load_filament(int slot_index) {
         system_info_.action = AmsAction::LOADING;
         system_info_.current_slot = slot_index;
     }
-    return ensure_homed_then(std::move(gcode));
+    return dispatch_action_script(std::move(gcode));
 }
 
 AmsError AmsBackendCfs::unload_filament(int) {
@@ -719,7 +716,7 @@ AmsError AmsBackendCfs::unload_filament(int) {
         std::lock_guard<std::mutex> lock(mutex_);
         system_info_.action = AmsAction::UNLOADING;
     }
-    return ensure_homed_then(unload_gcode());
+    return dispatch_action_script(unload_gcode());
 }
 
 AmsError AmsBackendCfs::select_slot(int) {
@@ -747,7 +744,7 @@ AmsError AmsBackendCfs::change_tool(int tool) {
         system_info_.action = AmsAction::LOADING;
         system_info_.current_slot = tool;
     }
-    return ensure_homed_then(std::move(gcode));
+    return dispatch_action_script(std::move(gcode));
 }
 
 AmsError AmsBackendCfs::reset() {
@@ -884,6 +881,24 @@ AmsError AmsBackendCfs::disable_bypass() {
 
 // --- GCode helpers ---
 
+namespace {
+
+/// Wrap a CR_BOX_* operation with the K2 stock screen's positioning
+/// envelope. Without this, the flush extrudes onto the build plate instead
+/// of into the K2's waste port — `BOX_GO_TO_EXTRUDE_POS` parks the toolhead
+/// over the waste area and `BOX_MOVE_TO_SAFE_POS` parks it back when the
+/// CR_BOX_END_OPT terminator finishes. SAVE/RESTORE_GCODE_STATE preserves
+/// the caller's coordinate mode, feedrate, and absolute/relative state.
+std::string wrap_with_park(const std::string& body) {
+    return "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+           "BOX_GO_TO_EXTRUDE_POS\n" +
+           body +
+           "\nBOX_MOVE_TO_SAFE_POS\n"
+           "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+}
+
+} // namespace
+
 std::string AmsBackendCfs::load_gcode(int idx) {
     std::string tnn = CfsMaterialDb::slot_to_tnn(idx);
     if (tnn.empty()) {
@@ -894,13 +909,13 @@ std::string AmsBackendCfs::load_gcode(int idx) {
     // on Creality's Klipper fork (always evaluates to 0, loading T1A regardless of I= value).
     // CR_BOX_PRE_OPT is required before extrude — sets CFS to material-change mode.
     // CR_BOX_WASTE must follow CR_BOX_EXTRUDE (purges transition material).
-    return "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=" + tnn +
-           "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT";
+    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=" + tnn +
+                          "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT");
 }
 
 std::string AmsBackendCfs::unload_gcode() {
     // Unload doesn't need TNN — operates on currently loaded filament
-    return "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT";
+    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT");
 }
 
 std::string AmsBackendCfs::swap_gcode(int idx) {
@@ -910,8 +925,81 @@ std::string AmsBackendCfs::swap_gcode(int idx) {
         return "";
     }
     // Full swap: unload current (cut+retract) then load new slot, all in one session
-    return "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=" + tnn +
-           "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT";
+    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=" + tnn +
+                          "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT");
+}
+
+AmsError AmsBackendCfs::dispatch_action_script(std::string gcode) {
+    if (!api_) {
+        return AmsErrorHelper::not_connected("MoonrakerAPI not available");
+    }
+
+    auto on_complete = [this]() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (system_info_.action != AmsAction::IDLE) {
+            spdlog::info("[AMS CFS] Action script complete — action {} -> IDLE",
+                         static_cast<int>(system_info_.action));
+            system_info_.action = AmsAction::IDLE;
+            PostOpCooldownManager::instance().schedule();
+        }
+    };
+
+    auto token = lifetime_.token();
+    auto on_error = [this, token](const MoonrakerError& err) {
+        if (token.expired()) return;
+        // Klipper rejection (key849, busy, etc.) and timeouts both land here.
+        // Either way the driver isn't running our script anymore, so flip back
+        // to IDLE so the UI doesn't get stuck on a "loading" spinner.
+        spdlog::error("[AMS CFS] Action script failed: {}", err.message);
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::IDLE;
+    };
+
+    // Homing-then-execute — same pattern as ensure_homed_then but with our
+    // own completion callbacks that propagate to action-state cleanup.
+    if (!client_) {
+        api_->execute_gcode(gcode, std::move(on_complete), std::move(on_error),
+                            MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+        return AmsErrorHelper::success();
+    }
+
+    auto gcode_copy = std::move(gcode);
+    client_->send_jsonrpc(
+        "printer.objects.query",
+        nlohmann::json{{"objects", nlohmann::json{{"toolhead", nlohmann::json::array({"homed_axes"})}}}},
+        [this, token, gcode_copy, on_complete = std::move(on_complete),
+         on_error = on_error](const nlohmann::json& response) {
+            if (token.expired()) return;
+
+            bool needs_home = true;
+            if (response.contains("result") && response["result"].contains("status")) {
+                const auto& status = response["result"]["status"];
+                if (status.contains("toolhead") &&
+                    status["toolhead"].contains("homed_axes") &&
+                    status["toolhead"]["homed_axes"].is_string()) {
+                    std::string axes = status["toolhead"]["homed_axes"].get<std::string>();
+                    needs_home = (axes.find("xyz") == std::string::npos);
+                }
+            }
+
+            if (needs_home) {
+                spdlog::info("[AMS CFS] Not homed, sending G28 before action script");
+                api_->execute_gcode(
+                    "G28",
+                    [this, token, gcode_copy, on_complete, on_error]() {
+                        if (token.expired()) return;
+                        api_->execute_gcode(gcode_copy, on_complete, on_error,
+                                            MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+                    },
+                    on_error, MoonrakerAPI::HOMING_TIMEOUT_MS);
+            } else {
+                api_->execute_gcode(gcode_copy, on_complete, on_error,
+                                    MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+            }
+        },
+        on_error);
+
+    return AmsErrorHelper::success();
 }
 
 std::string AmsBackendCfs::reset_gcode() {

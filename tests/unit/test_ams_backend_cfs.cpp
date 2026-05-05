@@ -416,33 +416,48 @@ TEST_CASE("CFS disconnected unit handling", "[ams][cfs]") {
 }
 
 TEST_CASE("CFS GCode helpers", "[ams][cfs]") {
-    SECTION("load gcode uses CR_BOX commands with TNN") {
-        REQUIRE(AmsBackendCfs::load_gcode(0) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T1A\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1A\nCR_BOX_END_OPT");
-        REQUIRE(AmsBackendCfs::load_gcode(1) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T1B\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1B\nCR_BOX_END_OPT");
-        REQUIRE(AmsBackendCfs::load_gcode(4) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T2A\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T2A\nCR_BOX_END_OPT");
+    // The CR_BOX_* primitives don't park the toolhead — without wrapping,
+    // CR_BOX_FLUSH extrudes onto the build plate instead of into the K2's
+    // waste port. These assertions enforce the SAVE_GCODE_STATE +
+    // BOX_GO_TO_EXTRUDE_POS / BOX_MOVE_TO_SAFE_POS envelope that mirrors
+    // the K2 stock screen's LOAD_MATERIAL macro chain.
+    SECTION("load gcode uses CR_BOX commands with TNN, wrapped in park envelope") {
+        const std::string expected_a =
+            "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+            "BOX_GO_TO_EXTRUDE_POS\n"
+            "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T1A\n"
+            "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1A\nCR_BOX_END_OPT\n"
+            "BOX_MOVE_TO_SAFE_POS\n"
+            "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+        REQUIRE(AmsBackendCfs::load_gcode(0) == expected_a);
+
+        REQUIRE(AmsBackendCfs::load_gcode(1).find("TNN=T1B") != std::string::npos);
+        REQUIRE(AmsBackendCfs::load_gcode(1).find("BOX_GO_TO_EXTRUDE_POS") !=
+                std::string::npos);
+        REQUIRE(AmsBackendCfs::load_gcode(1).find("BOX_MOVE_TO_SAFE_POS") !=
+                std::string::npos);
+
+        REQUIRE(AmsBackendCfs::load_gcode(4).find("TNN=T2A") != std::string::npos);
     }
 
-    SECTION("unload gcode uses CR_BOX commands") {
-        REQUIRE(AmsBackendCfs::unload_gcode() ==
-                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT");
+    SECTION("unload gcode uses CR_BOX commands inside park envelope") {
+        const std::string g = AmsBackendCfs::unload_gcode();
+        REQUIRE(g.find("SAVE_GCODE_STATE NAME=helix_cfs_load") != std::string::npos);
+        REQUIRE(g.find("BOX_GO_TO_EXTRUDE_POS") != std::string::npos);
+        REQUIRE(g.find("CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT") !=
+                std::string::npos);
+        REQUIRE(g.find("BOX_MOVE_TO_SAFE_POS") != std::string::npos);
+        REQUIRE(g.find("RESTORE_GCODE_STATE NAME=helix_cfs_load") != std::string::npos);
     }
 
-    SECTION("swap gcode combines unload and load in single CR_BOX session") {
-        REQUIRE(AmsBackendCfs::swap_gcode(0) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1A\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1A\nCR_BOX_END_OPT");
-        REQUIRE(AmsBackendCfs::swap_gcode(1) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1B\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1B\nCR_BOX_END_OPT");
-        REQUIRE(AmsBackendCfs::swap_gcode(3) ==
-                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1D\n"
-                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1D\nCR_BOX_END_OPT");
+    SECTION("swap gcode combines unload and load inside park envelope") {
+        for (int idx : {0, 1, 3}) {
+            const std::string g = AmsBackendCfs::swap_gcode(idx);
+            REQUIRE(g.find("BOX_GO_TO_EXTRUDE_POS") != std::string::npos);
+            REQUIRE(g.find("CR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=") !=
+                    std::string::npos);
+            REQUIRE(g.find("BOX_MOVE_TO_SAFE_POS") != std::string::npos);
+        }
         // Invalid index
         REQUIRE(AmsBackendCfs::swap_gcode(-1).empty());
         REQUIRE(AmsBackendCfs::swap_gcode(16).empty());

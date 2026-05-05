@@ -105,11 +105,31 @@ TEST_CASE("PrintPhaseTracker: flush percent line enters PURGE and updates progre
     t.deinit_subjects();
     t.init_subjects(false);
 
+    // Legacy/integer form: "percent:" with int 0..100
     feed(t, "// num: 0, velocity: 23.0, percent: 50");
     REQUIRE(PrintPhaseTrackerTestAccess::current_phase(t) == PrintPhase::PURGE);
     REQUIRE(lv_subject_get_int(t.get_phase_progress_subject()) == 500);
 
     feed(t, "// num: 1, velocity: 23.0, percent: 100");
+    REQUIRE(lv_subject_get_int(t.get_phase_progress_subject()) == 1000);
+
+    t.deinit_subjects();
+}
+
+TEST_CASE("PrintPhaseTracker: K2 fraction form '/percent <0..1>' is recognized",
+          "[print_phase_tracker]") {
+    lv_init_safe();
+    auto& t = PrintPhaseTracker::instance();
+    t.deinit_subjects();
+    t.init_subjects(false);
+
+    // Real K2 firmware emits: "// num: 0, velocity: 575.000000, percent 1.000000"
+    // No colon, value is a 0..1 fraction (not 0..100).
+    feed(t, "// num: 0, velocity: 575.000000, percent 0.250000");
+    REQUIRE(PrintPhaseTrackerTestAccess::current_phase(t) == PrintPhase::PURGE);
+    REQUIRE(lv_subject_get_int(t.get_phase_progress_subject()) == 250);
+
+    feed(t, "// num: 0, velocity: 575.000000, percent 1.000000");
     REQUIRE(lv_subject_get_int(t.get_phase_progress_subject()) == 1000);
 
     t.deinit_subjects();
