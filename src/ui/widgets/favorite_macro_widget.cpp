@@ -14,10 +14,14 @@
 #include "device_display_name.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_executor.h"
+#include "macro_param_cache.h"
 #include "moonraker_api.h"
 #include "panel_widget_registry.h"
+#include "safety_settings_manager.h"
 #include "theme_manager.h"
+#include "ui_modal.h"
 
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -103,6 +107,84 @@ void apply_color_swatch_highlight(lv_obj_t* swatch, bool selected) {
 helix::MacroParamModal& get_shared_param_modal() {
     static helix::MacroParamModal modal;
     return modal;
+}
+
+// Heap context for confirmation-modal callbacks. Holds only widget-independent
+// state (api ptr + macro name + parent screen) so the originating widget may be
+// destroyed mid-modal without UAF — none of the callback paths touch `this`.
+struct MacroExecCtx {
+    std::string macro_name;
+    MoonrakerAPI* api;
+    lv_obj_t* parent_screen;
+};
+
+// After-confirmation dispatch. Mirrors the original switch in fetch_and_execute()
+// but is a free function so it can be called from a static callback without
+// needing the widget instance to still exist.
+void run_macro_after_confirm(MacroExecCtx ctx) {
+    auto cached = helix::MacroParamCache::instance().get(ctx.macro_name);
+    switch (cached.knowledge) {
+    case helix::MacroParamKnowledge::KNOWN_NO_PARAMS:
+        helix::execute_macro_gcode(ctx.api, ctx.macro_name, {}, "[FavoriteMacroWidget]");
+        break;
+    case helix::MacroParamKnowledge::KNOWN_PARAMS:
+        if (ctx.parent_screen) {
+            std::string name = ctx.macro_name;
+            MoonrakerAPI* api = ctx.api;
+            get_shared_param_modal().show_for_macro(
+                ctx.parent_screen, ctx.macro_name, cached.params,
+                [api, name](const helix::MacroParamResult& result) {
+                    helix::execute_macro_gcode(api, name, result, "[FavoriteMacroWidget]");
+                });
+        }
+        break;
+    case helix::MacroParamKnowledge::UNKNOWN:
+        if (ctx.parent_screen) {
+            std::string name = ctx.macro_name;
+            MoonrakerAPI* api = ctx.api;
+            get_shared_param_modal().show_for_unknown_params(
+                ctx.parent_screen, ctx.macro_name,
+                [api, name](const helix::MacroParamResult& result) {
+                    helix::execute_macro_gcode(api, name, result, "[FavoriteMacroWidget]");
+                });
+        }
+        break;
+    }
+}
+
+void dangerous_confirm_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] dangerous_confirm_cb");
+    auto* ctx = static_cast<MacroExecCtx*>(lv_event_get_user_data(e));
+    Modal::hide(Modal::get_top());
+    run_macro_after_confirm(*ctx);
+    delete ctx;
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void dangerous_cancel_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] dangerous_cancel_cb");
+    auto* ctx = static_cast<MacroExecCtx*>(lv_event_get_user_data(e));
+    Modal::hide(Modal::get_top());
+    spdlog::debug("[FavoriteMacroWidget] Dangerous macro cancelled: {}", ctx->macro_name);
+    delete ctx;
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void run_confirm_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] run_confirm_cb");
+    auto* ctx = static_cast<MacroExecCtx*>(lv_event_get_user_data(e));
+    Modal::hide(Modal::get_top());
+    helix::execute_macro_gcode(ctx->api, ctx->macro_name, {}, "[FavoriteMacroWidget]");
+    delete ctx;
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void run_cancel_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] run_cancel_cb");
+    auto* ctx = static_cast<MacroExecCtx*>(lv_event_get_user_data(e));
+    Modal::hide(Modal::get_top());
+    delete ctx;
+    LVGL_SAFE_EVENT_CB_END();
 }
 
 /// Resolve a responsive spacing token to pixels, with a fallback.
@@ -300,41 +382,43 @@ void FavoriteMacroWidget::fetch_and_execute() {
         return;
     }
 
+    // Dangerous macros always require a confirmation modal — the home-screen tile
+    // is one accidental tap away from EMERGENCY_STOP / FIRMWARE_RESTART, and the
+    // MacrosPanel already enforces this; the home-screen widget previously
+    // bypassed it entirely (#925).
+    if (helix::is_dangerous_macro(macro_name_)) {
+        if (!parent_screen_) {
+            spdlog::warn("[FavoriteMacroWidget] No parent screen for dangerous-macro confirm");
+            return;
+        }
+        spdlog::warn("[FavoriteMacroWidget] Dangerous macro requested: {}", macro_name_);
+        auto* ctx = new MacroExecCtx{macro_name_, api, parent_screen_};
+        std::string display = helix::get_display_name(macro_name_, helix::DeviceType::MACRO);
+        std::string msg = display + " may cause unintended changes. Are you sure?";
+        helix::ui::modal_show_confirmation(lv_tr("Run Dangerous Macro?"), msg.c_str(),
+                                           ::ModalSeverity::Warning, lv_tr("Run"),
+                                           dangerous_confirm_cb, dangerous_cancel_cb, ctx);
+        return;
+    }
+
     auto cached = MacroParamCache::instance().get(macro_name_);
 
-    switch (cached.knowledge) {
-    case MacroParamKnowledge::KNOWN_NO_PARAMS:
-        execute_with_params({});
-        break;
-    case MacroParamKnowledge::KNOWN_PARAMS:
-        if (parent_screen_) {
-            auto token = lifetime_.token();
-            get_shared_param_modal().show_for_macro(
-                parent_screen_, macro_name_, cached.params,
-                [this, token](const MacroParamResult& result) {
-                    if (token.expired())
-                        return;
-                    execute_with_params(result);
-                });
-        }
-        break;
-    case MacroParamKnowledge::UNKNOWN:
-        if (parent_screen_) {
-            auto token = lifetime_.token();
-            get_shared_param_modal().show_for_unknown_params(
-                parent_screen_, macro_name_, [this, token](const MacroParamResult& result) {
-                    if (token.expired())
-                        return;
-                    execute_with_params(result);
-                });
-        }
-        break;
+    // Optional run-confirmation gate (Settings → Safety toggle, default on).
+    // Only applies to KNOWN_NO_PARAMS — for KNOWN_PARAMS / UNKNOWN, the param
+    // modal is itself the implicit confirmation step. Mirrors MacrosPanel logic.
+    if (cached.knowledge == MacroParamKnowledge::KNOWN_NO_PARAMS && parent_screen_ &&
+        helix::SafetySettingsManager::instance().get_macro_require_confirmation()) {
+        auto* ctx = new MacroExecCtx{macro_name_, api, parent_screen_};
+        std::string display = helix::get_display_name(macro_name_, helix::DeviceType::MACRO);
+        std::string msg = fmt::format(lv_tr("Run {}?"), display);
+        helix::ui::modal_show_confirmation(lv_tr("Run Macro?"), msg.c_str(),
+                                           ::ModalSeverity::Info, lv_tr("Run"), run_confirm_cb,
+                                           run_cancel_cb, ctx);
+        return;
     }
-}
 
-void FavoriteMacroWidget::execute_with_params(const MacroParamResult& result) {
-    MoonrakerAPI* api = get_api();
-    helix::execute_macro_gcode(api, macro_name_, result, "[FavoriteMacroWidget]");
+    // No (additional) confirmation required — dispatch directly.
+    run_macro_after_confirm({macro_name_, api, parent_screen_});
 }
 
 void FavoriteMacroWidget::show_macro_picker() {
