@@ -999,10 +999,6 @@ void ThermistorWidget::apply_sensor_selection(const std::vector<std::string>& se
     }
 
     sensors_ = selected;
-    if (!sensors_.empty()) {
-        selected_sensor_ = sensors_.front();
-        resolve_display_name();
-    }
 
     // Auto-detect mode: multiple sensors → carousel, single → single
     bool was_carousel = is_carousel_mode();
@@ -1018,13 +1014,23 @@ void ThermistorWidget::apply_sensor_selection(const std::vector<std::string>& se
     if (was_carousel != want_carousel) {
         // Mode changed — need a full widget rebuild (different XML component).
         // If we're in edit mode, the rebuild is deferred to edit-mode exit.
+        // set_config() on the rebuilt widget will repopulate selected_sensor_
+        // from the persisted sensors_.front().
         spdlog::info("[ThermistorWidget] Mode changed to {} — requesting rebuild",
                      want_carousel ? "carousel" : "single");
         PanelWidgetManager::instance().notify_config_changed(panel_id());
     } else if (is_carousel_mode()) {
-        // Same mode, just different sensor selection — rebind inline
+        // Same mode, just different sensor selection — rebind inline.
+        // bind_carousel_sensors() reads from sensors_ directly and does its own
+        // per-page display-name lookup, so leaving selected_sensor_ alone is fine.
         bind_carousel_sensors();
     } else if (!sensors_.empty()) {
+        // Single-mode, same-mode: let select_sensor() own selected_sensor_ so its
+        // dedup guard at the top of the function can detect a real change.
+        // Pre-mutating selected_sensor_ here makes that guard trivially match,
+        // leaving temp_observer_ bound to the previous sensor's subject — the
+        // displayed temperature only updates after a restart, when attach_single()
+        // re-binds from the persisted config (#916).
         select_sensor(sensors_.front());
     }
 
