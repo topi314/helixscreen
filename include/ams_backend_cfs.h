@@ -71,6 +71,16 @@ class CfsErrorDecoder {
     /// Returns {message, hint} or nullopt for unknown codes.
     static std::optional<std::pair<const char*, const char*>>
         lookup_message(const std::string& key_code);
+
+    /// Variant that splices the `values` array (e.g. `[1,"B"]` from
+    /// `!! {"code":"key849","values":[1,"B"]}`) into the user-facing
+    /// message when the code's value-format is known. Returns full
+    /// `std::string` so the caller doesn't have to mix const-char + string
+    /// concatenation. Falls back to the un-augmented message+hint when
+    /// the values shape is unknown for that code.
+    static std::optional<std::pair<std::string, std::string>>
+        lookup_message_with_values(const std::string& key_code,
+                                    const nlohmann::json& values);
 };
 
 /// CFS (Creality Filament System) backend — K2 series printers with RS-485 CFS units

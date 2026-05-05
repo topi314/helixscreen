@@ -2800,9 +2800,20 @@ void Application::init_action_prompt() {
                     auto j = nlohmann::json::parse(text);
                     if (j.contains("code") && j["code"].is_string()) {
                         out_code = j["code"].get<std::string>();
+                        // Pass `values` through so the decoder can splice
+                        // " in unit 1 slot B" into the friendly message.
+                        // Telemetry sample (2026-05-05): key849 with
+                        // `values: [1, "B"]` previously surfaced a generic
+                        // "Retract failed — filament stuck in connector"
+                        // with no slot locator; user had to investigate.
+                        nlohmann::json values = nlohmann::json::array();
+                        if (j.contains("values")) {
+                            values = j["values"];
+                        }
                         if (auto friendly =
-                                helix::printer::CfsErrorDecoder::lookup_message(out_code)) {
-                            text = std::string(friendly->first) + ". " + friendly->second;
+                                helix::printer::CfsErrorDecoder::lookup_message_with_values(
+                                    out_code, values)) {
+                            text = friendly->first + ". " + friendly->second;
                             return;
                         }
                     }

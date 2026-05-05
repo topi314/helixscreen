@@ -235,6 +235,58 @@ TEST_CASE("CFS error decoding", "[ams][cfs]") {
     }
 }
 
+TEST_CASE("CFS error message+values decoding", "[ams][cfs]") {
+    using nlohmann::json;
+
+    SECTION("key849 splices unit/slot locator into message") {
+        // Real telemetry shape observed 2026-05-05.
+        json values = json::array({1, "B"});
+        auto out = CfsErrorDecoder::lookup_message_with_values("key849", values);
+        REQUIRE(out.has_value());
+        REQUIRE(out->first.find("Retract failed") != std::string::npos);
+        REQUIRE(out->first.find("unit 1 slot B") != std::string::npos);
+        // Hint passes through unchanged.
+        REQUIRE(out->second.find("Manually pull") != std::string::npos);
+    }
+
+    SECTION("key851 (slot retract didn't reach) also gets unit/slot locator") {
+        json values = json::array({2, "C"});
+        auto out = CfsErrorDecoder::lookup_message_with_values("key851", values);
+        REQUIRE(out.has_value());
+        REQUIRE(out->first.find("unit 2 slot C") != std::string::npos);
+    }
+
+    SECTION("key840 (unit-level) gets unit-only locator") {
+        json values = json::array({3});
+        auto out = CfsErrorDecoder::lookup_message_with_values("key840", values);
+        REQUIRE(out.has_value());
+        REQUIRE(out->first.find("on unit 3") != std::string::npos);
+    }
+
+    SECTION("key298 (system, no formatter) returns message untouched") {
+        json values = json::array();
+        auto out = CfsErrorDecoder::lookup_message_with_values("key298", values);
+        REQUIRE(out.has_value());
+        // No "unit" or "slot" appended.
+        REQUIRE(out->first.find("unit") == std::string::npos);
+        REQUIRE(out->first.find("slot") == std::string::npos);
+    }
+
+    SECTION("malformed values fall back to no locator (no regression)") {
+        // Wrong shape — array but slot not a string.
+        json values = json::array({1, 2});
+        auto out = CfsErrorDecoder::lookup_message_with_values("key849", values);
+        REQUIRE(out.has_value());
+        REQUIRE(out->first.find("unit") == std::string::npos);
+    }
+
+    SECTION("unknown code returns nullopt") {
+        json values = json::array({1, "A"});
+        auto out = CfsErrorDecoder::lookup_message_with_values("key999", values);
+        REQUIRE_FALSE(out.has_value());
+    }
+}
+
 TEST_CASE("CFS slot addressing", "[ams][cfs]") {
     SECTION("global index to TNN name") {
         REQUIRE(CfsMaterialDb::slot_to_tnn(0) == "T1A");

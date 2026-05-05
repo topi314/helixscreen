@@ -111,48 +111,97 @@ int CfsMaterialDb::tnn_to_slot(const std::string& tnn)
 
 // --- CFS Error Decoder ---
 
+namespace {
+
+/// Format the [unit, slot] payload observed in `key849` (and likely all
+/// SLOT-level CFS errors) into a human locator. Klipper emits unit as an
+/// integer (1-based) and slot as a single uppercase letter ("A"..."D").
+/// Returns "" when the payload doesn't match the expected shape — caller
+/// then displays the un-augmented message rather than guessing.
+///
+/// Real-world sample (telemetry 2026-05-05):
+///     !! {"code":"key849","values":[1,"B"]}
+///   → " in unit 1 slot B"
+std::string format_unit_slot(const nlohmann::json& values) {
+    if (!values.is_array() || values.size() < 2) return "";
+    if (!values[0].is_number_integer()) return "";
+    if (!values[1].is_string()) return "";
+    int unit = values[0].get<int>();
+    std::string slot = values[1].get<std::string>();
+    if (unit < 1 || slot.size() != 1) return "";
+    char c = slot[0];
+    if (c < 'A' || c > 'D') return "";
+    return " in unit " + std::to_string(unit) + " slot " + slot;
+}
+
+/// Format unit-level errors where values is `[unit]` or `[unit, ...]`.
+/// We just grab the leading int and ignore tails. Empty string if the
+/// shape doesn't match.
+std::string format_unit_only(const nlohmann::json& values) {
+    if (!values.is_array() || values.empty()) return "";
+    if (!values[0].is_number_integer()) return "";
+    int unit = values[0].get<int>();
+    if (unit < 1) return "";
+    return " on unit " + std::to_string(unit);
+}
+
+} // namespace
+
 struct CfsErrorEntry {
     const char* message;
     const char* hint;
     AmsAlertLevel level;
+    /// Optional formatter that stringifies the `values` array into a
+    /// human-readable locator (" in unit 1 slot B"). Caller appends the
+    /// result to the friendly message. nullptr = no per-error format
+    /// known yet (no regression — message displays unchanged).
+    std::string (*format_values)(const nlohmann::json&) = nullptr;
 };
+
+// Format-callback aliases keep the table tidy. Only key849 has been
+// confirmed against real telemetry (`[1,"B"]`); the other SLOT/UNIT
+// codes are wired up to the same formatters on the assumption that
+// Creality uses a consistent shape, but they'll degrade gracefully
+// (no extra locator displayed) if the assumption is wrong.
+static auto* const fmt_unit_slot = &format_unit_slot;
+static auto* const fmt_unit_only = &format_unit_only;
 
 static const std::unordered_map<std::string, CfsErrorEntry> CFS_ERROR_TABLE = {
     // Klipper-internal errors (not CFS-specific) that we frequently surface to
     // users. Despite living in the CFS table for now, these are general — the
     // table predates the broader use case. TODO: rename to KlipperErrorTable.
-    {"key298", {"MCU bridge daemon is shut down", "Tap Firmware Restart to recover — on K2 this also bounces the rpi MCU bridge", AmsAlertLevel::SYSTEM}},
-    {"key585", {"Move out of range", "The requested position is outside the printer's bounds", AmsAlertLevel::SYSTEM}},
+    {"key298", {"MCU bridge daemon is shut down", "Tap Firmware Restart to recover — on K2 this also bounces the rpi MCU bridge", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key585", {"Move out of range", "The requested position is outside the printer's bounds", AmsAlertLevel::SYSTEM, nullptr}},
 
-    {"key831", {"Lost connection to CFS unit", "Check the RS-485 cable between printer and CFS", AmsAlertLevel::SYSTEM}},
-    {"key834", {"Invalid parameters sent to CFS", "This may indicate a firmware bug — try restarting", AmsAlertLevel::SYSTEM}},
-    {"key835", {"Filament jammed at CFS connector", "Open the CFS lid, check the PTFE tube connection for the stuck slot", AmsAlertLevel::SLOT}},
-    {"key836", {"Filament jammed between CFS and sensor", "Check the Bowden tube for kinks or debris", AmsAlertLevel::SLOT}},
-    {"key837", {"Filament jammed before extruder gear", "Check for tangles on the spool and clear the filament path to the printhead", AmsAlertLevel::SLOT}},
-    {"key838", {"Filament reached extruder but won't feed", "Check for a clog in the hotend or a worn drive gear", AmsAlertLevel::SLOT}},
-    {"key840", {"CFS unit state error", "A unit reported an unexpected state — check its current operation", AmsAlertLevel::UNIT}},
-    {"key841", {"Filament cutter stuck", "The cutter blade didn't return — check for filament wrapped around the cutting mechanism", AmsAlertLevel::SYSTEM}},
-    {"key843", {"Can't read filament RFID tag", "Re-seat the spool in the slot, ensure the RFID label faces the reader", AmsAlertLevel::SLOT}},
-    {"key844", {"PTFE tube connection loose", "Re-seat the Bowden tube connector on the CFS unit", AmsAlertLevel::UNIT}},
-    {"key845", {"Nozzle clog detected", "Run a cold pull or replace the nozzle", AmsAlertLevel::SYSTEM}},
-    {"key847", {"Empty spool — filament wound around hub", "Remove the empty spool and clear wound filament from the CFS hub", AmsAlertLevel::SLOT}},
-    {"key848", {"Filament snapped inside CFS", "Open the CFS unit and remove the broken filament from the slot", AmsAlertLevel::SLOT}},
-    {"key849", {"Retract failed — filament stuck in connector", "Manually pull the filament back through the connector", AmsAlertLevel::SLOT}},
-    {"key850", {"Retract error — multiple connectors triggered", "Check that only one filament path is active", AmsAlertLevel::UNIT}},
-    {"key851", {"Retract didn't reach buffer empty position", "The filament may not have fully retracted — try again or manually pull", AmsAlertLevel::SLOT}},
-    {"key852", {"Sensor mismatch — check extruder and CFS sensors", "Extruder and CFS disagree on filament state — inspect both sensors", AmsAlertLevel::SYSTEM}},
-    {"key853", {"Humidity sensor malfunction", "CFS unit's humidity sensor is not responding — may need service", AmsAlertLevel::UNIT}},
-    {"key855", {"Filament cutter position error", "The cutter is out of alignment — recalibrate with CALIBRATE_CUT_POS", AmsAlertLevel::SYSTEM}},
-    {"key856", {"Filament cutter not detected", "Check that the cutter mechanism is properly installed", AmsAlertLevel::SYSTEM}},
-    {"key857", {"CFS motor overloaded", "A spool may be tangled or the drive gear is jammed", AmsAlertLevel::UNIT}},
-    {"key858", {"EEPROM error on CFS unit", "CFS unit storage is corrupted — may need firmware reflash", AmsAlertLevel::UNIT}},
-    {"key859", {"Measuring wheel error", "The filament length sensor is malfunctioning", AmsAlertLevel::UNIT}},
-    {"key860", {"Buffer tube problem", "Check the buffer unit on the back of the printer", AmsAlertLevel::SYSTEM}},
-    {"key861", {"RFID reader malfunction (left)", "The left RFID reader in this CFS unit may need service", AmsAlertLevel::UNIT}},
-    {"key862", {"RFID reader malfunction (right)", "The right RFID reader in this CFS unit may need service", AmsAlertLevel::UNIT}},
-    {"key863", {"Retract error — filament still detected", "Filament didn't fully retract, may need manual removal", AmsAlertLevel::SLOT}},
-    {"key864", {"Extrude error — buffer not full", "Filament didn't fill buffer tube during load", AmsAlertLevel::SLOT}},
-    {"key865", {"Retract error — failed to exit connector", "Filament stuck in connector during unload", AmsAlertLevel::SLOT}},
+    {"key831", {"Lost connection to CFS unit", "Check the RS-485 cable between printer and CFS", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key834", {"Invalid parameters sent to CFS", "This may indicate a firmware bug — try restarting", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key835", {"Filament jammed at CFS connector", "Open the CFS lid, check the PTFE tube connection for the stuck slot", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key836", {"Filament jammed between CFS and sensor", "Check the Bowden tube for kinks or debris", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key837", {"Filament jammed before extruder gear", "Check for tangles on the spool and clear the filament path to the printhead", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key838", {"Filament reached extruder but won't feed", "Check for a clog in the hotend or a worn drive gear", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key840", {"CFS unit state error", "A unit reported an unexpected state — check its current operation", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key841", {"Filament cutter stuck", "The cutter blade didn't return — check for filament wrapped around the cutting mechanism", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key843", {"Can't read filament RFID tag", "Re-seat the spool in the slot, ensure the RFID label faces the reader", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key844", {"PTFE tube connection loose", "Re-seat the Bowden tube connector on the CFS unit", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key845", {"Nozzle clog detected", "Run a cold pull or replace the nozzle", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key847", {"Empty spool — filament wound around hub", "Remove the empty spool and clear wound filament from the CFS hub", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key848", {"Filament snapped inside CFS", "Open the CFS unit and remove the broken filament from the slot", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key849", {"Retract failed — filament stuck in connector", "Manually pull the filament back through the connector", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key850", {"Retract error — multiple connectors triggered", "Check that only one filament path is active", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key851", {"Retract didn't reach buffer empty position", "The filament may not have fully retracted — try again or manually pull", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key852", {"Sensor mismatch — check extruder and CFS sensors", "Extruder and CFS disagree on filament state — inspect both sensors", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key853", {"Humidity sensor malfunction", "CFS unit's humidity sensor is not responding — may need service", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key855", {"Filament cutter position error", "The cutter is out of alignment — recalibrate with CALIBRATE_CUT_POS", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key856", {"Filament cutter not detected", "Check that the cutter mechanism is properly installed", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key857", {"CFS motor overloaded", "A spool may be tangled or the drive gear is jammed", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key858", {"EEPROM error on CFS unit", "CFS unit storage is corrupted — may need firmware reflash", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key859", {"Measuring wheel error", "The filament length sensor is malfunctioning", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key860", {"Buffer tube problem", "Check the buffer unit on the back of the printer", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key861", {"RFID reader malfunction (left)", "The left RFID reader in this CFS unit may need service", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key862", {"RFID reader malfunction (right)", "The right RFID reader in this CFS unit may need service", AmsAlertLevel::UNIT, fmt_unit_only}},
+    {"key863", {"Retract error — filament still detected", "Filament didn't fully retract, may need manual removal", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key864", {"Extrude error — buffer not full", "Filament didn't fill buffer tube during load", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key865", {"Retract error — failed to exit connector", "Filament stuck in connector during unload", AmsAlertLevel::SLOT, fmt_unit_slot}},
 };
 
 std::optional<std::pair<const char*, const char*>>
@@ -161,6 +210,23 @@ CfsErrorDecoder::lookup_message(const std::string& key_code) {
     if (it == CFS_ERROR_TABLE.end())
         return std::nullopt;
     return std::make_pair(it->second.message, it->second.hint);
+}
+
+std::optional<std::pair<std::string, std::string>>
+CfsErrorDecoder::lookup_message_with_values(const std::string& key_code,
+                                            const nlohmann::json& values) {
+    auto it = CFS_ERROR_TABLE.find(key_code);
+    if (it == CFS_ERROR_TABLE.end())
+        return std::nullopt;
+    const auto& entry = it->second;
+    std::string message = entry.message;
+    if (entry.format_values) {
+        std::string locator = entry.format_values(values);
+        if (!locator.empty()) {
+            message += locator;
+        }
+    }
+    return std::make_pair(std::move(message), std::string(entry.hint));
 }
 
 std::optional<AmsAlert> CfsErrorDecoder::decode(const std::string& key_code,
