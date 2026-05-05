@@ -3564,6 +3564,12 @@ void Application::tear_down_printer_state() {
     // 13b. Clear ModalStack tracking (widgets destroyed by lv_obj_del below)
     ModalStack::instance().clear();
 
+    // 13c. Stop the consumption tracker BEFORE destroying overlays — same
+    //      ordering rationale as Application::shutdown() (#927). Self-registration
+    //      with StaticSubjectRegistry would otherwise run stop() AFTER destroy_all(),
+    //      which is the configuration that tripped a UAF on AD5X.
+    helix::FilamentConsumptionTracker::instance().stop();
+
     // 14. Destroy all static panel/overlay globals (releases ObserverGuards).
     //     Subjects are still alive here, so lv_observer_remove() works correctly.
     StaticPanelRegistry::instance().destroy_all();
@@ -3836,15 +3842,22 @@ void Application::shutdown() {
         m_display->restore_display_on_shutdown();
     }
 
+    // Stop the consumption tracker BEFORE destroying overlays. Bundle VHTR49QJ
+    // (#927, AD5X v0.99.53) crashed in stop() when it ran AFTER destroy_all():
+    // something in overlay teardown was freeing the tracker's PrinterState
+    // observer struct, and the subsequent ObserverGuard::reset() dereferenced
+    // freed memory. Removing observers first guarantees they're out of every
+    // subject's subs_ll before any other teardown step touches LVGL. The
+    // self-registration in start() is still wired up as a backstop — it runs
+    // again during deinit_all() but is a no-op because observers are already
+    // null after this call.
+    helix::FilamentConsumptionTracker::instance().stop();
+
     // Destroy ALL static panel/overlay globals via self-registration pattern.
     // This deinits local subjects (via SubjectManager) and releases ObserverGuards.
     // Must happen while LVGL is still initialized so lv_observer_remove() can
     // properly remove unsubscribe_on_delete_cb from widget event lists.
     StaticPanelRegistry::instance().destroy_all();
-
-    // Stop consumption tracker before subjects are deinitialized so ObserverGuards
-    // can unregister cleanly while subjects are still alive.
-    helix::FilamentConsumptionTracker::instance().stop();
 
     // Deinitialize core singleton subjects (PrinterState, AmsState, SettingsManager, etc.)
     // BEFORE lv_deinit(). lv_subject_deinit() calls lv_observer_remove() for each

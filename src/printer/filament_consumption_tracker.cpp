@@ -8,6 +8,8 @@
 #include "app_globals.h"
 #include "observer_factory.h"
 #include "printer_state.h"
+#include "static_subject_registry.h"
+#include "system/crash_handler.h"
 
 #include <algorithm>
 #include <spdlog/spdlog.h>
@@ -61,10 +63,38 @@ void FilamentConsumptionTracker::start() {
         external_sink_raw_ = ext.get();
         sinks_.push_back(std::move(ext));
     }
+
+    // Diagnostic crumbs to correlate with #927-class shutdown crashes.
+    // Address logged at start vs at stop should match — divergence means the
+    // observer was reassigned/freed externally between init and teardown.
+    crash_handler::breadcrumb::note("fct", "start_a",
+                                    reinterpret_cast<long>(print_state_obs_.get()));
+    crash_handler::breadcrumb::note("fct", "start_b",
+                                    reinterpret_cast<long>(filament_used_obs_.get()));
+
+    // Self-register with StaticSubjectRegistry so stop() runs as part of
+    // deinit_all() in proper LIFO order. Because PrinterState registers
+    // earlier (during SubjectInitializer::init_core_and_state() at app
+    // startup), our entry deinits FIRST — which means lv_observer_remove()
+    // sees live PrinterState subjects, the same ordering invariant that
+    // Application::shutdown()'s manual call was trying to provide. Closes
+    // #927: the manual shutdown call ran AFTER StaticPanelRegistry::
+    // destroy_all(), and intervening overlay teardown was apparently freeing
+    // our observer struct out from under us — under self-registration that
+    // window goes away because no other deinit step runs between
+    // FilamentConsumptionTracker::stop() and our observers' creation.
+    StaticSubjectRegistry::instance().register_deinit(
+        "FilamentConsumptionTracker",
+        []() { FilamentConsumptionTracker::instance().stop(); });
 }
 
 void FilamentConsumptionTracker::stop() {
+    crash_handler::breadcrumb::note("fct", "stop_a",
+                                    reinterpret_cast<long>(print_state_obs_.get()));
     print_state_obs_.reset();
+
+    crash_handler::breadcrumb::note("fct", "stop_b",
+                                    reinterpret_cast<long>(filament_used_obs_.get()));
     filament_used_obs_.reset();
 
     // [L077] Reset the lifetime FIRST so the weak_ptr inside each extruder
