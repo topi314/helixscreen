@@ -342,6 +342,19 @@ void MoonrakerDiscoverySequence::continue_discovery_objects(uint64_t seq) {
                                 0,     // default timeout
                                 true); // silent — Spoolman not always configured
                         }
+
+                        // moonraker-timelapse is a Moonraker component (configured in
+                        // moonraker.conf), not a Klipper object — so it never appears in
+                        // printer.objects.list. Detect it here so users with a pre-existing
+                        // install (MainsailOS, manual config) see the Settings row, not just
+                        // those who ran the in-app install wizard.
+                        bool has_timelapse_component =
+                            std::find(components.begin(), components.end(), "timelapse") !=
+                            components.end();
+                        if (has_timelapse_component) {
+                            spdlog::info("[Moonraker Client] Timelapse component detected");
+                            get_printer_state().set_timelapse_available(true);
+                        }
                     }
                 }
 
