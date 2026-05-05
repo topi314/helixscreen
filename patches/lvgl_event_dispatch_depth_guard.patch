@@ -1,0 +1,133 @@
+diff --git a/src/misc/lv_event.c b/src/misc/lv_event.c
+--- a/src/misc/lv_event.c
++++ b/src/misc/lv_event.c
+@@ -73,6 +73,15 @@
+ }
+ #endif
+ 
++/* HelixScreen: dispatch-depth counter paired with event_head. Each push/pop
++ * pair adjusts this counter; lv_event_mark_deleted() uses it to detect a
++ * stale event_head — i.e. event_head non-NULL while no lv_event_send frame
++ * is active. Such an inconsistency means a stack-allocated lv_event_t was
++ * popped logically but the global head pointer was never reset, and walking
++ * its chain SIGBUSes on garbage (cluster:pstat-async-delete / #906, plus
++ * #793/#840/#871/#878/#880). Single-threaded — plain int suffices. */
++static int event_dispatch_depth = 0;
++
+ void lv_event_push(lv_event_t * e)
+ {
+     /*Build a simple linked list from the objects used in the events
+@@ -80,12 +89,14 @@
+      *called from this `event_cb`.*/
+     e->prev = event_head;
+     event_head = e;
++    event_dispatch_depth++;
+ 
+ }
+ 
+ void lv_event_pop(lv_event_t * e)
+ {
+     event_head = e->prev;
++    if(event_dispatch_depth > 0) event_dispatch_depth--;
+ }
+ 
+ /* HelixScreen: idempotent pop. Pops only if `e` is still the head of the
+@@ -97,6 +108,7 @@
+ {
+     if(event_head == e) {
+         event_head = e->prev;
++        if(event_dispatch_depth > 0) event_dispatch_depth--;
+     }
+ }
+ 
+@@ -352,11 +364,73 @@
+      * sane depth and validate alignment at each step. On a runaway, log via
+      * helix_lvgl_anomaly (which captures a backtrace) and zero out event_head
+      * so subsequent dispatches get a clean slate. */
++
++    /* HelixScreen: depth-coherence check (telemetry).
++     * event_head non-NULL with depth=0 means push/pop accounting disagrees
++     * with the chain head. Common L081 stale-leak fails BOTH together (push
++     * incremented both, the missing cleanup-pop neither decremented), so
++     * this check is mainly a canary for OTHER inconsistencies — a path
++     * that mutates event_head without going through push/pop, or a memory
++     * stomp that wrote a non-NULL value over the head pointer. If it ever
++     * fires we learn something the cleanup-attribute fix didn't address. */
++    if(event_head != NULL && event_dispatch_depth == 0) {
++        if(helix_lvgl_anomaly) {
++            char ctx[96];
++            snprintf(ctx, sizeof(ctx), "head=%p target=%p (depth=0)",
++                     (void *)event_head, target);
++            helix_lvgl_anomaly("event_head_stale_leak", ctx);
++        }
++        event_head = NULL;
++        return;
++    }
++
++    /* HelixScreen: stack-bounds check (corrective).
++     * event_head must point at an active lv_event_t living on the call
++     * stack. User stacks on aarch64/armhf/x86 grow DOWNWARD: a valid `e`
++     * must be at an address >= the current frame address. An `e` BELOW the
++     * current frame is impossible (stack growth would have invalidated it).
++     * An `e` >16 MB above current frame is outside any plausible thread
++     * stack (Linux default is 8 MB; 16 MB is a generous upper bound).
++     *
++     * This catches event_head pointing at non-stack memory (heap reuse,
++     * struct field bleed, memory stomp) — a corruption pattern the
++     * cleanup-attribute fix can't address. The cleanup attribute only
++     * handles exception unwinds; if event_head is overwritten by an
++     * unrelated allocation, no cleanup runs. */
++    {
++        void * sp_now = __builtin_frame_address(0);
++        const uintptr_t sp_low = (uintptr_t)sp_now;
++        const uintptr_t sp_high = sp_low + (16U << 20); /* 16 MB above */
++        lv_event_t * head_now = event_head;
++        if(head_now != NULL &&
++           ((uintptr_t)head_now < sp_low || (uintptr_t)head_now >= sp_high)) {
++            if(helix_lvgl_anomaly) {
++                char ctx[96];
++                snprintf(ctx, sizeof(ctx), "head=%p sp=%p target=%p (oob)",
++                         (void *)head_now, sp_now, target);
++                helix_lvgl_anomaly("event_head_stack_oob", ctx);
++            }
++            event_head = NULL;
++            return;
++        }
++    }
++
++    /* Capture stack bounds once for the loop's per-step check. Recomputing
++     * sp_now inside the loop wouldn't help — we never recurse here, so SP
++     * is stable for the whole walk. */
++    void * sp_now = __builtin_frame_address(0);
++    const uintptr_t sp_low = (uintptr_t)sp_now;
++    const uintptr_t sp_high = sp_low + (16U << 20);
++
+     lv_event_t * e = event_head;
+     unsigned depth = 0;
+     const unsigned max_depth = 256;            /* deepest plausible nested send chain */
+ 
+     while(e) {
++        /* Per-step stack-bounds check on `e` (and implicitly on the prev
++         * pointer that took us here). e->prev can be a stale stack address
++         * even when event_head itself was valid, if a frame deeper in the
++         * chain returned without popping. */
+         if(((uintptr_t)e & (sizeof(void *) - 1)) != 0u) {
+             if(helix_lvgl_anomaly) {
+                 char ctx[96];
+@@ -366,6 +440,16 @@
+             }
+             event_head = NULL;
+             return;
++        }
++        if((uintptr_t)e < sp_low || (uintptr_t)e >= sp_high) {
++            if(helix_lvgl_anomaly) {
++                char ctx[96];
++                snprintf(ctx, sizeof(ctx), "e=%p sp=%p depth=%u (oob)",
++                         (void *)e, sp_now, depth);
++                helix_lvgl_anomaly("event_chain_stack_oob", ctx);
++            }
++            event_head = NULL;
++            return;
+         }
+         if(++depth > max_depth) {
+             if(helix_lvgl_anomaly) {

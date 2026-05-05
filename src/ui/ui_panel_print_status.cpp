@@ -707,6 +707,11 @@ lv_obj_t* PrintStatusPanel::create(lv_obj_t* parent) {
 }
 
 void PrintStatusPanel::on_activate() {
+    // Cluster:pstat-async-delete (#906) — fine-grained crumbs through every
+    // step of on_activate so the next production crash names which step left
+    // the corruption rolling. Pair with the larger breadcrumb ring so these
+    // survive the pre-crash tick storm.
+    crash_handler::breadcrumb::note("pstat_act", "enter");
     OverlayBase::on_activate(); // Sets visible_ = true
     is_active_ = true;
 
@@ -716,6 +721,7 @@ void PrintStatusPanel::on_activate() {
     // Load deferred G-code if pending (lazy loading optimization)
     // This avoids downloading large files unless user navigates here
     if (!pending_gcode_filename_.empty()) {
+        crash_handler::breadcrumb::note("pstat_act", "defer_gc");
         schedule_deferred_gcode_load();
     }
 
@@ -726,6 +732,7 @@ void PrintStatusPanel::on_activate() {
         pending_gcode_filename_.empty()) {
         const char* filename = lv_subject_get_string(printer_state_.get_print_filename_subject());
         if (filename && filename[0] != '\0') {
+            crash_handler::breadcrumb::note("pstat_act", "reload_gc");
             spdlog::info("[{}] Re-loading G-code after overlay recreate: {}", get_name(), filename);
             on_print_filename_changed(filename);
         }
@@ -736,12 +743,14 @@ void PrintStatusPanel::on_activate() {
     // source pixels from an unmapped heap page, #851) can be pinned to this
     // reactivation site in post-hoc crash reports.
     if (print_thumbnail_ && !cached_thumbnail_path_.empty()) {
-        crash_handler::breadcrumb::note("pstat_thm", "on_activate");
+        crash_handler::breadcrumb::note("pstat_thm", "set_src_pre");
         lv_image_set_src(print_thumbnail_, cached_thumbnail_path_.c_str());
+        crash_handler::breadcrumb::note("pstat_thm", "set_src_post");
     }
 
     // Sync button enabled/visibility state with current print state and outcome.
     // XML bindings may have been lost during overlay lifecycle transitions (#546).
+    crash_handler::breadcrumb::note("pstat_act", "btn_states");
     update_button_states();
 
     // Restore render mode from settings before showing the viewer.
@@ -757,6 +766,7 @@ void PrintStatusPanel::on_activate() {
     // Restore G-code viewer state based on current print conditions.
     // Thumbnail Only mode forces the viewer off regardless of gcode state.
     bool show_viewer = !thumbnail_only && lifecycle_.want_viewer() && gcode_loaded_;
+    crash_handler::breadcrumb::note("pstat_act", show_viewer ? "viewer_on" : "viewer_off");
     show_gcode_viewer(show_viewer);
 
     // Sync gcode viewer to current print layer (may have advanced while panel was hidden)
@@ -770,6 +780,7 @@ void PrintStatusPanel::on_activate() {
         }
         ui_gcode_viewer_set_print_progress(gcode_viewer_, viewer_layer);
     }
+    crash_handler::breadcrumb::note("pstat_act", "exit");
 }
 
 void PrintStatusPanel::on_deactivate() {

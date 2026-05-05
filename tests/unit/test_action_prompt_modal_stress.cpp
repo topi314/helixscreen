@@ -356,3 +356,98 @@ TEST_CASE_METHOD(ActionPromptStressFixture,
     process_lvgl(120);
     SUCCEED("Completed " << bursts << " queue-update racer bursts without crash");
 }
+
+// Reproducer for cluster:pstat-async-delete (#906 canonical, dups #913/#915/
+// #918/#919/#921/#923 plus issueless bundles BRBLKTMY/TXVE53X6/24HY6NTC/
+// 3R4QK9XS/8N2BPWMV/RDQLVFFJ between 2026-04-29 and 2026-05-04).
+//
+// Production breadcrumbs share the identical shape:
+//   modal+ action_prompt_modal 1
+//   modal- action_prompt_modal 0
+//   overlay Print Status
+//   pstat_t on_activate           ← from src/ui/ui_panel_print_status.cpp:739
+//   <fault in lv_event_mark_deleted / get_prop_core / lv_ll_remove>
+//
+// The fault is reached via lv_timer_handler → lv_async_call →
+// lv_obj_delete_async_cb → recursive obj_delete_core. Hypothesis: the modal
+// hide enqueues safe_delete_deferred_raw on the dialog tree at the same time
+// that on_activate's lv_image_set_src + child re-shaping schedule async
+// deletes on a sibling overlay subtree. The next tick processes both batches
+// in one obj_delete_core walk; deleting one widget invalidates the global
+// event-list iterator the other branch is mid-traversal.
+//
+// We approximate the production interaction with a host subtree shaped like
+// PrintStatusPanel's reactivation surface (image + transient child container)
+// without dragging in PrintStatusPanel's full plumbing. The point is to land
+// the modal hide and the host subtree mutation in the SAME single-tick drain
+// so they fight for the async-delete list.
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: print-status reactivation racer (#906 cluster)",
+                 "[action_prompt][stress][pstat][.ui_integration]") {
+    const int bursts = env_iterations(40);
+    const int pairs_per_burst = 8;
+    const int transient_children = 6;
+    spdlog::info("[action_prompt-stress/pstat] {} bursts × {} pairs (modal hide + sibling mutate)",
+                 bursts, pairs_per_burst);
+
+    // Sibling subtree representing the Print Status overlay's reactivation
+    // surface. Stays alive across iterations; its children churn each cycle.
+    lv_obj_t* host = lv_obj_create(test_screen());
+    lv_obj_set_size(host, 400, 240);
+    lv_obj_t* image = lv_image_create(host);
+    lv_obj_set_size(image, 200, 200);
+
+    // Two image source paths to alternate so lv_image_set_src actually
+    // takes the cache-eviction branch each call. LVGL accepts symbolic
+    // names for its built-in images via the asset manager but we keep this
+    // independent of asset registration by using inline LV_SYMBOL strings,
+    // which set_src treats as text-symbol sources (still exercises the
+    // src-change path that would free a previous descriptor).
+    const char* src_a = LV_SYMBOL_FILE;
+    const char* src_b = LV_SYMBOL_IMAGE;
+
+    auto rebuild_transients = [&]() {
+        // Mirror "destroy children async; create fresh ones synchronously"
+        // — Print Status doesn't recreate buttons but other overlays in the
+        // same activation chain do (gcode_viewer, color swatches). We use
+        // lv_obj_delete_async, which is the supposed-safe escape route, to
+        // verify that even the sanctioned async delete corrupts the event
+        // list when batched with Modal::hide()'s safe_delete_deferred_raw.
+        int n = lv_obj_get_child_count(host);
+        for (int i = n - 1; i >= 1; --i) { // skip child 0 = image
+            lv_obj_delete_async(lv_obj_get_child(host, i));
+        }
+        for (int i = 0; i < transient_children; ++i) {
+            lv_obj_t* btn = lv_button_create(host);
+            lv_obj_set_size(btn, 60, 30);
+        }
+    };
+
+    auto data = make_prompt("Pstat", 3);
+    for (int b = 0; b < bursts; ++b) {
+        for (int p = 0; p < pairs_per_burst; ++p) {
+            REQUIRE(modal_.show_prompt(test_screen(), data));
+            modal_.hide(); // schedules safe_delete_deferred_raw on dialog
+            // Sibling mutation in the same tick window — this is the
+            // "pstat_t on_activate" moment in the production breadcrumbs.
+            lv_image_set_src(image, (p & 1) ? src_b : src_a);
+            rebuild_transients();
+        }
+        // Single-tick drain: every modal hide AND every host rebuild from
+        // this burst lands in one lv_async_call_cancel + obj_delete_core
+        // pass. AD5X/MIPS produces the same accumulation naturally because
+        // its tick spacing (~30ms) accommodates several websocket prompts
+        // between drains.
+        lv_tick_inc(30);
+        lv_timer_handler_safe();
+        if ((b + 1) % 5 == 0) {
+            spdlog::info("[action_prompt-stress/pstat] burst {}/{}", b + 1, bursts);
+        }
+    }
+    process_lvgl(120);
+    // Tear the host down through the same async path so the destructor walk
+    // gets one more shot at landing on a corrupted list.
+    lv_obj_delete_async(host);
+    process_lvgl(80);
+    SUCCEED("Completed " << bursts << " pstat-reactivation racer bursts without crash");
+}

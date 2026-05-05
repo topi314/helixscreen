@@ -2692,6 +2692,54 @@ void Application::init_action_prompt() {
     AmsState::instance().set_gcode_response_callback(
         [prompt_mgr](const std::string& line) { prompt_mgr->process_line(line); });
 
+    // Cluster:pstat-async-delete reproducer hook (#906). When
+    // HELIX_AUTO_STRESS_PROMPT=1, drive a continuous show/hide cycle of
+    // action_prompt_modal so a user can sit on Print Status and let the
+    // bug accumulate. Period is configurable via HELIX_STRESS_PROMPT_MS
+    // (default 250 ms — fast enough to outpace the modal exit animation
+    // (~150 ms) so consecutive deletes pile in the same async list).
+    if (const char* on = std::getenv("HELIX_AUTO_STRESS_PROMPT"); on && *on && std::string(on) != "0") {
+        int period_ms = 500;
+        if (const char* p = std::getenv("HELIX_STRESS_PROMPT_MS")) {
+            try { period_ms = std::max(100, std::stoi(p)); } catch (...) {}
+        }
+        int delay_ms = 30000; // default 30s so user can navigate to Print Status first
+        if (const char* d = std::getenv("HELIX_STRESS_START_DELAY_SEC")) {
+            try { delay_ms = std::max(0, std::stoi(d)) * 1000; } catch (...) {}
+        }
+        spdlog::warn("[ActionPrompt] HELIX_AUTO_STRESS_PROMPT=1 — will drive show/hide every {}ms after {}s delay (gated on is_showing)", period_ms, delay_ms / 1000);
+        // Gate transitions on ActionPromptManager state so we alternate
+        // cleanly instead of stacking modals when the exit animation is
+        // slower than our period. ActionPromptManager::is_showing() is the
+        // canonical "is a prompt active right now" probe.
+        struct StressCtx { ActionPromptManager* mgr; int period_ms; };
+        auto* ctx = new StressCtx{prompt_mgr, period_ms};
+        // One-shot kick-off timer; on fire it spawns the repeating stress
+        // timer. Gives the operator time to navigate before modals start
+        // hijacking the screen.
+        auto* kickoff = lv_timer_create([](lv_timer_t* t) {
+            auto* c = static_cast<StressCtx*>(lv_timer_get_user_data(t));
+            if (!c) { lv_timer_delete(t); return; }
+            spdlog::warn("[ActionPrompt] Stress timer ARMED — show/hide cycle starting now");
+            auto* repeat = lv_timer_create([](lv_timer_t* t2) {
+                auto* mgr = static_cast<ActionPromptManager*>(lv_timer_get_user_data(t2));
+                if (!mgr) return;
+                if (ActionPromptManager::is_showing()) {
+                    mgr->process_line("// action:prompt_end");
+                } else {
+                    mgr->process_line("// action:prompt_begin StressTest");
+                    mgr->process_line("// action:prompt_text Cluster A reproducer");
+                    mgr->process_line("// action:prompt_button OK|ECHO_OK");
+                    mgr->process_line("// action:prompt_show");
+                }
+            }, c->period_ms, c->mgr);
+            (void)repeat;
+            delete c;
+            lv_timer_delete(t); // one-shot
+        }, std::max(1, delay_ms), ctx);
+        (void)kickoff;
+    }
+
     // Register for notify_gcode_response messages from Moonraker
     // All lines from G-code console output come through this notification
     client->register_method_callback(

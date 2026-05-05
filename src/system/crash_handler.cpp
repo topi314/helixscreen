@@ -151,11 +151,14 @@ struct BreadcrumbSlot {
     char subject[60]; // null-terminated, truncated
 };
 
-/// Ring size: 128 slots × 72 bytes = 9216 bytes static.
-/// Doubled from 64 to absorb growth in crumb sites (eviction, pressure
-/// response, thumbnail set_src) without displacing nav/overlay context
-/// during sustained pressure cycles.
-static constexpr size_t kBreadcrumbRingSize = 128;
+/// Ring size: 256 slots × 72 bytes = 18432 bytes static.
+/// Doubled from 128 to absorb the per-step pstat_act / pstat_thm crumbs
+/// added for cluster:pstat-async-delete (#906) without displacing the
+/// async_d / sync_d crumbs from earlier in the same trace. Production
+/// bundles since 2026-04-29 captured ≤80 crumbs each, but the new
+/// instrumentation adds ~6 per Print Status reactivation, and tick
+/// crumbs are still cheap to absorb at this size.
+static constexpr size_t kBreadcrumbRingSize = 256;
 static BreadcrumbSlot s_breadcrumb_ring[kBreadcrumbRingSize] = {};
 
 /// Monotonically-incrementing write index. Modulo ring size gives slot.
