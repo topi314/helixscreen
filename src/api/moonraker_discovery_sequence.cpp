@@ -1172,14 +1172,6 @@ json MoonrakerDiscoverySequence::build_subscription_objects(
     subscription_objects["gcode_macro START_PRINT"] = json::array({"preparation_done"});
     subscription_objects["gcode_macro _HELIX_STATE"] = json::array({"print_started"});
 
-    // Pre-print phase observability (PrintPhaseTracker). K2 (and similar
-    // Creality forks) expose homing progress via xyz_ready and the bed-temp
-    // stabilization band table via PRINTER_PARAM. Moonraker silently drops
-    // subscriptions for absent objects, so unconditional subscription is safe
-    // and the tracker auto-degrades on printers that don't emit these.
-    subscription_objects["gcode_macro xyz_ready"] = nullptr;
-    subscription_objects["gcode_macro PRINTER_PARAM"] = nullptr;
-
     return subscription_objects;
 }
 

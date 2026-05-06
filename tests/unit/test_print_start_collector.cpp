@@ -1948,3 +1948,61 @@ TEST_CASE("PreprintPredictor has_predictions reflects actual entries", "[print][
 
     REQUIRE(predictor.has_predictions());
 }
+
+// ============================================================================
+// K2/CFS-specific gcode tag stream — folded in from the deleted
+// PrintPhaseTracker. Universal printers fall through these matchers.
+// ============================================================================
+
+TEST_CASE_METHOD(PrintStartCollectorSequentialFixture,
+                 "K2 purge percent (fraction form) drives PURGING progress",
+                 "[print][collector][k2]") {
+    collector().start();
+    drain_async_updates();
+
+    // Real K2 firmware emits: "// num: 0, velocity: 575.000000, percent 1.000000"
+    // (no colon after "percent", value is a 0..1 fraction).
+    send_gcode_response("// num: 0, velocity: 575.000000, percent 0.500000");
+    REQUIRE(get_current_phase() == PrintStartPhase::PURGING);
+    REQUIRE(get_current_progress() == 50);
+
+    // The collector caps non-COMPLETE phases at 95% to leave headroom for the
+    // COMPLETE transition — so 100% K2 purge tops out at 95% on the overall bar.
+    send_gcode_response("// num: 0, velocity: 575.000000, percent 1.000000");
+    REQUIRE(get_current_progress() == 95);
+}
+
+TEST_CASE_METHOD(PrintStartCollectorSequentialFixture,
+                 "K2 purge percent (legacy integer form) drives PURGING progress",
+                 "[print][collector][k2]") {
+    collector().start();
+    drain_async_updates();
+
+    // Legacy/integer form: "percent:" followed by 0..100 integer.
+    send_gcode_response("// num: 0, velocity: 23.0, percent: 75");
+    REQUIRE(get_current_phase() == PrintStartPhase::PURGING);
+    REQUIRE(get_current_progress() == 75);
+}
+
+TEST_CASE_METHOD(PrintStartCollectorSequentialFixture,
+                 "CFS box cut sensor detected enters INITIALIZING with Loading Filament",
+                 "[print][collector][k2][cfs]") {
+    collector().start();
+    drain_async_updates();
+
+    send_gcode_response("// [box] cut sensor detected");
+    REQUIRE(get_current_phase() == PrintStartPhase::INITIALIZING);
+    REQUIRE(get_current_message().find("Loading Filament") != std::string::npos);
+}
+
+TEST_CASE_METHOD(PrintStartCollectorSequentialFixture,
+                 "Stock Klipper purge-line text falls through K2 matcher",
+                 "[print][collector][k2]") {
+    collector().start();
+    drain_async_updates();
+
+    // Voron / RatRig stock output — must NOT match the K2 percent matcher
+    // (no num:/velocity: anchors), so PURGING isn't entered from this line.
+    send_gcode_response("// probe at 190.000,8.000 is z=-0.580000");
+    REQUIRE(get_current_phase() != PrintStartPhase::PURGING);
+}

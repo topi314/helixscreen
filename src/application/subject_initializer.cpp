@@ -60,7 +60,6 @@
 #include "system/telemetry_manager.h"
 #include "temperature_sensor_manager.h"
 #include "temperature_service.h"
-#include "print_phase_tracker.h"
 #include "timelapse_state.h"
 #include "tool_state.h"
 #include "usb_manager.h"
@@ -202,12 +201,6 @@ void SubjectInitializer::init_panel_subjects(MoonrakerAPI* api) {
 
     // Timelapse state (event-driven, not a panel)
     helix::TimelapseState::instance().init_subjects();
-
-    // Pre-print phase tracker (event-driven; observers attached after
-    // PrinterState is wired and gcode_response listener registered with
-    // the MoonrakerClient in Application::run_loop).
-    helix::PrintPhaseTracker::instance().init_subjects();
-    helix::PrintPhaseTracker::instance().attach_observers();
 
     // Settings overlays
     init_global_timelapse_settings(api);
