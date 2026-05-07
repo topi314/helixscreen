@@ -647,6 +647,18 @@ int Application::run(int argc, char** argv) {
         return 1;
     }
 
+    // Post-UI safety net: phases 11-16b run finalize_setup, plugin init,
+    // overlay construction, and the first synchronous render. Any std::exception
+    // escaping here unwinds out of run() into main()'s catch and exits 134,
+    // which the watchdog interprets as a deterministic crash and (after
+    // CRASH_LOOP_MAX_CRASHES) shows the recovery dialog. The 4ca58af52 hotfix
+    // wraps main_loop() iterations but does not cover this pre-loop window —
+    // the 5ac58e051 follow_overlay regression hit exactly here, in
+    // HomePanel::finalize_setup() → set_config(null) (json::type_error::306).
+    // Catch + log + breadcrumb + toast + continue so the user gets a degraded
+    // but usable app instead of a watchdog crash loop they can only escape by
+    // reflashing. main_loop() owns the runaway-streak guard for steady state.
+    try {
     // Heap snapshot after XML panel load completes. Delta against
     // post_telemetry_init is the cost of init_panel_subjects + connect_moonraker
     // + init_ui — the window where #758 class aborts have fired.
@@ -663,7 +675,16 @@ int Application::run(int argc, char** argv) {
             CrashReporter::instance().consume_crash_file();
         } else {
             auto report = CrashReporter::instance().collect_report();
-            if (CrashReporter::instance().is_duplicate(report)) {
+            if (report.signal_name.empty()) {
+                // Empty signal_name means read_crash_file() returned null because
+                // the file lacked the required signal/name fields — typically a
+                // signal handler killed mid-write (OOM-killer, watchdog, power
+                // loss). Showing a dialog here just lets the user submit a
+                // useless bundle (see CHUQCNAE 2026-05-05).
+                spdlog::warn(
+                    "[Application] Crash file unparseable — consuming and skipping dialog");
+                CrashReporter::instance().consume_crash_file();
+            } else if (CrashReporter::instance().is_duplicate(report)) {
                 spdlog::info("[Application] Duplicate crash ({}), suppressing dialog",
                              CrashReporter::fingerprint(report));
                 CrashReporter::instance().consume_crash_file();
@@ -807,6 +828,27 @@ int Application::run(int argc, char** argv) {
             lv_timer_delete(timer);
         };
         lv_timer_create(deferred_refresh_cb, 100, m_screen); // 100ms delay
+    }
+
+    } catch (const std::exception& e) {
+        const char* type_name = typeid(e).name();
+        spdlog::error("[Application] Caught exception during post-UI init: {} ({})", e.what(),
+                      type_name);
+        crash_handler::breadcrumb::note("post_init_catch", type_name);
+        crash_handler::breadcrumb::dump_to_fd(STDERR_FILENO);
+        try {
+            TelemetryManager::instance().record_error("post_init", "unhandled_exception", e.what());
+        } catch (...) {
+            // Telemetry must never re-throw out of the catch handler.
+        }
+        try {
+            ToastManager::instance().show(
+                ToastSeverity::ERROR,
+                "App startup encountered an error. Some features may be unavailable.",
+                0 /* sticky */);
+        } catch (...) {
+            // Toast failure is non-fatal; the user still gets a working main loop.
+        }
     }
 
     // Phase 17: Main loop
