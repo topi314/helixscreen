@@ -920,19 +920,24 @@ void PrintSelectPanel::refresh_files(bool force) {
         return;
     }
 
+    const auto now = std::chrono::steady_clock::now();
+    if (refresh_should_skip(refresh_in_flight_, force, refresh_started_at_, now,
+                            refresh_stuck_threshold_)) {
+        const auto elapsed = now - refresh_started_at_;
+        spdlog::debug("[{}] refresh_files() skipped: previous request still in-flight ({}ms)",
+                      get_name(),
+                      std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+        return;
+    }
     if (refresh_in_flight_ && !force) {
-        const auto elapsed = std::chrono::steady_clock::now() - refresh_started_at_;
-        if (elapsed < REFRESH_STUCK_THRESHOLD) {
-            spdlog::debug("[{}] refresh_files() skipped: previous request still in-flight ({}ms)",
-                          get_name(),
-                          std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-            return;
-        }
-        spdlog::warn("[{}] refresh_files(): in-flight flag stuck for {}s — treating prior "
+        // Self-heal path: predicate returned false because the threshold was
+        // exceeded — treat the prior response as lost and fall through to a
+        // fresh request (the flag is overwritten below).
+        const auto elapsed = now - refresh_started_at_;
+        spdlog::warn("[{}] refresh_files(): in-flight flag stuck for {}ms — treating prior "
                      "response as lost and retrying",
                      get_name(),
-                     std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
-        // Fall through and issue a fresh request. The flag is overwritten below.
+                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
     }
 
     spdlog::trace("[{}] refresh_files() called for path='{}', existing_count={}{}", get_name(),

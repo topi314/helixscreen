@@ -94,6 +94,29 @@ struct CardDimensions {
 };
 
 /**
+ * @brief Decide whether to skip a refresh because one is already in flight,
+ *        or to fall through (self-heal) because the in-flight flag has been
+ *        stuck for longer than the threshold.
+ *
+ * Extracted as a pure function so it can be tested without the full
+ * PrintSelectPanel/LVGL fixture (#911).
+ *
+ * @return true to skip (existing request still healthy), false to proceed
+ */
+inline bool refresh_should_skip(bool in_flight, bool force,
+                                std::chrono::steady_clock::time_point started_at,
+                                std::chrono::steady_clock::time_point now,
+                                std::chrono::milliseconds stuck_threshold) {
+    if (force) {
+        return false;
+    }
+    if (!in_flight) {
+        return false;
+    }
+    return (now - started_at) < stuck_threshold;
+}
+
+/**
  * @brief Print file selection panel with card/list views
  *
  * Displays G-code files from Moonraker with two view modes:
@@ -505,8 +528,9 @@ class PrintSelectPanel : public PanelBase {
     /// and allow a fresh request through. The RPC layer's own 60s timeout normally
     /// clears the flag via the error callback; this is a panel-level safety net.
     /// Sits between worst-case slow embedded responses (K1C ~5-8s on large dirs)
-    /// and the RPC layer's 60s ceiling.
-    static constexpr std::chrono::seconds REFRESH_STUCK_THRESHOLD{30};
+    /// and the RPC layer's 60s ceiling. Non-const so tests can drop it to
+    /// milliseconds via PrintSelectPanelTestAccess (#911).
+    std::chrono::milliseconds refresh_stuck_threshold_{30000};
 
     // Virtualized view modules (extracted for maintainability)
     std::unique_ptr<helix::ui::PrintSelectCardView> card_view_;
