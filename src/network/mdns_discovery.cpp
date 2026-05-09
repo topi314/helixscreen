@@ -118,6 +118,14 @@ class MdnsDiscovery::Impl {
             }
         }
 
+        // Reap any prior thread that exited on its own (e.g. socket-open
+        // failure path below sets running_=false and returns early). Without
+        // this, the next move-assignment to a joinable thread_ calls
+        // std::terminate WITHOUT an active exception (UBZQ94EE).
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+
         // Start discovery thread. Wrap — EAGAIN under thread exhaustion
         // throws std::system_error ([L083]).
         running_.store(true);
@@ -132,12 +140,12 @@ class MdnsDiscovery::Impl {
     }
 
     void stop() {
-        // Signal thread to stop
+        // Signal thread to stop. Always proceed to the join below — the loop
+        // can clear running_ on its own (socket-open failure path), in which
+        // case an early return here would leave thread_ joinable. The next
+        // ~Impl or the next start() would then std::terminate.
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (!running_.load()) {
-                return;
-            }
             running_.store(false);
             callback_ = nullptr;
         }
@@ -145,12 +153,13 @@ class MdnsDiscovery::Impl {
         // Wake up thread if it's sleeping
         stop_cv_.notify_all();
 
-        // Wait for thread to exit
+        // Wait for thread to exit. Only log "Stopped" if there was actually
+        // a thread to reap — covers the case where ~Impl() runs without
+        // start() ever being called, or after the loop self-terminated.
         if (thread_.joinable()) {
             thread_.join();
+            spdlog::info("[MdnsDiscovery] Stopped discovery");
         }
-
-        spdlog::info("[MdnsDiscovery] Stopped discovery");
     }
 
     bool is_running() const {

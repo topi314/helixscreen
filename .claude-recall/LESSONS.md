@@ -182,20 +182,20 @@
 - **Uses**: 1 | **Velocity**: 0.125 | **Learned**: 2026-03-29 | **Last**: 2026-03-29 | **Category**: lvgl
 > LVGL 9.5: `DRAW_TASK_ADDED` cbs fire AFTER `DRAW_MAIN_END/DRAW_POST` — `lv_draw_rect/_triangle/_fill` from there draws nothing. Broke chart gradient fills that worked in 9.4-pre. Fix: do custom fills in `DRAW_MAIN_END`, compute positions via `lv_chart_get_y_array()` + `lv_map()`. Gotcha: `lv_draw_fill` VER gradient `frac=0` is BOTTOM, `frac=255` is TOP. Use `lv_draw_fill` (not `lv_draw_rect`) for gradient-only fills to avoid bg_color bleed.
 
-### [L080] [***--|****-] Verify deployment chain before user interaction
-- **Uses**: 11 | **Velocity**: 3 | **Learned**: 2026-04-16 | **Last**: 2026-05-05 | **Category**: gotcha
+### [L080] [***--|*****] Verify deployment chain before user interaction
+- **Uses**: 12 | **Velocity**: 4 | **Learned**: 2026-04-16 | **Last**: 2026-05-07 | **Category**: gotcha
 > Before asking user to interact on-device, verify in one pass: (1) NEW binary running (PID start time / version in log), (2) logs land where you expect (journalctl/file/console), (3) required state on (telemetry, debug level in helixscreen.env), (4) logs reachable via SSH. Each failed round-trip burns user patience. Pi: systemctl → journalctl; `deploy-pi-fg` uses `ssh -t` (console only); nohup drops output. Production log capture: systemd + journalctl.
 
-### [L081] [***--|****-] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 15 | **Velocity**: 3.625 | **Learned**: 2026-04-18 | **Last**: 2026-04-28 | **Category**: gotcha | **Type**: constraint
+### [L081] [***--|*****] lifetime_.defer does NOT escape UpdateQueue batch
+- **Uses**: 16 | **Velocity**: 4.625 | **Learned**: 2026-04-18 | **Last**: 2026-05-07 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / our `helix::ui::async_call` are thin wrappers over `queue_update` — the cb fires in the next `process_pending` tick, still inside a UpdateQueue batch with other sync deletions. AsyncLifetimeGuard's gen counter only protects `this`, not LVGL event-list. Any comment claiming "defer is outside process_pending" is wrong — fix it. Observer cbs (`observe_int_sync`, `observe_string`) are also queued since #82, same batch. BANNED inside any queued/deferred cb: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's async list, outside our batch. Multiple sync deletes in one batch → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). CLAUDE.md § "No sync widget deletion in queued callbacks", `include/ui_utils.h`.
 
 ### [L082] [*----|*----] Percent size inside LV_SIZE_CONTENT parent collapses to 0
 - **Uses**: 1 | **Velocity**: 0.25 | **Learned**: 2026-04-20 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > LVGL percent sizing (`width="50%"`, `style_min_width="50%"`) resolves against parent content area. If parent is `LV_SIZE_CONTENT` → circular dep, percent collapses to 0, child vanishes. Symptom: `long_mode="wrap"` + `flex_grow="1"` wraps near-per-character (super-tall cards); flex rows show only fixed-width children with the growing one squeezed out. Fix: give parent an explicit width, then child `width="100%"`. Never nest percent kids in content-sized parents. Bit us in toast stacking refactor 26573f1f2 — LV_SIZE_CONTENT stack between `lv_layer_top` and toast_root collapsed `min_width="50%"`.
 
-### [L083] [**---|****-] Never `std::thread(...).detach()` for fire-and-forget work
-- **Uses**: 6 | **Velocity**: 2.25 | **Learned**: 2026-04-22 | **Last**: 2026-05-06 | **Category**: gotcha | **Type**: constraint
+### [L083] [***--|*****] Never `std::thread(...).detach()` for fire-and-forget work
+- **Uses**: 10 | **Velocity**: 6.25 | **Learned**: 2026-04-22 | **Last**: 2026-05-09 | **Category**: gotcha | **Type**: constraint
 > On AD5M/CC1/MIPS32, `pthread_create` returns EAGAIN under thread exhaustion → `std::thread` ctor throws `std::system_error`. Propagating through an LVGL C event-dispatch frame or a `noexcept` boundary → `std::terminate without active exception`, near-impossible to diagnose because the crash looks unrelated (#724, #837 debug-bundle upload, #811-adjacent RatOS HTTP-thread storm).
 > **HTTP work**: `helix::http::HttpExecutor::fast()` (4 workers — REST/API/thumbnails/small uploads) or `::slow()` (1 worker — multi-MB transfers, debug bundles). Submitted lambdas still need `helix::ui::queue_update()` / `tok.defer()` for UI. `include/http_executor.h`.
 > **Non-HTTP IO** (BT/USB/RFCOMM, QR decode, device discovery): use an existing managed pool / BusThread, OR wrap `std::thread(...).detach()` in `try { ... } catch (const std::system_error&) { ... toast + error cb ... }` so spawn failure surfaces a toast instead of terminating. `feedback_no_bare_threads_arm.md`.
@@ -224,8 +224,8 @@
 > Symptom: device hangs at boot animation; no UI; SSH in → no `/tmp/helixscreen.log`, no helix-screen procs, no syslog entries. Manual `/etc/init.d/S99helixscreen start` works.
 > Fix: install a procd shim at `/etc/init.d/<name>` with `#!/bin/sh /etc/rc.common`, `START=99 STOP=01 DEPEND=done`, and `boot()/start()/stop()/restart()/status()` that delegate to the SysV `/etc/init.d/SXX<name>`. Then `<shim> enable` for rc.d symlinks. See `install_procd_shim_k2()` in `scripts/lib/installer/service.sh`. Diag: `head -1 /etc/init.d/<name>` must show `/etc/rc.common`; `<script> boot; echo $?` must succeed; post-reboot `grep <tag> /var/log/messages` must show boot invocation.
 
-### [L087] [*----|***--] Default-constructed nlohmann::json is NULL — `.value()` throws
-- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-05-06 | **Last**: 2026-05-06 | **Category**: gotcha | **Type**: constraint
+### [L087] [*----|****-] Default-constructed nlohmann::json is NULL — `.value()` throws
+- **Uses**: 3 | **Velocity**: 2 | **Learned**: 2026-05-06 | **Last**: 2026-05-09 | **Category**: gotcha | **Type**: constraint
 > `nlohmann::json j;` is **JSON null**, not `{}`. `.value("k", def)` throws `type_error::306` on null. Bites upgrade paths: loader does `if (item.contains("config")) widget_config = item["config"];` — if absent, stays null → consumer `.value()` blows up (`5ac58e051` → `c3835003f`).
 > Fix source: init with `json::object()`. Fix consumer: `j.is_object() && j.value("k", def)`. Do both.
 

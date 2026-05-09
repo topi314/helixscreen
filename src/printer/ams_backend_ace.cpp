@@ -884,6 +884,12 @@ uint32_t AmsBackendAce::parse_slot_color(const json& color_val) {
 void AmsBackendAce::start_rest_fallback() {
     use_rest_fallback_ = true;
     rest_stop_requested_.store(false);
+    // Reap any prior thread before move-assignment. Reassigning to a joinable
+    // std::thread calls std::terminate WITHOUT an active exception, regardless
+    // of whether the loop has already exited (UBZQ94EE-class bug).
+    if (rest_polling_thread_.joinable()) {
+        rest_polling_thread_.join();
+    }
     // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
     try {
         rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);
