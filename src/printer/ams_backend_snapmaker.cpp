@@ -273,6 +273,93 @@ AmsError AmsBackendSnapmaker::set_slot_info(int slot_index, const SlotInfo& info
             });
     }
 
+    // Push the user's edit back to firmware via the paxx12 Extended Firmware
+    // POST /printer/filament_detect/set endpoint (see filament_detect.md in
+    // SnapmakerU1-Extended-Firmware/docs/design/). Firmware mirrors the body
+    // into print_task_config.filament_vendor / filament_type / filament_color_rgba,
+    // which the parse path here already reads — so on the next status update
+    // OverwriteAlways auto-mirror sees firmware-truth that matches user-truth
+    // and lane_data converges. On stock firmware (no extension) the endpoint
+    // 404s; the override is still persisted to lane_data, so HelixScreen's UI
+    // works correctly. Only OrcaSlicer's MoonrakerPrinterAgent and the
+    // firmware-side LCD don't reflect user edits on stock firmware.
+    if (persist && api_) {
+        nlohmann::json info_obj = nlohmann::json::object();
+        if (!info.brand.empty())
+            info_obj["VENDOR"] = info.brand;
+        if (!info.material.empty())
+            info_obj["MAIN_TYPE"] = info.material;
+        // SUB_TYPE is restricted to Snapmaker's known product lines per the
+        // firmware spec. spool_name carries the SUB_TYPE on the read path
+        // (see handle_status_update), but UI-edited spool_name may be a free-
+        // form string ("My Custom Spool"). Only round-trip when it matches a
+        // known sub_type — otherwise omit and let firmware preserve whatever
+        // it had. The free-form string still lives in lane_data.
+        static const std::array<const char*, 8> kKnownSubTypes = {
+            "Basic", "Matte", "SnapSpeed", "Silk", "Support", "HF", "95A", "95A HF"};
+        for (const auto* st : kKnownSubTypes) {
+            if (info.spool_name == st) {
+                info_obj["SUB_TYPE"] = info.spool_name;
+                break;
+            }
+        }
+        info_obj["RGB_1"] = info.color_rgb;
+        info_obj["ALPHA"] = 255;
+        if (info.nozzle_temp_min > 0)
+            info_obj["HOTEND_MIN_TEMP"] = info.nozzle_temp_min;
+        if (info.nozzle_temp_max > 0)
+            info_obj["HOTEND_MAX_TEMP"] = info.nozzle_temp_max;
+        if (info.bed_temp > 0)
+            info_obj["BED_TEMP"] = info.bed_temp;
+        // CARD_UID and SKU intentionally omitted — SlotInfo doesn't carry
+        // them and we want firmware to preserve whatever the RFID tag wrote.
+
+        nlohmann::json payload = nlohmann::json::object();
+        payload["channel"] = slot_index;
+        payload["info"] = info_obj;
+
+        // Log-only callback — no UI / member access — so a value-captured tag
+        // is safe even after the backend is destroyed (same rationale as
+        // save_async's callback above). Routes through MoonrakerRestAPI which
+        // dispatches on its own HTTP worker thread, NOT a raw std::thread
+        // (lesson L083: pthread EAGAIN on AD5M / CC1 / MIPS32).
+        const std::string tag = backend_log_tag();
+        api_->rest().call_rest_post(
+            "/printer/filament_detect/set", payload,
+            [tag, slot_index](const RestResponse& resp) {
+                if (!resp.success) {
+                    // 404 on stock firmware (no Extended Firmware extension)
+                    // is expected — log at debug, not warn, so we don't spam
+                    // every user without the firmware update.
+                    if (resp.status_code == 404) {
+                        spdlog::debug("{} filament_detect/set unavailable (slot {}): "
+                                      "stock firmware without Extended Firmware extension",
+                                      tag, slot_index);
+                    } else {
+                        spdlog::warn("{} filament_detect/set failed for slot {}: HTTP {} {}",
+                                     tag, slot_index, resp.status_code, resp.error);
+                    }
+                    return;
+                }
+                // Success-shaped HTTP response can still carry "state":"error"
+                // (per filament_detect.md). Drain that as a warn — override is
+                // still saved to lane_data so user data isn't lost.
+                if (resp.data.is_object()) {
+                    auto state_it = resp.data.find("state");
+                    if (state_it != resp.data.end() && state_it->is_string() &&
+                        state_it->get<std::string>() == "error") {
+                        std::string msg;
+                        auto msg_it = resp.data.find("message");
+                        if (msg_it != resp.data.end() && msg_it->is_string()) {
+                            msg = msg_it->get<std::string>();
+                        }
+                        spdlog::warn("{} filament_detect/set returned error for slot {}: {}", tag,
+                                     slot_index, msg);
+                    }
+                }
+            });
+    }
+
     // Pass slot_index as event data so AmsState can do a targeted slot sync.
     // Without it, AmsState::on_event silently skips the refresh and the AMS
     // panel never re-reads the edited slot — the UI shows stale data until
@@ -712,12 +799,20 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
             check_hardware_event_clear(*slot, i, observed_uids[i]);
         }
         // Mirror firmware-truth color/material into lane_data so OrcaSlicer's
-        // MoonrakerPrinterAgent sees the spool. FillUnsetOnly policy: like CFS,
-        // Snapmaker user edits via set_slot_info don't reach firmware (RFID is
-        // hardware-truth). See mirror_firmware_to_lane_data docs.
+        // MoonrakerPrinterAgent sees the spool. OverwriteAlways policy: user
+        // edits via set_slot_info now round-trip through firmware via the
+        // POST /printer/filament_detect/set endpoint (paxx12 Extended Firmware),
+        // so firmware-truth and user-truth converge — overwriting lane_data
+        // unconditionally is safe and also catches external edits (CHANGE_ZCOLOR
+        // from a print, manual gcode, OrcaSlicer, etc). On stock firmware the
+        // POST 404s, but the override is still persisted to lane_data
+        // separately, so this overwrite is the only path that could theoretically
+        // de-sync — accept that tradeoff in exchange for picking up external
+        // edits on extension-enabled firmware. See mirror_firmware_to_lane_data
+        // docs and AD5X IFS for the same pattern.
         helix::ams::mirror_firmware_to_lane_data(
             override_store_.get(), overrides_, i, slot->color_rgb, slot->material,
-            slot->status == SlotStatus::AVAILABLE, helix::ams::MirrorPolicy::FillUnsetOnly,
+            slot->status == SlotStatus::AVAILABLE, helix::ams::MirrorPolicy::OverwriteAlways,
             backend_log_tag());
         apply_overrides(*slot, i);
     }

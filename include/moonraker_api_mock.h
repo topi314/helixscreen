@@ -394,6 +394,35 @@ class MoonrakerRestAPIMock : public MoonrakerRestAPI {
     void wled_get_status(RestCallback on_success, ErrorCallback on_error) override;
     void get_server_config(RestCallback on_success, ErrorCallback on_error) override;
 
+    // ========================================================================
+    // Test Spies — record outbound POSTs so unit tests can assert on payloads
+    // ========================================================================
+
+    /// Recorded POST: endpoint and body. Tests use mock_get_post_history()
+    /// to verify a backend issued the expected request.
+    struct PostRecord {
+        std::string endpoint;
+        nlohmann::json body;
+    };
+
+    /// All POST calls observed since construction (or last clear).
+    [[nodiscard]] std::vector<PostRecord> mock_get_post_history() const {
+        return post_history_;
+    }
+
+    /// Drop the recorded POST history.
+    void mock_clear_post_history() {
+        post_history_.clear();
+    }
+
+    /// Configure a fake response for the next POST to `endpoint`. If a
+    /// response is queued for an endpoint, the mock returns it (instead of
+    /// the default {"result":"ok"}) so tests can drive both success and
+    /// "state":"error" / 404 paths through the same code.
+    void mock_queue_post_response(const std::string& endpoint, RestResponse response) {
+        post_responses_[endpoint] = std::move(response);
+    }
+
   private:
     /// Mock WLED strip on/off states (strip_id -> is_on)
     std::map<std::string, bool> mock_wled_states_;
@@ -401,6 +430,11 @@ class MoonrakerRestAPIMock : public MoonrakerRestAPI {
     std::map<std::string, int> mock_wled_presets_;
     /// Mock WLED brightness per strip (strip_id -> 0-255)
     std::map<std::string, int> mock_wled_brightness_;
+
+    /// Recorded outbound POSTs (test spy)
+    std::vector<PostRecord> post_history_;
+    /// Per-endpoint canned responses (test spy)
+    std::map<std::string, RestResponse> post_responses_;
 };
 
 /**

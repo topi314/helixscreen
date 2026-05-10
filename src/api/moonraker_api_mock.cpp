@@ -2179,10 +2179,21 @@ void MoonrakerRestAPIMock::call_rest_post(const std::string& endpoint, const nlo
                                           RestCallback on_complete) {
     spdlog::debug("[MoonrakerAPIMock] REST POST: {} ({} bytes)", endpoint, params.dump().size());
 
+    // Record for test spies before invoking the callback so even tests that
+    // assert from inside on_complete (synchronous mock) see the entry.
+    post_history_.push_back({endpoint, params});
+
+    // Honor a queued canned response (drives 404 / "state":"error" branches);
+    // otherwise default to a generic success.
     RestResponse resp;
-    resp.success = true;
-    resp.status_code = 200;
-    resp.data = {{"result", "ok"}};
+    auto it = post_responses_.find(endpoint);
+    if (it != post_responses_.end()) {
+        resp = it->second;
+    } else {
+        resp.success = true;
+        resp.status_code = 200;
+        resp.data = {{"result", "ok"}};
+    }
 
     if (on_complete) {
         on_complete(resp);
