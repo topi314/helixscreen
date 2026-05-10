@@ -902,6 +902,7 @@ AmsError AmsBackendCfs::set_slot_info(int slot_index, const SlotInfo& info, bool
             ovr.remaining_weight_g = info.remaining_weight_g;
             ovr.total_weight_g = info.total_weight_g;
             ovr.color_rgb = info.color_rgb;
+            ovr.color_set = true; // a user-edit always records a color, even pure black (#000000)
             ovr.color_name = info.color_name;
             ovr.material = info.material;
             // SlotInfo carries the user's edit OR the bound Spoolman spool's
@@ -954,19 +955,17 @@ AmsError AmsBackendCfs::set_slot_info(int slot_index, const SlotInfo& info, bool
 }
 
 void AmsBackendCfs::push_slot_color_to_firmware(int global_index, uint32_t color_rgb) {
-    // Validate inputs BEFORE formatting the gcode — invalid args trigger an
-    // unhandled TypeError in box_wrapper that Klipper escalates to
+    // Validate slot index BEFORE formatting the gcode — invalid args trigger
+    // an unhandled TypeError in box_wrapper that Klipper escalates to
     // invoke_shutdown. Better to silently no-op than to crash the printer.
+    //
+    // No color-value validation here on purpose: pure black (0x000000) is a
+    // legitimate user choice and we don't want to silently drop it. The
+    // caller (set_slot_info, which sets color_set=true on the override) is
+    // responsible for only invoking this when a real color was chosen.
     constexpr int kCfsMaxSlots = 16; // 4 units × 4 slots
     if (global_index < 0 || global_index >= kCfsMaxSlots) {
         spdlog::debug("{} push_slot_color_to_firmware: skipping invalid slot {}",
-                      backend_log_tag(), global_index);
-        return;
-    }
-    if (color_rgb == 0) {
-        // "No signal" sentinel — same convention as the auto-mirror. Don't
-        // push a placeholder color that would overwrite a real firmware value.
-        spdlog::debug("{} push_slot_color_to_firmware: skipping slot {} (color=0)",
                       backend_log_tag(), global_index);
         return;
     }
@@ -1275,7 +1274,7 @@ void AmsBackendCfs::apply_overrides(SlotInfo& slot, int slot_index) {
         slot.remaining_weight_g = o.remaining_weight_g;
     if (o.total_weight_g >= 0.0f)
         slot.total_weight_g = o.total_weight_g;
-    if (o.color_rgb != 0)
+    if (o.color_set)
         slot.color_rgb = o.color_rgb;
     if (!o.color_name.empty())
         slot.color_name = o.color_name;

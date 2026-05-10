@@ -1495,8 +1495,11 @@ TEST_CASE("mirror_firmware_to_lane_data FillUnsetOnly: user color preserved agai
     FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
 
     // Simulate a user who already set blue + brand "Bambu" via set_slot_info.
+    // color_set is the explicit "user set this" signal — pure black is a
+    // legitimate user choice, so we cannot rely on color_rgb != 0.
     std::unordered_map<int, FilamentSlotOverride> overrides;
     overrides[0].color_rgb = 0x0000FF;
+    overrides[0].color_set = true;
     overrides[0].material = "PETG";
     overrides[0].brand = "Bambu";
 
@@ -1507,11 +1510,62 @@ TEST_CASE("mirror_firmware_to_lane_data FillUnsetOnly: user color preserved agai
         helix::ams::MirrorPolicy::FillUnsetOnly, "[test]");
     CHECK_FALSE(changed);
     CHECK(overrides[0].color_rgb == 0x0000FFu); // user's blue preserved
+    CHECK(overrides[0].color_set == true);
     CHECK(overrides[0].material == "PETG");
     CHECK(overrides[0].brand == "Bambu");
 
     // No save fired — lane_data not written.
     CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+}
+
+TEST_CASE("mirror_firmware_to_lane_data: pure black firmware color is mirrored "
+          "(NOT treated as no-signal)",
+          "[mirror_firmware][slow]") {
+    // Regression for the K2 lane1 bug: firmware reports loaded black PLA as
+    // RGB 0x000000 (color_value="0000000"). The pre-color_set helper used
+    // `firmware_color == 0` as a "no signal" sentinel and silently dropped
+    // the slot from lane_data, so OrcaSlicer never saw the loaded black.
+    // Now color_set is the explicit signal; firmware_color == 0 IS a real
+    // color and must round-trip into lane_data as "color":"#000000".
+    TmpCacheDir tmp("mirror_black_filament");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    std::unordered_map<int, FilamentSlotOverride> overrides;
+
+    SECTION("FillUnsetOnly fills empty override with firmware black") {
+        bool changed = helix::ams::mirror_firmware_to_lane_data(
+            &store, overrides, 0, /*firmware_color=*/0x000000, "PLA",
+            /*slot_has_filament=*/true, helix::ams::MirrorPolicy::FillUnsetOnly, "[test]");
+        REQUIRE(changed);
+        CHECK(overrides[0].color_rgb == 0u);
+        CHECK(overrides[0].color_set == true);
+        CHECK(overrides[0].material == "PLA");
+
+        auto stored = api.mock_get_db_value("lane_data", "lane1");
+        REQUIRE(!stored.is_null());
+        CHECK(stored["color"] == "#000000"); // <-- the bug we fixed
+        CHECK(stored["material"] == "PLA");
+    }
+
+    SECTION("OverwriteAlways propagates firmware black even over a prior color") {
+        overrides[0].color_rgb = 0xFFFFFF;
+        overrides[0].color_set = true;
+
+        bool changed = helix::ams::mirror_firmware_to_lane_data(
+            &store, overrides, 0, /*firmware_color=*/0x000000, "PLA", true,
+            helix::ams::MirrorPolicy::OverwriteAlways, "[test]");
+        REQUIRE(changed);
+        CHECK(overrides[0].color_rgb == 0u);
+
+        auto stored = api.mock_get_db_value("lane_data", "lane1");
+        REQUIRE(!stored.is_null());
+        CHECK(stored["color"] == "#000000");
+    }
 }
 
 TEST_CASE("mirror_firmware_to_lane_data FillUnsetOnly: partial override fills only the gap",
@@ -1568,14 +1622,9 @@ TEST_CASE("mirror_firmware_to_lane_data: no-signal cases skip writing",
         CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
     }
 
-    SECTION("zero color = unread sentinel") {
-        bool changed = helix::ams::mirror_firmware_to_lane_data(
-            &store, overrides, 0, /*firmware_color=*/0, "PLA", true,
-            helix::ams::MirrorPolicy::FillUnsetOnly, "[test]");
-        CHECK_FALSE(changed);
-        CHECK(overrides.empty());
-        CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
-    }
+    // Pure-black case is covered by its own test case "mirror_firmware_to_lane_data:
+    // pure black firmware color is mirrored" — the helper deliberately does
+    // NOT treat firmware_color == 0 as a no-signal sentinel.
 }
 
 TEST_CASE("mirror_firmware_to_lane_data OverwriteAlways: external color edit propagates",

@@ -55,7 +55,12 @@ std::chrono::system_clock::time_point parse_iso8601(const std::string& s) {
 nlohmann::json to_lane_data_record(int slot_index, const FilamentSlotOverride& o) {
     nlohmann::json j;
     j["lane"] = std::to_string(slot_index); // REQUIRED by Orca (0-based)
-    if (o.color_rgb != 0) {
+    // Emit color only when the override actually has one set. Pure black
+    // (#000000) is a legitimate user choice and a real firmware-detected
+    // color (K2 reports loaded black PLA as RGB 0x000000), so the previous
+    // `color_rgb != 0` check was wrong — it conflated "no color set" with
+    // "color set to black". `color_set` is the explicit signal.
+    if (o.color_set) {
         char buf[16];
         std::snprintf(buf, sizeof(buf), "#%06X", o.color_rgb & 0x00FFFFFFu);
         j["color"] = buf;
@@ -113,8 +118,9 @@ from_lane_data_record(const nlohmann::json& j) {
         }
         try {
             o.color_rgb = static_cast<uint32_t>(std::stoul(s, nullptr, 16));
+            o.color_set = true;
         } catch (...) {
-            // Leave color_rgb at default 0 on parse failure.
+            // Leave color_rgb at default + color_set=false on parse failure.
         }
     }
     o.material = j.value("material", "");
@@ -315,6 +321,7 @@ nlohmann::json to_json(const FilamentSlotOverride& o) {
         {"remaining_weight_g", o.remaining_weight_g},
         {"total_weight_g", o.total_weight_g},
         {"color_rgb", o.color_rgb},
+        {"color_set", o.color_set},
         {"color_name", o.color_name},
         {"material", o.material},
         {"bed_temp", o.bed_temp},
@@ -332,6 +339,10 @@ FilamentSlotOverride from_json(const nlohmann::json& j) {
     o.remaining_weight_g = j.value("remaining_weight_g", -1.0f);
     o.total_weight_g = j.value("total_weight_g", -1.0f);
     o.color_rgb = j.value("color_rgb", 0u);
+    // Pre-fix caches don't have color_set; reconstruct from the old "0 = unset"
+    // convention so a returning user's pre-existing overrides keep their
+    // intended meaning. New caches always emit the explicit boolean.
+    o.color_set = j.value("color_set", o.color_rgb != 0u);
     o.color_name = j.value("color_name", "");
     o.material = j.value("material", "");
     o.bed_temp = j.value("bed_temp", 0);
@@ -822,10 +833,16 @@ bool mirror_firmware_to_lane_data(FilamentSlotOverrideStore* store,
                                   int slot_index, uint32_t firmware_color,
                                   const std::string& firmware_material, bool slot_has_filament,
                                   MirrorPolicy policy, const std::string& log_tag) {
-    // No filament or no color reading = no signal. We must not establish a
-    // phantom lane_data entry for an empty slot, and clear_override paths
-    // already handle ejection.
-    if (!slot_has_filament || firmware_color == 0)
+    // No filament = no signal. Don't establish a phantom lane_data entry for
+    // an empty slot; clear_override paths handle ejection.
+    //
+    // IMPORTANT: do NOT skip on firmware_color == 0 — pure black (0x000000) is
+    // a legitimate filament color (the K2 reports loaded black PLA as RGB
+    // "0000000"). Callers that need a "color not yet parsed" guard must apply
+    // it BEFORE invoking this helper, e.g. AmsBackendAd5xIfs::
+    // check_external_color_change short-circuits on observed_color == 0
+    // because IFS's parse path may run with colors_[idx] still empty.
+    if (!slot_has_filament)
         return false;
 
     auto& ovr = overrides[slot_index]; // creates default-constructed entry if absent
@@ -837,8 +854,9 @@ bool mirror_firmware_to_lane_data(FilamentSlotOverrideStore* store,
             // so firmware-truth and user-truth converge after a write. Safe to
             // overwrite — and necessary to catch external edits (Mainsail
             // console, native LCD, CHANGE_ZCOLOR macro).
-            if (ovr.color_rgb != firmware_color) {
+            if (!ovr.color_set || ovr.color_rgb != firmware_color) {
                 ovr.color_rgb = firmware_color;
+                ovr.color_set = true;
                 changed = true;
             }
             if (ovr.material != firmware_material) {
@@ -853,8 +871,9 @@ bool mirror_firmware_to_lane_data(FilamentSlotOverrideStore* store,
             // set, otherwise every status poll would erase the user's choice.
             // The escape hatch is clear_slot_override, which erases the entry
             // and lets auto-mirror take over again.
-            if (ovr.color_rgb == 0) {
+            if (!ovr.color_set) {
                 ovr.color_rgb = firmware_color;
+                ovr.color_set = true;
                 changed = true;
             }
             if (ovr.material.empty() && !firmware_material.empty()) {

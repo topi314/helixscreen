@@ -651,7 +651,7 @@ void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
         slot.remaining_weight_g = o.remaining_weight_g;
     if (o.total_weight_g >= 0.0f)
         slot.total_weight_g = o.total_weight_g;
-    if (o.color_rgb != 0)
+    if (o.color_set)
         slot.color_rgb = o.color_rgb;
     if (!o.color_name.empty())
         slot.color_name = o.color_name;
@@ -1177,6 +1177,7 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
             ovr.remaining_weight_g = info.remaining_weight_g;
             ovr.total_weight_g = info.total_weight_g;
             ovr.color_rgb = info.color_rgb;
+            ovr.color_set = true; // a user-edit always records a color, even pure black (#000000)
             ovr.color_name = info.color_name;
             // normalize_material() was already applied to the cached
             // materials_ copy; reuse it so the on-disk record carries the

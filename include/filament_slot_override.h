@@ -20,8 +20,22 @@ struct FilamentSlotOverride {
     int spoolman_vendor_id = 0;
     float remaining_weight_g = -1.0f;
     float total_weight_g = -1.0f;
-    // Hardware-truth fields, override-wins
+    // Hardware-truth fields, override-wins.
+    //
+    // color_rgb stores the 24-bit RGB color (high byte unused). `color_set`
+    // is the explicit "this slot has a color recorded" signal — pure black
+    // (#000000) is a legitimate value (firmware reports loaded black PLA as
+    // 0x000000), so we cannot use color_rgb == 0 as an "unset" sentinel.
+    // Always check color_set before applying / emitting the color; when
+    // false, color_rgb is undefined and must be ignored.
+    //
+    // Lifecycle: starts false; flipped to true by set_slot_info (any user
+    // edit, even setting black), by auto-mirror when firmware fills it, and
+    // by from_lane_data_record / from_json when the on-disk record contains
+    // a color. clear_slot_override erases the whole entry; nothing else
+    // resets color_set to false.
     uint32_t color_rgb = 0;
+    bool color_set = false;
     std::string color_name;
     std::string material;
     // Recommended print temperatures, written into the lane_data record so

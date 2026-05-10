@@ -118,10 +118,14 @@ enum class MirrorPolicy {
 ///
 /// No-op (returns false without writing) when:
 ///   - !slot_has_filament  (empty / unread slot — no signal)
-///   - firmware_color == 0 (placeholder / unread color — no signal)
 ///   - the chosen policy leaves nothing to change (e.g. FillUnsetOnly when
 ///     ovr already has both fields set, or OverwriteAlways when ovr already
 ///     matches firmware)
+///
+/// Note: `firmware_color == 0` is NOT treated as "no signal" — pure black is
+/// a legitimate color the user can load. Backends whose parse path may run
+/// before colors are populated (e.g. AD5X IFS) must apply their own
+/// color-zero guard upstream of this helper.
 ///
 /// `store` may be null (init-time race / test fixture without MR API) — the
 /// in-memory override is still updated, but no save_async is fired.

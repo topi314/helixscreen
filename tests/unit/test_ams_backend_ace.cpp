@@ -579,6 +579,7 @@ TEST_CASE("ACE override loaded at init is applied over firmware data",
     ovr.spool_name = "PolyLite Orange";
     ovr.spoolman_id = 42;
     ovr.color_rgb = 0xFF5500;
+    ovr.color_set = true;
     ovr.material = "PLA";
     AceTestAccess::seed_override(backend, 0, ovr);
 

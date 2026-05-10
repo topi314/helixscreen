@@ -2181,6 +2181,7 @@ TEST_CASE("AD5X IFS applies override brand over Adventurer5M.json data",
     ovr.brand = "Polymaker";
     ovr.spool_name = "PolyLite Green";
     ovr.color_rgb = 0x00AA00;  // Override to green
+    ovr.color_set = true;
     ovr.material = "PETG";      // Override to PETG
     ovr.spoolman_id = 42;
     ovr.remaining_weight_g = 750.0f;
@@ -2266,6 +2267,7 @@ TEST_CASE("AD5X IFS override applies to multiple slots independently",
     helix::ams::FilamentSlotOverride ovr2;
     ovr2.brand = "eSUN";
     ovr2.color_rgb = 0x123456;
+    ovr2.color_set = true;
     Ad5xIfsTestAccess::seed_override(backend, 2, ovr2);
 
     // Slots 1 and 3 have NO override — must reflect pure firmware data.

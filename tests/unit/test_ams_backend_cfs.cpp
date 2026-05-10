@@ -723,9 +723,16 @@ TEST_CASE("CFS push_slot_color_to_firmware skips invalid inputs (must NOT crash 
           "[ams][cfs][firmware_writeback]") {
     CfsRemapHelper helper;
 
-    SECTION("color_rgb == 0 (no-signal sentinel) is skipped") {
+    SECTION("color_rgb == 0 (pure black) is a valid color and DOES dispatch") {
+        // Pure black is a legitimate user choice and a real firmware-detected
+        // color (K2 reports loaded black PLA as 0x000000). The push helper
+        // must NOT skip it — that's the bug fixed by the color_set boolean.
+        // Caller (set_slot_info) is responsible for not invoking when color
+        // wasn't actually set (color_set=false on the override).
         helper.push_slot_color_to_firmware(0, 0);
-        REQUIRE(helper.captured.empty());
+        REQUIRE(helper.captured ==
+                std::vector<std::string>{
+                    "BOX_MODIFY_TN_DATA ADDR=1 NUM=A PART=color_value DATA=0000000"});
     }
 
     SECTION("Negative slot index is skipped") {
@@ -852,6 +859,7 @@ TEST_CASE("CFS override loaded at init is applied over firmware data",
     ovr.spool_name = "PolyLite PLA Orange";
     ovr.spoolman_id = 42;
     ovr.color_rgb = 0xFF5500;
+    ovr.color_set = true;
     ovr.material = "PLA";
     CfsTestAccess::seed_override(backend, 0, ovr);
 
@@ -995,9 +1003,26 @@ TEST_CASE("CFS set_slot_info(persist=false) does NOT write to store",
     auto err = backend.set_slot_info(0, edit, /*persist=*/false);
     REQUIRE(err.success());
 
-    // No override staged, no DB write.
-    CHECK_FALSE(CfsTestAccess::get_override(backend, 0).has_value());
-    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+    // The user's edit (brand="Draft", color=0x123456) was NOT persisted —
+    // any override entry that exists came from the auto-mirror path firing
+    // on the firmware-detected color/material in the prior status update,
+    // which is independent of this preview edit. Verify by field:
+    //   - brand: must NOT be "Draft" (auto-mirror only fills color/material)
+    //   - color_rgb: must NOT be 0x123456 (the preview color)
+    //   - color_set may be true if firmware reported a color (slot 0 is
+    //     black, 0x000000); the auto-mirror records that as the firmware
+    //     baseline, NOT as the user's preview.
+    auto stored = CfsTestAccess::get_override(backend, 0);
+    if (stored.has_value()) {
+        CHECK(stored->brand != "Draft");
+        CHECK(stored->color_rgb != 0x123456u);
+    }
+    auto db_record = api.mock_get_db_value("lane_data", "lane1");
+    if (!db_record.is_null()) {
+        // Auto-mirror's record does not contain the preview's brand/color.
+        CHECK(db_record.value("vendor", "") != "Draft");
+        CHECK(db_record.value("color", "") != "#123456");
+    }
 
     // Preview edit still visible via get_slot_info (in-memory only).
     auto info = backend.get_slot_info(0);
