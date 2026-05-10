@@ -136,29 +136,20 @@ void BeltTensionCalibrator::detect_hardware(BeltHardwareDetectCallback on_comple
     state_.store(State::DETECTING_HARDWARE);
     spdlog::info("[BeltTension] Detecting printer hardware capabilities");
 
-    auto token = lifetime_.token();
-
     api_->advanced().detect_belt_hardware(
-        [this, token, on_complete](const BeltTensionHardware& hw) {
-            // BG THREAD: nothing to parse, just marshal hw into main.
-            token.defer("BeltTensionCalibrator::detect_hw_success",
-                        [this, on_complete, hw]() {
+        lifetime_.bg_cb("BeltTensionCalibrator::detect_hw_success",
+                        [this, on_complete](const BeltTensionHardware& hw) {
                             hardware_ = hw;
                             state_.store(State::IDLE);
                             if (on_complete)
                                 on_complete(hw);
-                        });
-        },
-        [this, token, on_error](const MoonrakerError& err) {
-            // BG THREAD: build local message, no `this` access.
-            std::string msg = "Hardware detection failed: " + err.message;
-            token.defer("BeltTensionCalibrator::detect_hw_error",
-                        [this, on_error, msg = std::move(msg)]() {
+                        }),
+        lifetime_.bg_cb("BeltTensionCalibrator::detect_hw_error",
+                        [this, on_error](const MoonrakerError& err) {
                             state_.store(State::ERROR);
                             if (on_error)
-                                on_error(msg);
-                        });
-        });
+                                on_error("Hardware detection failed: " + err.message);
+                        }));
 }
 
 // ============================================================================
@@ -237,40 +228,27 @@ void BeltTensionCalibrator::execute_resonance_test(BeltPath path, BeltProgressCa
                             // Download and process the CSV
                             api_->advanced().download_accel_csv(
                                 output_name,
-                                [this, token, on_complete,
-                                 on_error](const std::string& csv_data) {
-                                    // BG THREAD: move CSV into deferred body for
-                                    // process_csv_data on main thread.
-                                    token.defer("BeltTensionCalibrator::accel_csv_success",
-                                                [this, on_complete, on_error,
-                                                 csv_data = std::move(csv_data)]() {
-                                                    process_csv_data(csv_data, on_complete,
-                                                                     on_error);
-                                                });
-                                },
-                                [token, on_error](const MoonrakerError& err) {
-                                    // BG THREAD: build message; no `this` needed for
-                                    // user-supplied on_error invocation.
-                                    std::string msg =
-                                        "Failed to download data: " + err.message;
-                                    token.defer("BeltTensionCalibrator::accel_csv_error",
-                                                [on_error, msg = std::move(msg)]() {
-                                                    if (on_error)
-                                                        on_error(msg);
-                                                });
-                                });
+                                lifetime_.bg_cb(
+                                    "BeltTensionCalibrator::accel_csv_success",
+                                    [this, on_complete,
+                                     on_error](const std::string& csv_data) {
+                                        process_csv_data(csv_data, on_complete, on_error);
+                                    }),
+                                lifetime_.bg_cb(
+                                    "BeltTensionCalibrator::accel_csv_error",
+                                    [on_error](const MoonrakerError& err) {
+                                        if (on_error)
+                                            on_error("Failed to download data: " +
+                                                     err.message);
+                                    }));
                         });
         },
-        [this, token, on_error](const MoonrakerError& err) {
-            // BG THREAD: build message.
-            std::string msg = "Resonance test failed: " + err.message;
-            token.defer("BeltTensionCalibrator::resonance_test_error",
-                        [this, on_error, msg = std::move(msg)]() {
+        lifetime_.bg_cb("BeltTensionCalibrator::resonance_test_error",
+                        [this, on_error](const MoonrakerError& err) {
                             state_.store(State::ERROR);
                             if (on_error)
-                                on_error(msg);
-                        });
-        });
+                                on_error("Resonance test failed: " + err.message);
+                        }));
 }
 
 // ============================================================================
@@ -476,21 +454,17 @@ void BeltTensionCalibrator::start_strobe(float frequency_hz, BeltErrorCallback o
     spdlog::info("[BeltTension] Starting strobe at {:.1f} Hz on pin {}", frequency_hz,
                  hardware_.pwm_led_pin);
 
-    auto token = lifetime_.token();
     api_->advanced().set_strobe_frequency(
         hardware_.pwm_led_pin, frequency_hz,
         []() {}, // Strobe started successfully
-        [this, token, on_error](const MoonrakerError& err) {
-            // BG THREAD: build local message, then marshal.
-            spdlog::error("[BeltTension] Failed to start strobe: {}", err.message);
-            std::string msg = "Failed to start strobe: " + err.message;
-            token.defer("BeltTensionCalibrator::start_strobe_error",
-                        [this, on_error, msg = std::move(msg)]() {
+        lifetime_.bg_cb("BeltTensionCalibrator::start_strobe_error",
+                        [this, on_error](const MoonrakerError& err) {
+                            spdlog::error("[BeltTension] Failed to start strobe: {}",
+                                          err.message);
                             state_.store(State::IDLE);
                             if (on_error)
-                                on_error(msg);
-                        });
-        });
+                                on_error("Failed to start strobe: " + err.message);
+                        }));
 }
 
 // ============================================================================
@@ -590,96 +564,80 @@ void BeltTensionCalibrator::start_z_belt_listening(ZBeltCorner corner,
                                     // Download and analyze the captured data via API
                                     api_->advanced().download_accel_csv(
                                         "z_belt",
-                                        [this, token, corner, on_complete,
-                                         on_error](const std::string& csv_data) {
-                                            // BG THREAD: move CSV; process on main.
-                                            token.defer(
-                                                "BeltTensionCalibrator::z_belt_csv_success",
-                                                [this, corner, on_complete, on_error,
-                                                 csv_data = std::move(csv_data)]() {
-                                                    process_csv_data(
-                                                        csv_data,
-                                                        [this, corner, on_complete](
-                                                            const BeltMeasurement&
-                                                                measurement) {
-                                                            // Already on main: invoked
-                                                            // synchronously inside
-                                                            // process_csv_data.
-                                                            ZBeltMeasurement z_result;
-                                                            z_result.corner = corner;
-                                                            z_result.peak_frequency =
-                                                                measurement.peak_frequency;
-                                                            z_result.status =
-                                                                measurement.status;
+                                        lifetime_.bg_cb(
+                                            "BeltTensionCalibrator::z_belt_csv_success",
+                                            [this, corner, on_complete, on_error](
+                                                const std::string& csv_data) {
+                                                process_csv_data(
+                                                    csv_data,
+                                                    [this, corner, on_complete](
+                                                        const BeltMeasurement&
+                                                            measurement) {
+                                                        // Already on main: invoked
+                                                        // synchronously inside
+                                                        // process_csv_data.
+                                                        ZBeltMeasurement z_result;
+                                                        z_result.corner = corner;
+                                                        z_result.peak_frequency =
+                                                            measurement.peak_frequency;
+                                                        z_result.status =
+                                                            measurement.status;
 
-                                                            results_.z_belts.push_back(
-                                                                z_result);
+                                                        results_.z_belts.push_back(
+                                                            z_result);
 
-                                                            spdlog::info(
-                                                                "[BeltTension] Z belt "
-                                                                "corner {} measured: "
-                                                                "{:.1f} Hz",
-                                                                static_cast<int>(corner),
-                                                                z_result.peak_frequency);
+                                                        spdlog::info(
+                                                            "[BeltTension] Z belt "
+                                                            "corner {} measured: "
+                                                            "{:.1f} Hz",
+                                                            static_cast<int>(corner),
+                                                            z_result.peak_frequency);
 
-                                                            if (on_complete)
-                                                                on_complete(measurement);
+                                                        if (on_complete)
+                                                            on_complete(measurement);
 
-                                                            state_.store(
-                                                                State::Z_RESULTS_READY);
-                                                        },
-                                                        [this, on_error](
-                                                            const std::string& err_msg) {
-                                                            // Already on main.
-                                                            state_.store(State::ERROR);
-                                                            if (on_error)
-                                                                on_error(err_msg);
-                                                        });
-                                                });
-                                        },
-                                        [this, token,
-                                         on_error](const MoonrakerError& err) {
-                                            // BG THREAD: build msg, marshal.
-                                            std::string msg =
-                                                "Failed to download Z belt data: " +
-                                                err.message;
-                                            token.defer(
-                                                "BeltTensionCalibrator::z_belt_csv_error",
-                                                [this, on_error,
-                                                 msg = std::move(msg)]() {
-                                                    state_.store(State::ERROR);
-                                                    if (on_error)
-                                                        on_error(msg);
-                                                });
-                                        });
+                                                        state_.store(
+                                                            State::Z_RESULTS_READY);
+                                                    },
+                                                    [this, on_error](
+                                                        const std::string& err_msg) {
+                                                        // Already on main.
+                                                        state_.store(State::ERROR);
+                                                        if (on_error)
+                                                            on_error(err_msg);
+                                                    });
+                                            }),
+                                        lifetime_.bg_cb(
+                                            "BeltTensionCalibrator::z_belt_csv_error",
+                                            [this, on_error](const MoonrakerError& err) {
+                                                state_.store(State::ERROR);
+                                                if (on_error)
+                                                    on_error(
+                                                        "Failed to download Z belt "
+                                                        "data: " +
+                                                        err.message);
+                                            }));
                                 });
                         },
-                        [this, token, on_error](const MoonrakerError& err) {
-                            // BG THREAD: log + msg, marshal.
-                            spdlog::error("[BeltTension] Z belt capture failed: {}",
-                                          err.message);
-                            std::string msg = "Z belt measurement failed: " + err.message;
-                            token.defer(
-                                "BeltTensionCalibrator::z_belt_named_error",
-                                [this, on_error, msg = std::move(msg)]() {
-                                    state_.store(State::ERROR);
-                                    if (on_error)
-                                        on_error(msg);
-                                });
-                        });
+                        lifetime_.bg_cb(
+                            "BeltTensionCalibrator::z_belt_named_error",
+                            [this, on_error](const MoonrakerError& err) {
+                                spdlog::error("[BeltTension] Z belt capture failed: {}",
+                                              err.message);
+                                state_.store(State::ERROR);
+                                if (on_error)
+                                    on_error("Z belt measurement failed: " + err.message);
+                            }));
                 });
         },
-        [this, token, on_error](const MoonrakerError& err) {
-            // BG THREAD: log + msg, marshal.
-            spdlog::error("[BeltTension] Failed to start accelerometer: {}", err.message);
-            std::string msg = "Failed to start accelerometer: " + err.message;
-            token.defer("BeltTensionCalibrator::z_belt_start_error",
-                        [this, on_error, msg = std::move(msg)]() {
+        lifetime_.bg_cb("BeltTensionCalibrator::z_belt_start_error",
+                        [this, on_error](const MoonrakerError& err) {
+                            spdlog::error("[BeltTension] Failed to start accelerometer: {}",
+                                          err.message);
                             state_.store(State::ERROR);
                             if (on_error)
-                                on_error(msg);
-                        });
-        });
+                                on_error("Failed to start accelerometer: " + err.message);
+                        }));
 }
 
 // ============================================================================
