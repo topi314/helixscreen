@@ -1918,6 +1918,11 @@ bool AmsBackendAd5xIfs::on_gcode_response_line(const std::string& line) {
         return true;
     }
 
+    // NOTE: register_zcolor_listener() has a bg-side pre-filter that drops
+    // every line not containing one of these tokens (and not buffering for
+    // an active query). If you add a third trigger here, update that filter
+    // too — otherwise the new token will be silently dropped before it
+    // reaches this function on heavy-print response streams.
     if (line.find("RUN_ZCOLOR") != std::string::npos ||
         line.find("CHANGE_ZCOLOR") != std::string::npos) {
         spdlog::debug("{} Detected external color change in gcode stream, "
@@ -1947,6 +1952,33 @@ void AmsBackendAd5xIfs::register_zcolor_listener() {
             } else if (msg.is_array() && !msg.empty() && msg[0].is_string()) {
                 line = msg[0].get<std::string>();
             } else {
+                return;
+            }
+
+            // BG-side pre-filter (queue-pressure economy): notify_gcode_response
+            // fires for EVERY gcode console line — hundreds/sec on a busy print
+            // with macros echoing. on_gcode_response_line only acts in two
+            // cases: (a) `zcolor_query_active_` is set, in which case the line
+            // is buffered as part of a GET_ZCOLOR SILENT=1 response, or (b) the
+            // line contains the RUN_ZCOLOR / CHANGE_ZCOLOR token that signals
+            // an externally-driven color change. Every other line is dropped on
+            // the main thread. Move that filter to bg so non-matching lines
+            // never hit the UpdateQueue.
+            //
+            // Race analysis: zcolor_query_active_ is std::atomic<bool>, set via
+            // exchange(true) BEFORE api_->execute_gcode("GET_ZCOLOR SILENT=1")
+            // is called (see query_zcolor_silent). Klipper guarantees gcode-
+            // response ordering, so any response line emitted by the GET_ZCOLOR
+            // macro body necessarily arrives on the WS thread AFTER the bg load
+            // sees zcolor_query_active_ == true. Lines emitted before the macro
+            // started can't be query-response lines and are correctly dropped
+            // (matches main-thread behaviour: load() would also be false there
+            // because the deferred lambda preserves arrival order via the
+            // FIFO UpdateQueue).
+            const bool query_active = zcolor_query_active_.load(std::memory_order_acquire);
+            const bool is_zcolor_token = (line.find("RUN_ZCOLOR") != std::string::npos ||
+                                          line.find("CHANGE_ZCOLOR") != std::string::npos);
+            if (!query_active && !is_zcolor_token) {
                 return;
             }
 
