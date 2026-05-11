@@ -1237,8 +1237,21 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
         std::vector<std::string> filament_colors;
     };
 
-    helix::ui::queue_update<MetadataUpdate>(
-        std::make_unique<MetadataUpdate>(MetadataUpdate{this,
+    // process_metadata_result already runs on the main thread (every caller is
+    // inside a `tok.defer(...)` / `tok.defer_critical(...)` body — see
+    // fetch_metadata_range). The original code wrapped the apply-and-fetch
+    // step in queue_update<MetadataUpdate> to marshal back to main from the
+    // bg thread that used to run this function. Post-L081 that's redundant —
+    // and harmful: the untagged `queue_update` here is silently dropped during
+    // the splash→home `scoped_freeze()` window, which strands files with
+    // `metadata_fetched=true` but no thumbnail (every startup, only the one
+    // gcode whose response arrived after the freeze ended got its thumbnail).
+    // Run the body synchronously instead. Wrap into an immediately-invoked
+    // lambda so the existing `MetadataUpdate* d` body (~260 lines, including
+    // the chained fetch_for_card_view + download_file_partial calls) stays
+    // unchanged.
+    {
+        auto d_owned = std::make_unique<MetadataUpdate>(MetadataUpdate{this,
                                                         i,
                                                         filename,
                                                         print_time_minutes,
@@ -1259,8 +1272,8 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
                                                         target,
                                                         std::move(filament_types),
                                                         std::move(filament_names),
-                                                        std::move(filament_colors)}),
-        [](MetadataUpdate* d) {
+                                                        std::move(filament_colors)});
+        auto apply = [](MetadataUpdate* d) {
             auto* self = d->panel;
 
             // Bounds check (file_list could change during async operation)
@@ -1504,7 +1517,9 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
                     d->print_height_str.c_str(), self->file_list_[d->index].modified_timestamp,
                     d->layer_height_str.c_str(), filament_display.c_str());
             }
-        });
+        };
+        apply(d_owned.get());
+    }
 }
 
 void PrintSelectPanel::set_api(MoonrakerAPI* api) {
