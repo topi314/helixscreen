@@ -52,6 +52,16 @@ AmsBackendSnapmaker::AmsBackendSnapmaker(MoonrakerAPI* api, helix::MoonrakerClie
     system_info_.units.push_back(std::move(unit));
     system_info_.total_slots = NUM_TOOLS;
 
+    // Snapmaker U1 has a fixed 1:1 tool↔slot mapping (4 extruders, 4 slots).
+    // Without this, ui_gcode_viewer_apply_ams_tool_colors() short-circuits on
+    // an empty map and the 2D toolpath renders in whatever single color the
+    // slicer wrote into filament_palette[initial_tool_index] — black on prints
+    // where the initial tool's filament is dark.
+    system_info_.tool_to_slot_map.reserve(NUM_TOOLS);
+    for (int i = 0; i < NUM_TOOLS; i++) {
+        system_info_.tool_to_slot_map.push_back(i);
+    }
+
     spdlog::debug("[AMS Snapmaker] Backend created with {} tools", NUM_TOOLS);
 }
 

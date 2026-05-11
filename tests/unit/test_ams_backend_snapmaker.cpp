@@ -192,6 +192,16 @@ TEST_CASE("AmsBackendSnapmaker construction", "[ams][snapmaker]") {
         REQUIRE(info.units.size() == 1);
         REQUIRE(info.units[0].slot_count == 4);
     }
+
+    SECTION("tool_to_slot_map is 1:1 identity (gates 2D toolpath colors)") {
+        AmsBackendSnapmaker backend(nullptr, nullptr);
+        auto info = backend.get_system_info();
+        REQUIRE(info.tool_to_slot_map.size() == 4);
+        REQUIRE(info.tool_to_slot_map[0] == 0);
+        REQUIRE(info.tool_to_slot_map[1] == 1);
+        REQUIRE(info.tool_to_slot_map[2] == 2);
+        REQUIRE(info.tool_to_slot_map[3] == 3);
+    }
 }
 
 // ============================================================================
