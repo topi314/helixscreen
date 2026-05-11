@@ -154,42 +154,33 @@ class UpdateQueue {
      * @param tag String literal identifying the caller (e.g., "ToastManager::dismiss")
      * @param callback Function to execute
      */
+    // Enqueue work for the main thread.
+    //
+    // While a scoped_freeze() is held, callbacks are BUFFERED into
+    // frozen_buffer_ instead of dropped; ScopedFreeze::~ splices the buffer
+    // into pending_ when the last freeze releases, so the work fires on the
+    // following process_pending tick. The freeze still serializes BG threads
+    // against drain+destroy (anything enqueued during freeze runs after the
+    // freeze ends, by which time the drain has flushed and any destroy has
+    // completed) — AsyncLifetimeGuard's generation check on the apply side
+    // handles UAF if the owner died during the freeze window. shut_down_
+    // still drops (post-shutdown enqueues are unrecoverable). Replaces the
+    // older defer/defer_critical split: with buffer-not-drop the two were
+    // functionally identical, so there is now one path.
     void queue(const char* tag, UpdateCallback callback) {
-        if (frozen_.load(std::memory_order_relaxed)) {
-            if (tag) spdlog::warn("[UpdateQueue] DROPPED (frozen): {}", tag);
-            return;
-        }
         std::lock_guard<std::mutex> lock(mutex_);
         if (shut_down_) {
             if (tag) spdlog::warn("[UpdateQueue] DROPPED (shutdown): {}", tag);
+            return;
+        }
+        if (freeze_depth_ > 0) {
+            frozen_buffer_.push({tag, std::move(callback)});
+            if (tag) spdlog::trace("[UpdateQueue] Buffered (frozen): {} (buffered={})",
+                                   tag, frozen_buffer_.size());
             return;
         }
         pending_.push({tag, std::move(callback)});
         if (tag) spdlog::trace("[UpdateQueue] Enqueued: {} (pending={})", tag, pending_.size());
-    }
-
-    // BYPASSES scoped_freeze(). Reserve for one-shot startup handshakes that the
-    // rest of the app permanently strands itself waiting for — Moonraker
-    // discovery completion is the canonical case: if it lands during the splash→
-    // home freeze and gets dropped, gate subjects never flip and home widgets
-    // stay disabled forever even though Moonraker is up.
-    //
-    // DO NOT use for routine UI updates, observer fan-out, or anything that
-    // could fire during widget destruction. The freeze exists for a reason
-    // (it stops BG threads from enqueueing callbacks against widgets being
-    // torn down). Bypassing it is only safe when the callback's effects are
-    // bounded to subjects/state that survive the drain+destroy window.
-    //
-    // Still honors shut_down_.
-    void queue_critical(const char* tag, UpdateCallback callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (shut_down_) {
-            if (tag) spdlog::warn("[UpdateQueue] DROPPED (shutdown): {}", tag);
-            return;
-        }
-        pending_.push({tag, std::move(callback)});
-        if (tag) spdlog::trace("[UpdateQueue] Enqueued (critical): {} (pending={})",
-                               tag, pending_.size());
     }
 
     /**
@@ -233,26 +224,45 @@ class UpdateQueue {
      *
      * Use around drain()+destroy sequences to prevent the WebSocket background
      * thread from queueing new callbacks between drain() and widget destruction.
-     * While frozen, queue() silently discards callbacks (same as shut_down_).
+     * While frozen, queue() buffers callbacks into frozen_buffer_ instead of
+     * pending_. On the last ScopedFreeze destruction the buffer is spliced
+     * into pending_, so deferred work resumes on the following
+     * process_pending tick. shut_down_ still drops (post-shutdown enqueues
+     * are unrecoverable).
      *
      * Reference-counted: nested freezes are safe. The queue only unfreezes
-     * when the last ScopedFreeze is destroyed.
+     * (and splices the buffer) when the last ScopedFreeze is destroyed.
      */
     class ScopedFreeze {
     public:
         explicit ScopedFreeze(UpdateQueue& q, const char* caller = nullptr) : q_(q), caller_(caller) {
-            if (q_.freeze_depth_.fetch_add(1, std::memory_order_relaxed) == 0) {
-                q_.frozen_.store(true, std::memory_order_relaxed);
+            int depth;
+            {
+                std::lock_guard<std::mutex> lock(q_.mutex_);
+                depth = ++q_.freeze_depth_;
             }
             spdlog::trace("[UpdateQueue] FREEZE depth={} caller={}",
-                         q_.freeze_depth_.load(), caller_ ? caller_ : "unknown");
+                         depth, caller_ ? caller_ : "unknown");
         }
         ~ScopedFreeze() {
-            spdlog::trace("[UpdateQueue] THAW depth={} caller={}",
-                         q_.freeze_depth_.load() - 1, caller_ ? caller_ : "unknown");
-            if (q_.freeze_depth_.fetch_sub(1, std::memory_order_relaxed) == 1) {
-                q_.frozen_.store(false, std::memory_order_relaxed);
+            size_t spliced = 0;
+            int depth;
+            {
+                std::lock_guard<std::mutex> lock(q_.mutex_);
+                depth = --q_.freeze_depth_;
+                if (depth == 0) {
+                    // Splice buffered work into pending so it fires on the next
+                    // process_pending tick. AsyncLifetimeGuard's generation
+                    // check guards against UAF if the owner died during freeze.
+                    spliced = q_.frozen_buffer_.size();
+                    while (!q_.frozen_buffer_.empty()) {
+                        q_.pending_.push(std::move(q_.frozen_buffer_.front()));
+                        q_.frozen_buffer_.pop();
+                    }
+                }
             }
+            spdlog::trace("[UpdateQueue] THAW depth={} caller={} spliced={}",
+                         depth, caller_ ? caller_ : "unknown", spliced);
         }
         ScopedFreeze(const ScopedFreeze&) = delete;
         ScopedFreeze& operator=(const ScopedFreeze&) = delete;
@@ -264,9 +274,13 @@ class UpdateQueue {
     /**
      * @brief Create a scoped freeze guard
      *
-     * While the returned guard is alive, queue() silently discards all callbacks.
-     * Use before drain()+destroy to close the race window where background threads
-     * can enqueue callbacks targeting widgets about to be destroyed.
+     * While the returned guard is alive, queue() buffers all callbacks into
+     * frozen_buffer_. Use before drain()+destroy to close the race window
+     * where background threads can enqueue callbacks targeting widgets about
+     * to be destroyed: drain() flushes pre-freeze work, the freeze diverts
+     * post-freeze work into the buffer, the destroy completes, and when the
+     * guard goes out of scope the buffer is spliced back into pending_.
+     * Generation tokens on the apply side handle UAF if the owner died.
      */
     [[nodiscard]] ScopedFreeze scoped_freeze(const char* caller = nullptr) {
         return ScopedFreeze(*this, caller);
@@ -369,11 +383,15 @@ class UpdateQueue {
 
     std::mutex mutex_;
     std::queue<TaggedCallback> pending_;
+    // Callbacks enqueued while freeze_depth_ > 0 land here; ScopedFreeze::~
+    // splices them back to pending_ when the depth returns to 0. Protected
+    // by mutex_.
+    std::queue<TaggedCallback> frozen_buffer_;
     lv_timer_t* timer_ = nullptr;
     bool initialized_ = false;
     bool shut_down_ = false;
-    std::atomic<bool> frozen_{false};
-    std::atomic<int> freeze_depth_{0};
+    // Protected by mutex_ — accessed from queue() and ScopedFreeze ctor/dtor.
+    int freeze_depth_ = 0;
 
     /// Tag of the currently executing callback (read by crash handler).
     /// Only written from the main LVGL thread; read by the crash signal handler.
@@ -442,14 +460,6 @@ inline void queue_update(UpdateCallback callback) {
  */
 inline void queue_update(const char* tag, UpdateCallback callback) {
     UpdateQueue::instance().queue(tag, std::move(callback));
-}
-
-// BYPASSES scoped_freeze. Reserve for one-shot startup handshakes the app
-// strands itself waiting for (discovery completion, etc.). See
-// UpdateQueue::queue_critical for the full warning. Regular UI updates and
-// observer fan-out MUST use queue_update().
-inline void queue_critical(const char* tag, UpdateCallback callback) {
-    UpdateQueue::instance().queue_critical(tag, std::move(callback));
 }
 
 /**

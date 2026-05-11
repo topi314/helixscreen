@@ -1052,21 +1052,13 @@ void PrintSelectPanel::fetch_metadata_range(size_t start, size_t end) {
                     return;
                 }
 
-                // defer_critical: first-fire metadata response. fetch_metadata_range
-                // marks file_list_[i].metadata_fetched=true EAGERLY before the HTTP
-                // request to dedupe rapid poll cycles. If the defer is dropped during
-                // the splash→home scoped_freeze, that flag becomes a lie — the
-                // metadata never arrives but subsequent fetch_metadata_range calls
-                // skip the file forever (placeholder thumbnails stuck). The carry-
-                // forward retry-on-activate handles other transient failures but
-                // can't compensate for a freeze-drop on every startup. Mechanism D.
-                token.defer_critical("PrintSelectPanel::metadata_process",
-                                     [self, i, filename, captured_gen, metadata]() {
-                                         if (self->nav_generation_.load() != captured_gen) {
-                                             return;
-                                         }
-                                         self->process_metadata_result(i, filename, metadata);
-                                     });
+                token.defer("PrintSelectPanel::metadata_process",
+                            [self, i, filename, captured_gen, metadata]() {
+                                if (self->nav_generation_.load() != captured_gen) {
+                                    return;
+                                }
+                                self->process_metadata_result(i, filename, metadata);
+                            });
             },
             // Metadata error callback. Same pattern: nav-gen check moves into the defer body.
             [self, i, filename, file_path, captured_gen,
@@ -1238,18 +1230,13 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
     };
 
     // process_metadata_result already runs on the main thread (every caller is
-    // inside a `tok.defer(...)` / `tok.defer_critical(...)` body — see
-    // fetch_metadata_range). The original code wrapped the apply-and-fetch
-    // step in queue_update<MetadataUpdate> to marshal back to main from the
-    // bg thread that used to run this function. Post-L081 that's redundant —
-    // and harmful: the untagged `queue_update` here is silently dropped during
-    // the splash→home `scoped_freeze()` window, which strands files with
-    // `metadata_fetched=true` but no thumbnail (every startup, only the one
-    // gcode whose response arrived after the freeze ended got its thumbnail).
-    // Run the body synchronously instead. Wrap into an immediately-invoked
-    // lambda so the existing `MetadataUpdate* d` body (~260 lines, including
-    // the chained fetch_for_card_view + download_file_partial calls) stays
-    // unchanged.
+    // inside a `tok.defer(...)` body — see fetch_metadata_range). The original
+    // code wrapped the apply-and-fetch step in queue_update<MetadataUpdate> to
+    // marshal back to main from the bg thread that used to run this function.
+    // Post-L081 sweep that's redundant: just call the apply lambda directly.
+    // The MetadataUpdate struct is preserved as a parameter bag so the
+    // ~260-line existing apply body (chains fetch_for_card_view +
+    // download_file_partial) stays unchanged.
     {
         auto d_owned = std::make_unique<MetadataUpdate>(MetadataUpdate{this,
                                                         i,

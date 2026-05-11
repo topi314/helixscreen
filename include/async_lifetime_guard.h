@@ -153,38 +153,6 @@ class LifetimeToken {
         });
     }
 
-    /// Like defer(tag, fn) but routes through `queue_critical` instead of
-    /// `queue_update`, so the callback survives a `scoped_freeze()` window.
-    /// Reserve for callbacks that establish startup state the rest of the app
-    /// is waiting on — Klipper subscription notify is the canonical case: the
-    /// first status frame populates AMS / printer state, and if it's dropped
-    /// during the splash→home freeze, slot widgets stay at SlotStatus::UNKNOWN
-    /// forever (Snapmaker UI showed all lanes as EMPTY because the very first
-    /// notify_update arrived during a freeze and was dropped).
-    ///
-    /// The lifetime check still runs — if the owning object was destroyed
-    /// between enqueue and dispatch, the callback no-ops. queue_critical
-    /// ONLY bypasses the freeze, NOT shut_down_, so post-shutdown enqueues
-    /// are still discarded.
-    ///
-    /// DO NOT use for routine UI updates, observer fan-out, or any callback
-    /// that could fire during widget destruction. The freeze exists to stop
-    /// BG threads from enqueueing callbacks against widgets being torn down;
-    /// bypassing it is only safe when the callback's effects are bounded to
-    /// subjects/state that survive the drain+destroy window.
-    template <typename F> void defer_critical(const char* tag, F&& fn) const {
-        auto gen = gen_;
-        auto snapshot = snapshot_;
-        helix::ui::queue_critical(tag, [gen, snapshot, tag, f = std::forward<F>(fn)]() mutable {
-            if (gen->load(std::memory_order_acquire) != snapshot) {
-                spdlog::trace("[LifetimeToken] Skipped expired callback: {}",
-                              tag ? tag : "unknown");
-                return;
-            }
-            f();
-        });
-    }
-
   private:
     friend class AsyncLifetimeGuard;
 

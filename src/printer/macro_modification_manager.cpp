@@ -143,12 +143,8 @@ void MacroModificationManager::check_and_notify() {
             // L081 Mechanism C: previously did inline member writes
             // (analyzing_, cached_analysis_) and a show_configure_toast()
             // (LVGL) on the bg thread (analyzer's HTTP cb). Marshal to main.
-            // defer_critical: first-fire PRINT_START analysis. If dropped during
-            // splash→home scoped_freeze, the safety-config toast never appears
-            // and analyzing_ stays true forever, blocking future re-analysis.
-            // Mechanism D freeze-drop (L081).
-            token.defer_critical("MacroModificationManager::analyze_success",
-                                 [this, analysis, wizard_config]() {
+            token.defer("MacroModificationManager::analyze_success",
+                        [this, analysis, wizard_config]() {
                             analyzing_ = false;
                             cached_analysis_ = analysis;
 

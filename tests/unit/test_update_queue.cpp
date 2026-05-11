@@ -10,55 +10,53 @@
 using helix::ui::UpdateQueue;
 using helix::ui::UpdateQueueTestAccess;
 
-TEST_CASE_METHOD(LVGLTestFixture, "ScopedFreeze discards queued callbacks", "[update_queue]") {
+TEST_CASE_METHOD(LVGLTestFixture, "drain works before freeze", "[update_queue]") {
+    auto& q = UpdateQueue::instance();
+    bool first_ran = false;
+
+    // Queue and drain before freezing — callback should run
+    q.queue([&first_ran]() { first_ran = true; });
+    UpdateQueueTestAccess::drain(q);
+    REQUIRE(first_ran);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "drain inside freeze is a no-op for buffered work",
+                 "[update_queue]") {
     auto& q = UpdateQueue::instance();
     bool ran = false;
 
     {
         auto freeze = q.scoped_freeze();
         q.queue([&ran]() { ran = true; });
+        // Drain inside freeze: the work was diverted into frozen_buffer_,
+        // so pending_ is empty and the drain is a no-op.
         UpdateQueueTestAccess::drain(q);
+        REQUIRE_FALSE(ran);
     }
-
-    REQUIRE_FALSE(ran);
-}
-
-TEST_CASE_METHOD(LVGLTestFixture, "drain works before freeze", "[update_queue]") {
-    auto& q = UpdateQueue::instance();
-    bool first_ran = false;
-    bool second_ran = false;
-
-    // Queue and drain before freezing — callback should run
-    q.queue([&first_ran]() { first_ran = true; });
+    // Freeze released → buffer spliced into pending_. Flush before captures
+    // go out of scope.
     UpdateQueueTestAccess::drain(q);
-    REQUIRE(first_ran);
-
-    // Now freeze and queue — callback should be discarded
-    {
-        auto freeze = q.scoped_freeze();
-        q.queue([&second_ran]() { second_ran = true; });
-        UpdateQueueTestAccess::drain(q);
-    }
-
-    REQUIRE_FALSE(second_ran);
+    REQUIRE(ran);
 }
 
-TEST_CASE_METHOD(LVGLTestFixture, "queue_critical bypasses ScopedFreeze", "[update_queue]") {
+TEST_CASE_METHOD(LVGLTestFixture, "ScopedFreeze buffers, splices on release", "[update_queue]") {
     auto& q = UpdateQueue::instance();
-    bool dropped = false;
-    bool delivered = false;
+    bool a = false;
+    bool b = false;
 
     {
         auto freeze = q.scoped_freeze();
-        q.queue("normal-should-drop", [&dropped]() { dropped = true; });
-        q.queue_critical("critical-should-survive", [&delivered]() { delivered = true; });
-        // Drain inside freeze: only the critical one is in pending_, but
-        // process_pending runs callbacks regardless of freeze state.
+        q.queue("a-buffered", [&a]() { a = true; });
+        q.queue("b-buffered", [&b]() { b = true; });
+        // Drain inside freeze is a no-op for buffered work.
         UpdateQueueTestAccess::drain(q);
+        REQUIRE_FALSE(a);
+        REQUIRE_FALSE(b);
     }
-
-    REQUIRE_FALSE(dropped);
-    REQUIRE(delivered);
+    // Freeze released → buffer spliced into pending_. Drain fires both.
+    UpdateQueueTestAccess::drain(q);
+    REQUIRE(a);
+    REQUIRE(b);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture, "ScopedFreeze is RAII — thaw on scope exit", "[update_queue]") {
@@ -77,36 +75,38 @@ TEST_CASE_METHOD(LVGLTestFixture, "ScopedFreeze is RAII — thaw on scope exit",
     REQUIRE(ran);
 }
 
-TEST_CASE_METHOD(LVGLTestFixture, "queue resumes after thaw", "[update_queue]") {
+TEST_CASE_METHOD(LVGLTestFixture, "queue resumes after thaw — buffered + post-thaw both run",
+                 "[update_queue]") {
     auto& q = UpdateQueue::instance();
-    bool discarded_ran = false;
+    bool buffered_ran = false;
     bool resumed_ran = false;
 
-    // Freeze — queued callback should be discarded
+    // Queue inside freeze — goes into frozen_buffer_, spliced into pending_
+    // when the freeze releases at scope exit.
     {
         auto freeze = q.scoped_freeze();
-        q.queue([&discarded_ran]() { discarded_ran = true; });
+        q.queue([&buffered_ran]() { buffered_ran = true; });
     }
 
-    // After thaw, queue a new callback — should run
+    // After thaw, queue another callback. Drain fires both: the spliced-in
+    // buffered one and the post-thaw one.
     q.queue([&resumed_ran]() { resumed_ran = true; });
     UpdateQueueTestAccess::drain(q);
 
-    REQUIRE_FALSE(discarded_ran);
+    REQUIRE(buffered_ran);
     REQUIRE(resumed_ran);
 }
 
 // ---------------------------------------------------------------------------
 // observe_int_sync + ScopedFreeze interaction
 //
-// observe_int_sync defers its initial callback via queue_update(). If the
-// observer is created while the queue is frozen (e.g. inside populate_widgets'
-// scoped_freeze), the initial fire is silently dropped and the handler never
-// runs — unless the subject changes again later.
-//
-// This documents the root cause of the "carousel fans show 0%" bug: widgets
-// that set up observers during populate_widgets() must also call their bind
-// function directly, because the deferred initial fire will be discarded.
+// observe_int_sync defers its initial callback via queue_update(). Under the
+// buffer-not-drop semantics, an observer created during a freeze has its
+// initial fire diverted into frozen_buffer_ and spliced into pending_ when
+// the freeze releases, so it fires on the next drain — no manual rebind
+// needed. Pre-2026-05-11 the initial fire was silently dropped (the root
+// cause of the "carousel fans show 0%" bug); this is preserved as a
+// regression test for the buffer-and-splice behavior.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -116,7 +116,7 @@ struct FakePanel {
 } // namespace
 
 TEST_CASE_METHOD(LVGLTestFixture,
-                 "observe_int_sync initial callback is lost during ScopedFreeze",
+                 "observe_int_sync initial callback is buffered during ScopedFreeze",
                  "[update_queue][observer]") {
     auto& q = UpdateQueue::instance();
     FakePanel panel;
@@ -124,24 +124,30 @@ TEST_CASE_METHOD(LVGLTestFixture,
     lv_subject_t subject;
     lv_subject_init_int(&subject, 42);
 
+    // Guard must outlive the freeze. In real code the guard is a member of
+    // the widget that registered it; destroying it before the buffered initial
+    // fire is drained expires its alive shared_ptr, and the deferred body's
+    // weak_alive check skips the handler.
+    ObserverGuard guard;
     {
         auto freeze = q.scoped_freeze();
 
         // Create observer while frozen — the initial fire is queued via
-        // queue_update(), but the queue silently discards it.
-        auto guard = helix::ui::observe_int_sync<FakePanel>(
+        // queue_update(), goes into frozen_buffer_.
+        guard = helix::ui::observe_int_sync<FakePanel>(
             &subject, &panel,
             [](FakePanel* p, int value) { p->observed_value = value; });
 
-        // Even draining won't help — the callback was never enqueued.
+        // Drain inside freeze is a no-op — buffer has not been spliced yet.
         UpdateQueueTestAccess::drain(q);
         REQUIRE(panel.observed_value == -1);
     }
 
-    // After thaw, drain again — still nothing, the callback was lost.
+    // After thaw, the buffered initial fire is in pending_. Drain delivers it.
     UpdateQueueTestAccess::drain(q);
-    REQUIRE(panel.observed_value == -1);
+    REQUIRE(panel.observed_value == 42);
 
+    guard.reset();
     lv_subject_deinit(&subject);
 }
 
@@ -180,17 +186,18 @@ TEST_CASE_METHOD(LVGLTestFixture,
     {
         auto freeze = q.scoped_freeze();
 
-        // Initial fire lost during freeze.
+        // Initial fire buffered during freeze.
         guard = helix::ui::observe_int_sync<FakePanel>(
             &subject, &panel,
             [](FakePanel* p, int value) { p->observed_value = value; });
     }
 
-    // Initial was lost — value still -1.
+    // Buffered initial fire spliced into pending_ on freeze release — drain
+    // delivers it.
     UpdateQueueTestAccess::drain(q);
-    REQUIRE(panel.observed_value == -1);
+    REQUIRE(panel.observed_value == 0);
 
-    // But a subsequent subject change IS delivered (queue is thawed).
+    // A subsequent subject change is also delivered.
     lv_subject_set_int(&subject, 99);
     UpdateQueueTestAccess::drain(q);
     REQUIRE(panel.observed_value == 99);

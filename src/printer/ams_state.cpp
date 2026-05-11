@@ -1312,13 +1312,8 @@ void AmsState::on_backend_event(int backend_index, const std::string& event,
     spdlog::trace("[AMS State] Received event '{}' data='{}' from backend {}", event, data,
                   backend_index);
 
-    // queue_critical (not queue_update): backend events update foundational
-    // slot state that widgets observe. If the FIRST event lands during a
-    // scoped_freeze, plain queue_update is dropped and observers stay stale
-    // forever — slot data isn't periodically re-emitted (L081 freeze-drop;
-    // Snapmaker U1 filament panel showed empty bars on every boot until fixed).
     auto queue_sync = [backend_index](bool full_sync, int slot_index) {
-        helix::ui::queue_critical(
+        helix::ui::queue_update(
             "AmsState::on_backend_event",
             [backend_index, full_sync, slot_index]() {
                 // Skip if shutdown is in progress - AmsState singleton may be destroyed

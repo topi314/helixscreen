@@ -52,21 +52,12 @@ AmsError AmsSubscriptionBackend::start() {
                 // L081 Mechanism C: handle_status_update mutates members + emits events.
                 // High-volume WS notify path: every status frame goes through queue_update,
                 // matching the rest of printer state which is already main-thread-marshaled.
-                //
-                // defer_critical (NOT defer) because Klipper sends the initial subscription
-                // state as the FIRST notify after register_notify_update succeeds — that
-                // frame populates baseline backend state (slot RFID, materials, etc.) the
-                // rest of the app depends on. If it lands during the splash→home
-                // scoped_freeze() window it would be silently dropped, leaving slots stuck
-                // at SlotStatus::UNKNOWN forever (Snapmaker UI showed all lanes as EMPTY,
-                // bug surfaced 2026-05-10). Subsequent high-frequency frames also bypass
-                // freeze, but each one is bounded — handle_status_update completes
-                // synchronously and writes only to backend members + subjects, never
-                // directly to widgets being torn down.
-                token.defer_critical("AmsSubscriptionBackend::notify_update",
-                                     [this, notification]() {
-                    handle_status_update(notification);
-                });
+                // First-fire baseline state (initial subscription frame from Klipper) used
+                // to need defer_critical to survive the splash→home scoped_freeze(); under
+                // the new buffer-not-drop semantics, plain defer is sufficient — buffered
+                // callbacks splice back into pending_ when the freeze releases.
+                token.defer("AmsSubscriptionBackend::notify_update",
+                            [this, notification]() { handle_status_update(notification); });
             });
 
         if (id == helix::INVALID_SUBSCRIPTION_ID) {

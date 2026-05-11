@@ -2223,8 +2223,8 @@ void Application::setup_discovery_callbacks() {
                       initial_status.is_object() ? initial_status.size() : 0);
         auto snapshot = std::make_shared<helix::PrinterDiscovery>(hardware);
         auto status_snapshot = std::make_shared<const nlohmann::json>(initial_status);
-        helix::ui::queue_critical("Application::on_discovery_complete",
-                                  [api, client, app, snapshot, status_snapshot]() {
+        helix::ui::queue_update("Application::on_discovery_complete",
+                                [api, client, app, snapshot, status_snapshot]() {
             // Count invocations so crash bundles reveal whether we crashed on
             // the first discovery or on a reconnect-triggered re-run.
             static int s_discovery_complete_n = 0;

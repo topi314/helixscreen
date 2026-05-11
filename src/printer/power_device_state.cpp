@@ -146,10 +146,7 @@ void PowerDeviceState::update_device_status(const std::string& device, const std
     auto tok = lifetime_.token();
     if (tok.expired())
         return;
-    // defer_critical: notify_power_changed is event-only — a freeze-dropped
-    // event leaves the UI stuck on the default ("off") until the user toggles
-    // the device. L081 freeze-drop.
-    tok.defer_critical("PowerDeviceState::update_device_status", [this, device, new_raw]() {
+    tok.defer("PowerDeviceState::update_device_status", [this, device, new_raw]() {
         auto it = devices_.find(device);
         if (it == devices_.end())
             return;
@@ -202,9 +199,7 @@ void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
                 RecoverySuppression::NORMAL);
         }
 
-        // defer_critical: see update_device_status above (L081 freeze-drop).
-        tok.defer_critical("PowerDeviceState::on_power_changed",
-                           [this, device_name, new_raw]() {
+        tok.defer("PowerDeviceState::on_power_changed", [this, device_name, new_raw]() {
             auto it = devices_.find(device_name);
             if (it == devices_.end()) {
                 spdlog::trace("[PowerDeviceState] Ignoring update for unknown device '{}'",

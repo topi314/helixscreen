@@ -199,52 +199,40 @@ lv_obj_clean(container);  // or safe_delete(), lv_obj_delete()
 // freeze thaws on scope exit
 ```
 
-### Hazard: tok.defer() callbacks are silently DROPPED during freeze
+### scoped_freeze buffers callbacks (no longer drops)
 
-`tok.defer(...)` routes through `queue_update`, which honors `scoped_freeze()` —
-during a freeze window, the callback is **discarded with a single warn line**
-(`[UpdateQueue] DROPPED (frozen): <tag>`) and **never runs**. For ordinary
-post-startup callbacks (UI updates, observer fan-out) this is correct: it
-prevents BG threads from enqueueing work against widgets being torn down.
+`tok.defer(...)` / `queue_update(...)` route through `UpdateQueue::queue()`.
+During a `scoped_freeze()` window, callbacks are diverted into a
+`frozen_buffer_` queue. When the last `ScopedFreeze` destructs, the buffer is
+spliced back into `pending_` and the work fires on the next `process_pending`
+tick.
 
-But for **startup-handshake callbacks** — the FIRST frame of a Klipper
-subscription, the first `notify_klippy_ready` after register, any "establish
-baseline state" path the rest of the app waits on — a single drop strands the
-app permanently. The Snapmaker U1 lane-EMPTY bug (2026-05-10) was exactly
-this: `AmsSubscriptionBackend::notify_update` got dropped during the
-splash→home freeze, so backend `slot.status` stayed at `UNKNOWN` forever and
-the AMS panel rendered every lane as empty even though firmware reported
-loaded RFID tags.
+Earlier code (pre-2026-05-11) used a separate `tok.defer_critical(...)` /
+`queue_critical(...)` API to bypass the freeze for first-fire baseline state
+that the rest of the app waited on. That API has been removed: with
+buffer-not-drop, plain `defer` already preserves first-fire callbacks across
+the freeze window. There is **one** path now.
 
-Use `tok.defer_critical(tag, fn)` for these sites — it routes through
-`queue_critical` instead of `queue_update`, bypassing freeze (still honors
-`shut_down_`):
+Why this is safe even though the freeze exists to prevent enqueueing against
+widgets being torn down: the apply side gates `AsyncLifetimeGuard`'s
+generation counter, so if the owner died during the freeze (drain → destroy →
+freeze releases → buffer splices into pending), the deferred body sees
+`gen->load() != snapshot` and no-ops. The freeze still serializes BG threads
+against drain+destroy, just without losing the work.
 
 ```cpp
 client_->register_notify_update(
     [this, token = lifetime_.token()](const json& notification) {
-        // First frame establishes baseline state — must survive freeze.
-        token.defer_critical("Backend::notify_update", [this, notification]() {
+        // No special variant needed — plain defer buffers across freeze.
+        token.defer("Backend::notify_update", [this, notification]() {
             handle_status_update(notification);
         });
     });
 ```
 
-**When to use defer_critical:**
-- WebSocket subscription callbacks (`register_notify_update`)
-- `notify_klippy_ready` handlers that gate initial state queries
-- Any callback that establishes state the rest of the app waits on
-
-**When NOT to use defer_critical:**
-- Routine UI updates / observer fan-out
-- Per-frame status processing (use regular `defer` — it's fine if one
-  frame drops, the next will arrive; only the FIRST is critical)
-- Anything that touches widgets being torn down
-
-Symptom of a missed defer_critical: feature works on a fresh boot with a
-slow startup, breaks on faster machines or post-update restarts where the
-freeze is more likely to land on the first frame. Grep for `[UpdateQueue]
-DROPPED (frozen): <Backend>::notify_update` in the device log.
+`shut_down_` still drops (post-shutdown enqueues are unrecoverable). If you
+see `[UpdateQueue] DROPPED (shutdown): <tag>` in a device log, a BG thread
+is enqueueing after `update_queue_shutdown()` ran — that's a real bug.
 
 ## CRITICAL: Subject Shutdown Self-Registration
 

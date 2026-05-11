@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Aggregate L081 Mechanism D (freeze-drop) events from device logs.
+# Aggregate `DROPPED` events from UpdateQueue across device logs.
 #
-# The Mechanism D detector logs `[UpdateQueue] DROPPED (frozen): <tag>` every
-# time a `tok.defer(...)` / `queue_update(...)` is silently discarded during a
-# `scoped_freeze()` window. If <tag> identifies a first-fire baseline-state
-# callback (HTTP response that the UI is waiting on), the drop leaves the UI
-# permanently broken. This script aggregates drops across one or more log
-# sources so we can spot new regressions without manually walking each device.
+# Under current semantics, `scoped_freeze()` BUFFERS callbacks rather than
+# dropping them — they splice into pending_ when the freeze releases. So
+# `DROPPED (frozen)` events are now historical only (from binaries built
+# before commit XXXXXX) and should be zero on any current build.
+#
+# `DROPPED (shutdown)` events are still possible (post-shutdown enqueues are
+# unrecoverable) and indicate a different class of bug: a BG thread that
+# kept running past shutdown teardown.
+#
+# This script aggregates both kinds across one or more log sources so we
+# can spot regressions without manually walking each device.
 #
 # Usage:
 #   scripts/freeze-drops.sh <log-file> [<log-file> ...]
@@ -23,8 +28,7 @@
 #   # Local file
 #   scripts/freeze-drops.sh /tmp/helixscreen.log
 #
-# Cross-references each tag to a source location and notes whether it's
-# already using defer_critical (existing fix) or plain defer (regression).
+# Cross-references each tag to its source location.
 
 set -euo pipefail
 
@@ -102,26 +106,25 @@ echo "──── By tag (drops × tag) ────"
 sed -E 's/.*DROPPED \(frozen\): //' "$agg" | sort | uniq -c | sort -rn
 
 echo ""
-echo "──── Source location + defer type ────"
-# For each unique tag, find its definition in the source tree and note defer type
-sed -E 's/.*DROPPED \(frozen\): //' "$agg" | sort -u | while read -r tag; do
+echo "──── Source location ────"
+# For each unique tag, find its definition in the source tree.
+sed -E 's/.*DROPPED \([a-z]+\): //' "$agg" | sort -u | while read -r tag; do
     [[ -z "$tag" ]] && continue
     hit="$(cd "$REPO_ROOT" && grep -rn "\"$tag\"" src include 2>/dev/null \
         | grep -E 'defer|queue_' | head -1)"
     if [[ -z "$hit" ]]; then
-        echo "  $tag → (no source match — stale tag?)"
+        echo "  $tag → (no source match — stale tag from older code path)"
         continue
     fi
     file_line="$(echo "$hit" | cut -d: -f1-2)"
-    if echo "$hit" | grep -q 'defer_critical\|queue_critical'; then
-        status="✓ defer_critical (drop is from old binary; should not recur)"
-    else
-        status="✗ plain defer — REGRESSION CANDIDATE, convert to defer_critical"
-    fi
     echo "  $tag"
     echo "    $file_line"
-    echo "    $status"
 done
+echo ""
+echo "Note: under the buffer-not-drop UpdateQueue, 'DROPPED (frozen)' should"
+echo "be zero on current builds — non-zero results are events from older"
+echo "binaries still in the log. 'DROPPED (shutdown)' indicates a BG thread"
+echo "that kept enqueueing past shutdown teardown (still a real bug)."
 
 echo ""
 echo "──── Per-source breakdown ────"

@@ -89,15 +89,9 @@ void JobQueueState::fetch() {
     auto token = lifetime_.token();
     api_->queue().get_queue_status(
         [this, token](const JobQueueStatus& status) {
-            // Clear guard on the BG thread so a freeze-drop doesn't strand us.
             is_fetching_.store(false);
-            // defer_critical: queue state is event-only. A first-fetch result
-            // dropped during scoped_freeze leaves the panel showing "Queue
-            // empty" until a future external mutation. L081 freeze-drop.
-            // (Direct defer also avoids #707 — bg-thread lifetime_ access.)
-            token.defer_critical("JobQueueState::on_queue_fetched", [this, status]() {
-                on_queue_fetched(status);
-            });
+            token.defer("JobQueueState::on_queue_fetched",
+                        [this, status]() { on_queue_fetched(status); });
         },
         [this, token](const MoonrakerError& err) {
             is_fetching_.store(false);
@@ -157,8 +151,7 @@ void JobQueueState::subscribe_to_notifications() {
     client_->register_method_callback(
         "notify_job_queue_changed", "JobQueueState",
         [this, token](const nlohmann::json& /*data*/) {
-            // defer_critical: event-only notification (L081 freeze-drop).
-            token.defer_critical("JobQueueState::notify_changed", [this]() { fetch(); });
+            token.defer("JobQueueState::notify_changed", [this]() { fetch(); });
         });
 
     spdlog::debug("[JobQueueState] Subscribed to notify_job_queue_changed");

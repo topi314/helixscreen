@@ -478,39 +478,15 @@ def main() -> int:
             print()
             total += 1
 
-    http_files = freeze_files if args.http_cb_audit else []
-    for f in http_files:
-        http_hits = scan_file_http_cb_freeze_drop(f)
-        for line_no, snippet in http_hits:
-            print(f"{f}:{line_no}: L081 Mechanism D (HTTP variant): plain "
-                  f"defer/queue_update inside an HTTP response callback")
-            for ln in snippet.split('\n'):
-                print(f"    {ln}")
-            print(f"    Fix: if this is a first-fire baseline-state fetch (metadata, "
-                  f"history, queue, discovery, etc.), use `tok.defer_critical(...)`. "
-                  f"Plain defer routes through UpdateQueue and is dropped during "
-                  f"the splash→home `scoped_freeze()` window — see "
-                  f"feedback_freeze_drop_telemetry_audit.md.")
-            print(f"    Opt-out (user-initiated retry-on-demand, etc.): "
-                  f"add `// {OPT_OUT_FREEZE}: <reason>` on the defer line.")
-            print()
-            total += 1
-
-    for f in freeze_files:
-        freeze_hits = scan_file_freeze_drop(f)
-        for line_no, snippet in freeze_hits:
-            print(f"{f}:{line_no}: L081 Mechanism D: notification subscription dispatches "
-                  f"subject mutation via non-critical defer/queue_update")
-            for ln in snippet.split('\n'):
-                print(f"    {ln}")
-            print(f"    Fix: use `tok.defer_critical(...)` or `helix::ui::queue_critical(...)`. "
-                  f"Plain queue_update/tok.defer are dropped during scoped_freeze, which strands "
-                  f"first-fire baseline state (Klipper subscription frame, notify_klippy_ready, "
-                  f"power_changed init_on, etc).")
-            print(f"    Opt-out (e.g. high-frequency feeds that re-emit quickly): "
-                  f"add `// {OPT_OUT_FREEZE}: <reason>` on the defer line.")
-            print()
-            total += 1
+    # Mechanism D (freeze-drop) is obsolete: UpdateQueue now buffers callbacks
+    # while frozen and splices them into pending_ when the freeze releases, so
+    # there are no silent drops to detect. The Mechanism D / HTTP-variant scan
+    # helpers (scan_file_freeze_drop, scan_file_http_cb_freeze_drop) are kept
+    # in the source for now in case the buffer-not-drop behavior is ever rolled
+    # back, but they are no longer invoked. The --http-cb-audit flag is also
+    # a no-op.
+    _ = args.http_cb_audit
+    _ = freeze_files
 
     if total > 0:
         print(f"❌ {total} L081 anti-pattern site(s) found. See "

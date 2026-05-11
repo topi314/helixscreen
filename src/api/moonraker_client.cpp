@@ -576,9 +576,7 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
                 else if (method == "notify_klippy_shutdown") {
                     spdlog::warn("[Moonraker Client] Klipper entered shutdown state");
 
-                    // queue_critical: klippy state is event-only and observed by
-                    // nearly every panel. L081 freeze-drop.
-                    helix::ui::queue_critical("MoonrakerClient::notify_klippy_shutdown", []() {
+                    helix::ui::queue_update("MoonrakerClient::notify_klippy_shutdown", []() {
                         get_printer_state().set_klippy_state_sync(KlippyState::SHUTDOWN);
                     });
 
@@ -598,8 +596,7 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
                 else if (method == "notify_klippy_ready") {
                     spdlog::info("[Moonraker Client] Klipper ready");
 
-                    // queue_critical: see notify_klippy_shutdown above (L081 freeze-drop).
-                    helix::ui::queue_critical("MoonrakerClient::notify_klippy_ready", []() {
+                    helix::ui::queue_update("MoonrakerClient::notify_klippy_ready", []() {
                         get_printer_state().set_klippy_state_sync(KlippyState::READY);
                     });
 

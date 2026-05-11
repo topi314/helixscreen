@@ -68,14 +68,10 @@ void PrintHistoryManager::fetch(int limit) {
             // detector for this site (3XNZQB2R audit). The std::vector copy
             // below is harmless if defer skips.
             std::vector<PrintHistoryJob> jobs_copy = jobs;
-            // defer_critical: first-fire history fetch establishes baseline state
-            // the print-select panel and history overlay observe. Dropped during
-            // splash→home scoped_freeze leaves the history list empty until a
-            // future print completes. Mechanism D freeze-drop (L081).
-            token.defer_critical("PrintHistoryManager::fetch_success",
-                                 [this, jobs = std::move(jobs_copy)]() mutable {
-                                     on_history_fetched(std::move(jobs));
-                                 });
+            token.defer("PrintHistoryManager::fetch_success",
+                        [this, jobs = std::move(jobs_copy)]() mutable {
+                            on_history_fetched(std::move(jobs));
+                        });
         },
         [this, token](const MoonrakerError& error) {
             is_fetching_.store(false);

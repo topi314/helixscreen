@@ -2031,15 +2031,7 @@ void AmsBackendAd5xIfs::register_klippy_ready_listener() {
         "notify_klippy_ready", handler_name, [this, token](const json& /*msg*/) {
             // MAIN THREAD: schedule_* helpers spawn HttpExecutor work that
             // re-reads via api_; both rely on `this` being alive.
-            //
-            // defer_critical (NOT defer) because notify_klippy_ready is the
-            // startup handshake that gates initial GET_ZCOLOR SILENT=1 — if
-            // it's dropped during the splash→home scoped_freeze() window,
-            // schedule_zcolor_query() never runs and slot colors stay at
-            // firmware defaults forever (the canonical "startup handshake
-            // dropped during freeze" pattern, same as AmsSubscriptionBackend's
-            // notify_update). See LifetimeToken::defer_critical docs.
-            token.defer_critical("Ad5xIfsBackend::klippy_ready_apply", [this]() {
+            token.defer("Ad5xIfsBackend::klippy_ready_apply", [this]() {
                 spdlog::info("{} notify_klippy_ready — scheduling GET_ZCOLOR SILENT=1",
                              backend_log_tag());
                 // Re-read the JSON cache too — firmware may have persisted new

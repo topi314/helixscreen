@@ -418,13 +418,8 @@ void LedController::discover_wled_strips() {
             }
 
             // === MAIN THREAD: apply discovered strips, then chain server config fetch ===
-            // defer_critical: first-fire WLED discovery. Dropped during splash→
-            // home scoped_freeze leaves wled_ unpopulated until a manual rescan,
-            // and the chained server_config + presets fetches never fire either.
-            // Mechanism D freeze-drop (L081).
-            token.defer_critical("LedController::wled_strips_apply",
-                                 [this, token,
-                                  discovered = std::move(discovered)]() mutable {
+            token.defer("LedController::wled_strips_apply",
+                        [this, token, discovered = std::move(discovered)]() mutable {
                             spdlog::info("[LedController] Discovered {} WLED strip(s)",
                                          discovered.size());
                             for (auto& strip : discovered) {
