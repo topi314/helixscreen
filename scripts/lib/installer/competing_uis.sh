@@ -288,12 +288,10 @@ stop_competing_uis() {
         return 0
     fi
 
-    # Snapmaker U1 stock UI
-    if pgrep -x "unisrv" >/dev/null 2>&1; then
-        log_info "Stopping Snapmaker stock UI (unisrv)..."
-        killall unisrv 2>/dev/null || true
-        found_any=true
-    fi
+    # Snapmaker U1: unisrv is the proprietary camera/MQTT daemon (handles
+    # Klipper's TIMELAPSE_START), NOT a UI. The real U1 stock UI is /usr/bin/gui
+    # via /etc/init.d/S99screen, handled by snapmaker-u1-setup-autostart.sh.
+    # Killing unisrv here breaks timelapse on every deploy.
 
     # Handle the specific previous UI if we know it (for clean reversibility)
     if [ -n "$PREVIOUS_UI_SCRIPT" ] && [ -x "$PREVIOUS_UI_SCRIPT" ] 2>/dev/null; then
