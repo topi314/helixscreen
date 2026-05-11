@@ -161,6 +161,7 @@
   <translation tag="Automatic" ru="Автоматический"/>
   <translation tag="Automatic Heater Control Calibration" ru="Автоматическая калибровка нагревателя"/>
   <translation tag="Automatic LED Control" ru="Автоматическое управление LED"/>
+  <translation tag="Available"/>
   <translation tag="Available Networks" ru="Доступные сети"/>
   <translation tag="Available networks" ru="Доступные сети"/>
   <translation tag="Average" ru="Среднее"/>
@@ -201,6 +202,7 @@
   <translation tag="Beta features: OFF" ru="Beta-функции: ВЫКЛ"/>
   <translation tag="Beta features: ON" ru="Beta-функции: ВКЛ"/>
   <translation tag="Black" ru="Чёрный"/>
+  <translation tag="Blocked"/>
   <translation tag="Bluetooth" ru="Bluetooth"/>
   <translation tag="Bluetooth initialization failed" ru="Ошибка инициализации Bluetooth"/>
   <translation tag="Bluetooth is not available on this device" ru="Bluetooth недоступен на этом устройстве"/>
@@ -311,6 +313,7 @@
   <translation tag="Check for Updates" ru="Проверить обновления"/>
   <translation tag="Check the filament path and try again." ru="Проверьте путь филамента и попробуйте снова."/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" ru="Проверьте мощность нагревателя (обычно 40–60W для хотэндов)"/>
+  <translation tag="Checking"/>
   <translation tag="Checking Spoolman server..." ru="Проверка сервера Spoolman..."/>
   <translation tag="Checking accelerometer..." ru="Проверка акселерометра..."/>
   <translation tag="Checking for plugin..." ru="Поиск плагина..."/>
@@ -451,6 +454,7 @@
   <translation tag="Customize Macro" ru="Настроить макрос"/>
   <translation tag="Customize preset temperatures" ru="Настройка пресетов температур"/>
   <translation tag="Cutter jam" ru="Замятие резака"/>
+  <translation tag="Cutting"/>
   <translation tag="Cutting filament..." ru="Обрезка филамента..."/>
   <translation tag="DETECTED USB PRINTERS" ru="ОБНАРУЖЕННЫЕ USB-ПРИНТЕРЫ"/>
   <translation tag="DISABLED" ru="ОТКЛЮЧЕНО"/>
@@ -721,12 +725,14 @@
   <translation tag="Flying Toasters" ru="Летающие тостеры"/>
   <translation tag="Follow graph screen" ru="Следовать экрану графика"/>
   <translation tag="Forget" ru="Забыть"/>
+  <translation tag="Forming Tip"/>
   <translation tag="Forming tip..." ru="Формирование кончика..."/>
   <translation tag="Found %zu printers" ru="Найдено %zu принтеров"/>
   <translation tag="Found 1 printer" ru="Найден 1 принтер"/>
   <translation tag="Framerate" ru="Частота кадров"/>
   <translation tag="Freq Graph" ru="График частот"/>
   <translation tag="Frequency Delta" ru="Разница частот"/>
+  <translation tag="From Buffer"/>
   <translation tag="Front" ru="Спереди"/>
   <translation tag="Full" ru="Полный"/>
   <translation tag="G-code Console" ru="Консоль G-code"/>
@@ -759,6 +765,7 @@
   <translation tag="Heat Capacity" ru="Теплоёмкость"/>
   <translation tag="Heat Soak" ru="Прогрев"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." ru="Нагрейте стол перед калибровкой для точного смещения с учётом теплового расширения."/>
+  <translation tag="Heat nozzle"/>
   <translation tag="Heatbed Temperature" ru="Температура стола"/>
   <translation tag="Heated Bed" ru="Подогреваемый стол"/>
   <translation tag="Heated Bed MPC Calibration" ru="Калибровка MPC стола"/>
@@ -766,6 +773,7 @@
   <translation tag="Heater" ru="Нагреватель"/>
   <translation tag="Heater Power" ru="Мощность нагревателя"/>
   <translation tag="Heaters off" ru="Нагреватели выключены"/>
+  <translation tag="Heating"/>
   <translation tag="Heating (%d°C below minimum)" ru="Нагрев (%d°C ниже минимума)"/>
   <translation tag="Heating Bed..." ru="Нагрев стола..."/>
   <translation tag="Heating Nozzle..." ru="Нагрев сопла..."/>
@@ -903,6 +911,7 @@
   <translation tag="Load may still be running — response timed out" ru="Загрузка может ещё выполняться — время ожидания истекло"/>
   <translation tag="Load the required filaments or start anyway?" ru="Загрузить нужные филаменты или начать без них?"/>
   <translation tag="Loaded" ru="Загружен"/>
+  <translation tag="Loading"/>
   <translation tag="Loading Bed Mesh..." ru="Загрузка сетки стола..."/>
   <translation tag="Loading Error" ru="Ошибка загрузки"/>
   <translation tag="Loading Filament..." ru="Загрузка филамента..."/>
@@ -1393,6 +1402,7 @@
   <translation tag="Reset failed: {}" ru="Ошибка сброса: {}"/>
   <translation tag="Reset to Default" ru="Сбросить до умолчания"/>
   <translation tag="Reset to original values" ru="Сбросить к исходным значениям"/>
+  <translation tag="Resetting"/>
   <translation tag="Resetting..." ru="Сброс..."/>
   <translation tag="Response (Kp)" ru="Отклик (Kp)"/>
   <translation tag="Restart" ru="Перезапуск"/>
@@ -1523,6 +1533,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" ru="Выберите датчик, который ставит на паузу при окончании филамента"/>
   <translation tag="Select your preferred language" ru="Выберите предпочитаемый язык"/>
   <translation tag="Selected" ru="Выбрано"/>
+  <translation tag="Selecting"/>
   <translation tag="Selecting slot..." ru="Выбор слота..."/>
   <translation tag="Self-Test" ru="Самотестирование"/>
   <translation tag="Semantic Size Parameter Tests" ru="Тесты семантических параметров размера"/>
@@ -1793,6 +1804,7 @@
   <translation tag="Unload failed: {}" ru="Ошибка выгрузки: {}"/>
   <translation tag="Unload macro not configured" ru="Макрос выгрузки не настроен"/>
   <translation tag="Unload may still be running — response timed out" ru="Выгрузка может ещё выполняться — время ожидания истекло"/>
+  <translation tag="Unloading"/>
   <translation tag="Unloading before bypass..." ru="Выгрузка перед байпасом..."/>
   <translation tag="Unloading filament ({}mm)..." ru="Выгрузка филамента ({}мм)..."/>
   <translation tag="Unloading filament..." ru="Выгрузка филамента..."/>

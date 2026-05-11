@@ -161,6 +161,7 @@ translations:
   Automatic: Automatique
   Automatic Heater Control Calibration: Calibration automatique du chauffage
   Automatic LED Control: Contrôle LED automatique
+  Available: ''
   Available Networks: Réseaux disponibles
   Available networks: Réseaux disponibles
   Average: Moyenne
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'Fonctionnalités Beta : OFF'
   'Beta features: ON': 'Fonctionnalités Beta : ON'
   Black: Noir
+  Blocked: ''
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Échec de l'initialisation Bluetooth
   Bluetooth is not available on this device: 'Bluetooth n''est pas disponible sur cet appareil'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: Vérifier les mises à jour
   Check the filament path and try again.: Vérifiez le chemin du filament et réessayez.
   Check your heater's rating (typically 40-60W for hotends): Vérifiez la puissance de votre chauffage (généralement 40-60W pour les hotends)
+  Checking: ''
   Checking Spoolman server...: Vérification du serveur Spoolman...
   Checking accelerometer...: Vérification de l'accéléromètre...
   Checking for plugin...: Recherche du plugin...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: Personnaliser la macro
   Customize preset temperatures: Personnaliser les températures de préréglage
   Cutter jam: Bourrage du coupeur
+  Cutting: ''
   Cutting filament...: Coupe du filament...
   DETECTED USB PRINTERS: IMPRIMANTES USB DÉTECTÉES
   DISABLED: DÉSACTIVÉ
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: Flying Toasters
   Follow graph screen: Suivre l'écran du graphique
   Forget: 'Oublier'
+  Forming Tip: ''
   Forming tip...: Formation de la pointe...
   Found %zu printers: '%zu imprimantes trouvées'
   Found 1 printer: 1 imprimante trouvée
   Framerate: Fréquence d'images
   Freq Graph: Graph. fréq.
   Frequency Delta: Delta de fréquence
+  From Buffer: ''
   Front: Avant
   Full: 'Complet'
   G-code Console: Console G-code
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: Capacité thermique
   Heat Soak: Stabilisation thermique
   Heat bed before calibrating for accurate offset with thermal expansion.: Chauffez le plateau avant de calibrer pour un offset précis avec la dilatation thermique.
+  Heat nozzle: ''
   Heatbed Temperature: Température du plateau chauffant
   Heated Bed: Plateau chauffant
   Heated Bed MPC Calibration: Calibration MPC du plateau chauffant
@@ -767,6 +774,7 @@ translations:
   Heater: Chauffage
   Heater Power: Puissance du chauffage
   Heaters off: Chauffages éteints
+  Heating: ''
   Heating (%d°C below minimum): Chauffe (%d°C sous le minimum)
   Heating Bed...: Chauffe du plateau...
   Heating Nozzle...: Chauffe de la buse...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: Le chargement est peut-être encore en cours — délai dépassé
   Load the required filaments or start anyway?: Charger les filaments requis ou démarrer quand même ?
   Loaded: Chargé
+  Loading: ''
   Loading Bed Mesh...: Chargement du maillage...
   Loading Error: Erreur de chargement
   Loading Filament...: Chargement du filament...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'Échec de la réinitialisation : {}'
   Reset to Default: Réinitialiser par défaut
   Reset to original values: Réinitialiser aux valeurs d'origine
+  Resetting: ''
   Resetting...: Réinitialisation...
   Response (Kp): Réponse (Kp)
   Restart: Redémarrer
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: Sélectionnez le capteur qui déclenche la pause en cas de rupture de filament
   Select your preferred language: Sélectionnez votre langue préférée
   Selected: 'Sélectionné'
+  Selecting: ''
   Selecting slot...: Sélection du slot...
   Self-Test: Auto-test
   Semantic Size Parameter Tests: Tests de paramètres de taille sémantique
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'Échec du déchargement : {}'
   Unload macro not configured: Macro de déchargement non configurée
   Unload may still be running — response timed out: Le déchargement est peut-être encore en cours — délai dépassé
+  Unloading: ''
   Unloading before bypass...: Déchargement avant bypass...
   Unloading filament ({}mm)...: Déchargement du filament ({}mm)...
   Unloading filament...: Déchargement du filament...

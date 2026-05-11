@@ -161,6 +161,7 @@
   <translation tag="Automatic" en="Automatic"/>
   <translation tag="Automatic Heater Control Calibration" en="Automatic Heater Control Calibration"/>
   <translation tag="Automatic LED Control" en="Automatic LED Control"/>
+  <translation tag="Available" en="Available"/>
   <translation tag="Available Networks" en="Available Networks"/>
   <translation tag="Available networks" en="Available networks"/>
   <translation tag="Average" en="Average"/>
@@ -201,6 +202,7 @@
   <translation tag="Beta features: OFF" en="Beta features: OFF"/>
   <translation tag="Beta features: ON" en="Beta features: ON"/>
   <translation tag="Black" en="Black"/>
+  <translation tag="Blocked" en="Blocked"/>
   <translation tag="Bluetooth" en="Bluetooth"/>
   <translation tag="Bluetooth initialization failed" en="Bluetooth initialization failed"/>
   <translation tag="Bluetooth is not available on this device" en="Bluetooth is not available on this device"/>
@@ -311,6 +313,7 @@
   <translation tag="Check for Updates" en="Check for Updates"/>
   <translation tag="Check the filament path and try again." en="Check the filament path and try again."/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" en="Check your heater&apos;s rating (typically 40-60W for hotends)"/>
+  <translation tag="Checking" en="Checking"/>
   <translation tag="Checking Spoolman server..." en="Checking Spoolman server..."/>
   <translation tag="Checking accelerometer..." en="Checking accelerometer..."/>
   <translation tag="Checking for plugin..." en="Checking for plugin..."/>
@@ -451,6 +454,7 @@
   <translation tag="Customize Macro" en="Customize Macro"/>
   <translation tag="Customize preset temperatures" en="Customize preset temperatures"/>
   <translation tag="Cutter jam" en="Cutter jam"/>
+  <translation tag="Cutting" en="Cutting"/>
   <translation tag="Cutting filament..." en="Cutting filament..."/>
   <translation tag="DETECTED USB PRINTERS" en="DETECTED USB PRINTERS"/>
   <translation tag="DISABLED" en="DISABLED"/>
@@ -721,12 +725,14 @@
   <translation tag="Flying Toasters" en="Flying Toasters"/>
   <translation tag="Follow graph screen" en="Follow graph screen"/>
   <translation tag="Forget" en="Forget"/>
+  <translation tag="Forming Tip" en="Forming Tip"/>
   <translation tag="Forming tip..." en="Forming tip..."/>
   <translation tag="Found %zu printers" en="Found %zu printers"/>
   <translation tag="Found 1 printer" en="Found 1 printer"/>
   <translation tag="Framerate" en="Framerate"/>
   <translation tag="Freq Graph" en="Freq Graph"/>
   <translation tag="Frequency Delta" en="Frequency Delta"/>
+  <translation tag="From Buffer" en="From Buffer"/>
   <translation tag="Front" en="Front"/>
   <translation tag="Full" en="Full"/>
   <translation tag="G-code Console" en="G-code Console"/>
@@ -759,6 +765,7 @@
   <translation tag="Heat Capacity" en="Heat Capacity"/>
   <translation tag="Heat Soak" en="Heat Soak"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." en="Heat bed before calibrating for accurate offset with thermal expansion."/>
+  <translation tag="Heat nozzle" en="Heat nozzle"/>
   <translation tag="Heatbed Temperature" en="Heatbed Temperature"/>
   <translation tag="Heated Bed" en="Heated Bed"/>
   <translation tag="Heated Bed MPC Calibration" en="Heated Bed MPC Calibration"/>
@@ -766,6 +773,7 @@
   <translation tag="Heater" en="Heater"/>
   <translation tag="Heater Power" en="Heater Power"/>
   <translation tag="Heaters off" en="Heaters off"/>
+  <translation tag="Heating" en="Heating"/>
   <translation tag="Heating (%d°C below minimum)" en="Heating (%d°C below minimum)"/>
   <translation tag="Heating Bed..." en="Heating Bed..."/>
   <translation tag="Heating Nozzle..." en="Heating Nozzle..."/>
@@ -903,6 +911,7 @@
   <translation tag="Load may still be running — response timed out" en="Load may still be running — response timed out"/>
   <translation tag="Load the required filaments or start anyway?" en="Load the required filaments or start anyway?"/>
   <translation tag="Loaded" en="Loaded"/>
+  <translation tag="Loading" en="Loading"/>
   <translation tag="Loading Bed Mesh..." en="Loading Bed Mesh..."/>
   <translation tag="Loading Error" en="Loading Error"/>
   <translation tag="Loading Filament..." en="Loading Filament..."/>
@@ -1393,6 +1402,7 @@
   <translation tag="Reset failed: {}" en="Reset failed: {}"/>
   <translation tag="Reset to Default" en="Reset to Default"/>
   <translation tag="Reset to original values" en="Reset to original values"/>
+  <translation tag="Resetting" en="Resetting"/>
   <translation tag="Resetting..." en="Resetting..."/>
   <translation tag="Response (Kp)" en="Response (Kp)"/>
   <translation tag="Restart" en="Restart"/>
@@ -1523,6 +1533,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" en="Select which sensor triggers pause on filament runout"/>
   <translation tag="Select your preferred language" en="Select your preferred language"/>
   <translation tag="Selected" en="Selected"/>
+  <translation tag="Selecting" en="Selecting"/>
   <translation tag="Selecting slot..." en="Selecting slot..."/>
   <translation tag="Self-Test" en="Self-Test"/>
   <translation tag="Semantic Size Parameter Tests" en="Semantic Size Parameter Tests"/>
@@ -1793,6 +1804,7 @@
   <translation tag="Unload failed: {}" en="Unload failed: {}"/>
   <translation tag="Unload macro not configured" en="Unload macro not configured"/>
   <translation tag="Unload may still be running — response timed out" en="Unload may still be running — response timed out"/>
+  <translation tag="Unloading" en="Unloading"/>
   <translation tag="Unloading before bypass..." en="Unloading before bypass..."/>
   <translation tag="Unloading filament ({}mm)..." en="Unloading filament ({}mm)..."/>
   <translation tag="Unloading filament..." en="Unloading filament..."/>

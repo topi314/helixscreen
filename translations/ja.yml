@@ -161,6 +161,7 @@ translations:
   Automatic: 自動
   Automatic Heater Control Calibration: 自動ヒーター制御キャリブレーション
   Automatic LED Control: 自動LED制御
+  Available: ''
   Available Networks: 利用可能なネットワーク
   Available networks: 利用可能なネットワーク
   Average: 平均
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'ベータ機能: OFF'
   'Beta features: ON': 'ベータ機能: ON'
   Black: ブラック
+  Blocked: ''
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Bluetooth の初期化に失敗しました
   Bluetooth is not available on this device: 'このデバイスでは Bluetooth を利用できません'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: 更新を確認
   Check the filament path and try again.: フィラメント経路を確認して、もう一度お試しください。
   Check your heater's rating (typically 40-60W for hotends): ヒーターの定格を確認してください（ホットエンドは通常40〜60W）
+  Checking: ''
   Checking Spoolman server...: Spoolman サーバーを確認中...
   Checking accelerometer...: 加速度センサーを確認中...
   Checking for plugin...: プラグインを確認中...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: マクロをカスタマイズ
   Customize preset temperatures: プリセット温度をカスタマイズ
   Cutter jam: カッター詰まり
+  Cutting: ''
   Cutting filament...: フィラメントを切断中...
   DETECTED USB PRINTERS: 検出されたUSBプリンター
   DISABLED: 無効
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: フライングトースター
   Follow graph screen: グラフ画面に追従
   Forget: '登録解除'
+  Forming Tip: ''
   Forming tip...: チップを形成中...
   Found %zu printers: '%zu台のプリンターを検出'
   Found 1 printer: プリンター1台を検出
   Framerate: フレームレート
   Freq Graph: 周波数グラフ
   Frequency Delta: 周波数差
+  From Buffer: ''
   Front: 正面
   Full: 'フル'
   G-code Console: G-code コンソール
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: 熱容量
   Heat Soak: ヒートソーク
   Heat bed before calibrating for accurate offset with thermal expansion.: 熱膨張を考慮した正確なオフセットのため、キャリブレーション前にベッドを加熱してください。
+  Heat nozzle: ''
   Heatbed Temperature: ヒートベッド温度
   Heated Bed: 加熱ベッド
   Heated Bed MPC Calibration: ヒートベッド MPCキャリブレーション
@@ -767,6 +774,7 @@ translations:
   Heater: ヒーター
   Heater Power: ヒーター出力
   Heaters off: ヒーターをオフにしました
+  Heating: ''
   Heating (%d°C below minimum): '"加熱中（最低温度より%d°C低い）"'
   Heating Bed...: ベッド加熱中...
   Heating Nozzle...: ノズル加熱中...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: 装填がまだ実行中の可能性があります — 応答タイムアウト
   Load the required filaments or start anyway?: 必要なフィラメントを装填しますか？それともこのまま開始しますか？
   Loaded: 装填済み
+  Loading: ''
   Loading Bed Mesh...: ベッドメッシュ読込中...
   Loading Error: 装填エラー
   Loading Filament...: フィラメントを装填中...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'リセットに失敗しました: {}'
   Reset to Default: デフォルトにリセット
   Reset to original values: 元の値にリセット
+  Resetting: ''
   Resetting...: リセット中...
   Response (Kp): 応答 (Kp)
   Restart: 再起動
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: フィラメント切れ時に一時停止するセンサーを選択してください
   Select your preferred language: ご希望の言語を選択してください
   Selected: '選択済み'
+  Selecting: ''
   Selecting slot...: スロットを選択中...
   Self-Test: セルフテスト
   Semantic Size Parameter Tests: セマンティックサイズパラメータテスト
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'アンロードに失敗しました: {}'
   Unload macro not configured: アンロードマクロが未設定です
   Unload may still be running — response timed out: 排出がまだ実行中の可能性があります — 応答タイムアウト
+  Unloading: ''
   Unloading before bypass...: バイパス前にアンロード中...
   Unloading filament ({}mm)...: フィラメントを排出中 ({}mm)...
   Unloading filament...: フィラメントを排出中...

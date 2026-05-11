@@ -161,6 +161,7 @@
   <translation tag="Automatic" fr="Automatique"/>
   <translation tag="Automatic Heater Control Calibration" fr="Calibration automatique du chauffage"/>
   <translation tag="Automatic LED Control" fr="Contrôle LED automatique"/>
+  <translation tag="Available"/>
   <translation tag="Available Networks" fr="Réseaux disponibles"/>
   <translation tag="Available networks" fr="Réseaux disponibles"/>
   <translation tag="Average" fr="Moyenne"/>
@@ -201,6 +202,7 @@
   <translation tag="Beta features: OFF" fr="Fonctionnalités Beta : OFF"/>
   <translation tag="Beta features: ON" fr="Fonctionnalités Beta : ON"/>
   <translation tag="Black" fr="Noir"/>
+  <translation tag="Blocked"/>
   <translation tag="Bluetooth" fr="Bluetooth"/>
   <translation tag="Bluetooth initialization failed" fr="Échec de l&apos;initialisation Bluetooth"/>
   <translation tag="Bluetooth is not available on this device" fr="Bluetooth n&apos;est pas disponible sur cet appareil"/>
@@ -311,6 +313,7 @@
   <translation tag="Check for Updates" fr="Vérifier les mises à jour"/>
   <translation tag="Check the filament path and try again." fr="Vérifiez le chemin du filament et réessayez."/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" fr="Vérifiez la puissance de votre chauffage (généralement 40-60W pour les hotends)"/>
+  <translation tag="Checking"/>
   <translation tag="Checking Spoolman server..." fr="Vérification du serveur Spoolman..."/>
   <translation tag="Checking accelerometer..." fr="Vérification de l&apos;accéléromètre..."/>
   <translation tag="Checking for plugin..." fr="Recherche du plugin..."/>
@@ -451,6 +454,7 @@
   <translation tag="Customize Macro" fr="Personnaliser la macro"/>
   <translation tag="Customize preset temperatures" fr="Personnaliser les températures de préréglage"/>
   <translation tag="Cutter jam" fr="Bourrage du coupeur"/>
+  <translation tag="Cutting"/>
   <translation tag="Cutting filament..." fr="Coupe du filament..."/>
   <translation tag="DETECTED USB PRINTERS" fr="IMPRIMANTES USB DÉTECTÉES"/>
   <translation tag="DISABLED" fr="DÉSACTIVÉ"/>
@@ -721,12 +725,14 @@
   <translation tag="Flying Toasters" fr="Flying Toasters"/>
   <translation tag="Follow graph screen" fr="Suivre l&apos;écran du graphique"/>
   <translation tag="Forget" fr="Oublier"/>
+  <translation tag="Forming Tip"/>
   <translation tag="Forming tip..." fr="Formation de la pointe..."/>
   <translation tag="Found %zu printers" fr="%zu imprimantes trouvées"/>
   <translation tag="Found 1 printer" fr="1 imprimante trouvée"/>
   <translation tag="Framerate" fr="Fréquence d&apos;images"/>
   <translation tag="Freq Graph" fr="Graph. fréq."/>
   <translation tag="Frequency Delta" fr="Delta de fréquence"/>
+  <translation tag="From Buffer"/>
   <translation tag="Front" fr="Avant"/>
   <translation tag="Full" fr="Complet"/>
   <translation tag="G-code Console" fr="Console G-code"/>
@@ -759,6 +765,7 @@
   <translation tag="Heat Capacity" fr="Capacité thermique"/>
   <translation tag="Heat Soak" fr="Stabilisation thermique"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." fr="Chauffez le plateau avant de calibrer pour un offset précis avec la dilatation thermique."/>
+  <translation tag="Heat nozzle"/>
   <translation tag="Heatbed Temperature" fr="Température du plateau chauffant"/>
   <translation tag="Heated Bed" fr="Plateau chauffant"/>
   <translation tag="Heated Bed MPC Calibration" fr="Calibration MPC du plateau chauffant"/>
@@ -766,6 +773,7 @@
   <translation tag="Heater" fr="Chauffage"/>
   <translation tag="Heater Power" fr="Puissance du chauffage"/>
   <translation tag="Heaters off" fr="Chauffages éteints"/>
+  <translation tag="Heating"/>
   <translation tag="Heating (%d°C below minimum)" fr="Chauffe (%d°C sous le minimum)"/>
   <translation tag="Heating Bed..." fr="Chauffe du plateau..."/>
   <translation tag="Heating Nozzle..." fr="Chauffe de la buse..."/>
@@ -903,6 +911,7 @@
   <translation tag="Load may still be running — response timed out" fr="Le chargement est peut-être encore en cours — délai dépassé"/>
   <translation tag="Load the required filaments or start anyway?" fr="Charger les filaments requis ou démarrer quand même ?"/>
   <translation tag="Loaded" fr="Chargé"/>
+  <translation tag="Loading"/>
   <translation tag="Loading Bed Mesh..." fr="Chargement du maillage..."/>
   <translation tag="Loading Error" fr="Erreur de chargement"/>
   <translation tag="Loading Filament..." fr="Chargement du filament..."/>
@@ -1393,6 +1402,7 @@
   <translation tag="Reset failed: {}" fr="Échec de la réinitialisation : {}"/>
   <translation tag="Reset to Default" fr="Réinitialiser par défaut"/>
   <translation tag="Reset to original values" fr="Réinitialiser aux valeurs d&apos;origine"/>
+  <translation tag="Resetting"/>
   <translation tag="Resetting..." fr="Réinitialisation..."/>
   <translation tag="Response (Kp)" fr="Réponse (Kp)"/>
   <translation tag="Restart" fr="Redémarrer"/>
@@ -1523,6 +1533,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" fr="Sélectionnez le capteur qui déclenche la pause en cas de rupture de filament"/>
   <translation tag="Select your preferred language" fr="Sélectionnez votre langue préférée"/>
   <translation tag="Selected" fr="Sélectionné"/>
+  <translation tag="Selecting"/>
   <translation tag="Selecting slot..." fr="Sélection du slot..."/>
   <translation tag="Self-Test" fr="Auto-test"/>
   <translation tag="Semantic Size Parameter Tests" fr="Tests de paramètres de taille sémantique"/>
@@ -1793,6 +1804,7 @@
   <translation tag="Unload failed: {}" fr="Échec du déchargement : {}"/>
   <translation tag="Unload macro not configured" fr="Macro de déchargement non configurée"/>
   <translation tag="Unload may still be running — response timed out" fr="Le déchargement est peut-être encore en cours — délai dépassé"/>
+  <translation tag="Unloading"/>
   <translation tag="Unloading before bypass..." fr="Déchargement avant bypass..."/>
   <translation tag="Unloading filament ({}mm)..." fr="Déchargement du filament ({}mm)..."/>
   <translation tag="Unloading filament..." fr="Déchargement du filament..."/>

@@ -161,6 +161,7 @@ translations:
   Automatic: Automatisch
   Automatic Heater Control Calibration: Automatische Heizungsregelung Kalibrierung
   Automatic LED Control: Automatische LED-Steuerung
+  Available: ''
   Available Networks: Verfügbare Netzwerke
   Available networks: Verfügbare Netzwerke
   Average: Durchschnitt
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'Beta-Funktionen: AUS'
   'Beta features: ON': 'Beta-Funktionen: EIN'
   Black: Schwarz
+  Blocked: ''
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Bluetooth-Initialisierung fehlgeschlagen
   Bluetooth is not available on this device: 'Bluetooth ist auf diesem Gerät nicht verfügbar'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: Nach Updates suchen
   Check the filament path and try again.: Prüfen Sie den Filamentpfad und versuchen Sie es erneut.
   Check your heater's rating (typically 40-60W for hotends): Heizleistung prüfen (typisch 40-60W für Hotends)
+  Checking: ''
   Checking Spoolman server...: Spoolman-Server wird geprüft...
   Checking accelerometer...: Beschleunigungssensor prüfen...
   Checking for plugin...: Prüfe Plugin...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: Makro anpassen
   Customize preset temperatures: Voreingestellte Temperaturen anpassen
   Cutter jam: Schneidestau
+  Cutting: ''
   Cutting filament...: Filament wird geschnitten...
   DETECTED USB PRINTERS: ERKANNTE USB-DRUCKER
   DISABLED: DEAKTIVIERT
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: Flying Toasters
   Follow graph screen: Diagrammbildschirm folgen
   Forget: 'Vergessen'
+  Forming Tip: ''
   Forming tip...: Spitze wird geformt...
   Found %zu printers: '%zu Drucker gefunden'
   Found 1 printer: 1 Drucker gefunden
   Framerate: Bildrate
   Freq Graph: Frequenzdiagramm
   Frequency Delta: Frequenzdifferenz
+  From Buffer: ''
   Front: Vorne
   Full: 'Vollständig'
   G-code Console: G-Code-Konsole
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: Wärmekapazität
   Heat Soak: Aufwärmen
   Heat bed before calibrating for accurate offset with thermal expansion.: Bett vor der Kalibrierung heizen für genauen Offset mit Wärmeausdehnung.
+  Heat nozzle: ''
   Heatbed Temperature: Heizbett-Temperatur
   Heated Bed: Heizbett
   Heated Bed MPC Calibration: Heizbett MPC-Kalibrierung
@@ -767,6 +774,7 @@ translations:
   Heater: Heizung
   Heater Power: Heizleistung
   Heaters off: Heizungen aus
+  Heating: ''
   Heating (%d°C below minimum): Aufheizen (%d°C unter Minimum)
   Heating Bed...: Bett aufheizen...
   Heating Nozzle...: Düse aufheizen...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: Laden läuft möglicherweise noch — Zeitüberschreitung
   Load the required filaments or start anyway?: Benötigte Filamente laden oder trotzdem starten?
   Loaded: Geladen
+  Loading: ''
   Loading Bed Mesh...: Bett-Mesh laden...
   Loading Error: Ladefehler
   Loading Filament...: Lade Filament...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'Zurücksetzen fehlgeschlagen: {}'
   Reset to Default: Auf Standard zurücksetzen
   Reset to original values: Auf Originalwerte zurücksetzen
+  Resetting: ''
   Resetting...: Wird zurückgesetzt...
   Response (Kp): Antwort (Kp)
   Restart: Neustart
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: Wählen Sie den Sensor, der bei Filamentende pausiert
   Select your preferred language: Wählen Sie Ihre bevorzugte Sprache
   Selected: 'Ausgewählt'
+  Selecting: ''
   Selecting slot...: Slot wird ausgewählt...
   Self-Test: Selbsttest
   Semantic Size Parameter Tests: Semantische Größenparameter-Tests
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'Entladen fehlgeschlagen: {}'
   Unload macro not configured: Entlade-Makro nicht konfiguriert
   Unload may still be running — response timed out: Entladen läuft möglicherweise noch — Zeitüberschreitung
+  Unloading: ''
   Unloading before bypass...: Entladen vor Bypass...
   Unloading filament ({}mm)...: Filament wird entladen ({}mm)...
   Unloading filament...: Filament wird entladen...

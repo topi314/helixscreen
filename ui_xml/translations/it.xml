@@ -161,6 +161,7 @@
   <translation tag="Automatic" it="Automatico"/>
   <translation tag="Automatic Heater Control Calibration" it="Calibrazione controllo automatico riscaldatore"/>
   <translation tag="Automatic LED Control" it="Controllo LED automatico"/>
+  <translation tag="Available"/>
   <translation tag="Available Networks" it="Reti disponibili"/>
   <translation tag="Available networks" it="Reti disponibili"/>
   <translation tag="Average" it="Media"/>
@@ -201,6 +202,7 @@
   <translation tag="Beta features: OFF" it="Funzioni Beta: OFF"/>
   <translation tag="Beta features: ON" it="Funzioni Beta: ON"/>
   <translation tag="Black" it="Nero"/>
+  <translation tag="Blocked"/>
   <translation tag="Bluetooth" it="Bluetooth"/>
   <translation tag="Bluetooth initialization failed" it="Inizializzazione Bluetooth fallita"/>
   <translation tag="Bluetooth is not available on this device" it="Bluetooth non disponibile su questo dispositivo"/>
@@ -311,6 +313,7 @@
   <translation tag="Check for Updates" it="Verifica Aggiornamenti"/>
   <translation tag="Check the filament path and try again." it="Controllare il percorso del filamento e riprovare."/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" it="Controlla la potenza del riscaldatore (tipicamente 40-60W per gli hotend)"/>
+  <translation tag="Checking"/>
   <translation tag="Checking Spoolman server..." it="Controllo server Spoolman..."/>
   <translation tag="Checking accelerometer..." it="Controllo accelerometro..."/>
   <translation tag="Checking for plugin..." it="Ricerca plugin..."/>
@@ -451,6 +454,7 @@
   <translation tag="Customize Macro" it="Personalizza macro"/>
   <translation tag="Customize preset temperatures" it="Personalizza le temperature preset"/>
   <translation tag="Cutter jam" it="Inceppamento taglierina"/>
+  <translation tag="Cutting"/>
   <translation tag="Cutting filament..." it="Taglio filamento..."/>
   <translation tag="DETECTED USB PRINTERS" it="STAMPANTI USB RILEVATE"/>
   <translation tag="DISABLED" it="DISABILITATO"/>
@@ -721,12 +725,14 @@
   <translation tag="Flying Toasters" it="Tostapane volanti"/>
   <translation tag="Follow graph screen" it="Segui schermata grafico"/>
   <translation tag="Forget" it="Dimentica"/>
+  <translation tag="Forming Tip"/>
   <translation tag="Forming tip..." it="Formazione punta..."/>
   <translation tag="Found %zu printers" it="%zu stampanti trovate"/>
   <translation tag="Found 1 printer" it="1 stampante trovata"/>
   <translation tag="Framerate" it="Frequenza fotogrammi"/>
   <translation tag="Freq Graph" it="Grafico freq."/>
   <translation tag="Frequency Delta" it="Delta di frequenza"/>
+  <translation tag="From Buffer"/>
   <translation tag="Front" it="Anteriore"/>
   <translation tag="Full" it="Completo"/>
   <translation tag="G-code Console" it="Console G-code"/>
@@ -759,6 +765,7 @@
   <translation tag="Heat Capacity" it="Capacità termica"/>
   <translation tag="Heat Soak" it="Preriscaldamento"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." it="Riscalda il piano prima di calibrare per un offset preciso con espansione termica."/>
+  <translation tag="Heat nozzle"/>
   <translation tag="Heatbed Temperature" it="Temperatura piano riscaldato"/>
   <translation tag="Heated Bed" it="Piano riscaldato"/>
   <translation tag="Heated Bed MPC Calibration" it="Calibrazione MPC piano riscaldato"/>
@@ -766,6 +773,7 @@
   <translation tag="Heater" it="Riscaldatore"/>
   <translation tag="Heater Power" it="Potenza riscaldatore"/>
   <translation tag="Heaters off" it="Riscaldatori spenti"/>
+  <translation tag="Heating"/>
   <translation tag="Heating (%d°C below minimum)" it="Riscaldamento (%d°C sotto il minimo)"/>
   <translation tag="Heating Bed..." it="Riscaldamento piatto..."/>
   <translation tag="Heating Nozzle..." it="Riscaldamento ugello..."/>
@@ -903,6 +911,7 @@
   <translation tag="Load may still be running — response timed out" it="Il caricamento potrebbe essere ancora in corso — tempo scaduto"/>
   <translation tag="Load the required filaments or start anyway?" it="Caricare i filamenti richiesti o avviare comunque?"/>
   <translation tag="Loaded" it="Caricato"/>
+  <translation tag="Loading"/>
   <translation tag="Loading Bed Mesh..." it="Caricamento mesh del piatto..."/>
   <translation tag="Loading Error" it="Errore caricamento"/>
   <translation tag="Loading Filament..." it="Caricamento filamento..."/>
@@ -1393,6 +1402,7 @@
   <translation tag="Reset failed: {}" it="Reset fallito: {}"/>
   <translation tag="Reset to Default" it="Ripristina predefinito"/>
   <translation tag="Reset to original values" it="Ripristina valori originali"/>
+  <translation tag="Resetting"/>
   <translation tag="Resetting..." it="Ripristino..."/>
   <translation tag="Response (Kp)" it="Risposta (Kp)"/>
   <translation tag="Restart" it="Riavvia"/>
@@ -1523,6 +1533,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" it="Seleziona quale sensore attiva la pausa all&apos;esaurimento filamento"/>
   <translation tag="Select your preferred language" it="Seleziona la lingua preferita"/>
   <translation tag="Selected" it="Selezionato"/>
+  <translation tag="Selecting"/>
   <translation tag="Selecting slot..." it="Selezione slot..."/>
   <translation tag="Self-Test" it="Auto-test"/>
   <translation tag="Semantic Size Parameter Tests" it="Test parametri dimensione semantici"/>
@@ -1793,6 +1804,7 @@
   <translation tag="Unload failed: {}" it="Scaricamento fallito: {}"/>
   <translation tag="Unload macro not configured" it="Macro scaricamento non configurata"/>
   <translation tag="Unload may still be running — response timed out" it="Lo scaricamento potrebbe essere ancora in corso — tempo scaduto"/>
+  <translation tag="Unloading"/>
   <translation tag="Unloading before bypass..." it="Scaricamento prima del bypass..."/>
   <translation tag="Unloading filament ({}mm)..." it="Scaricamento filamento ({}mm)..."/>
   <translation tag="Unloading filament..." it="Scaricamento filamento..."/>

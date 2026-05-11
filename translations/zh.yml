@@ -161,6 +161,7 @@ translations:
   Automatic: 自动
   Automatic Heater Control Calibration: 自动加热控制校准
   Automatic LED Control: 自动 LED 控制
+  Available: ''
   Available Networks: 可用网络
   Available networks: 可用网络
   Average: 平均值
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': '测试版功能: 关'
   'Beta features: ON': '测试版功能: 开'
   Black: 黑色
+  Blocked: ''
   Bluetooth: 蓝牙
   Bluetooth initialization failed: 蓝牙初始化失败
   Bluetooth is not available on this device: '此设备不支持蓝牙'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: 检查更新
   Check the filament path and try again.: 检查耗材路径并重试。
   Check your heater's rating (typically 40-60W for hotends): 检查加热器功率（热端通常为 40-60W）
+  Checking: ''
   Checking Spoolman server...: 正在检查 Spoolman 服务器...
   Checking accelerometer...: 正在检查加速度计...
   Checking for plugin...: 正在检查插件...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: 自定义宏
   Customize preset temperatures: 自定义预设温度
   Cutter jam: 切刀卡住
+  Cutting: ''
   Cutting filament...: 正在切断耗材...
   DETECTED USB PRINTERS: 已检测到的 USB 打印机
   DISABLED: 已禁用
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: 飞行烤面包机
   Follow graph screen: 跟随图表屏幕
   Forget: '忘记'
+  Forming Tip: ''
   Forming tip...: 正在成型尖端...
   Found %zu printers: 找到 %zu 台打印机
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
   Freq Graph: 频率图
   Frequency Delta: 频率差
+  From Buffer: ''
   Front: 前
   Full: '完整'
   G-code Console: G-code 控制台
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: 热容量
   Heat Soak: 预热浸泡
   Heat bed before calibrating for accurate offset with thermal expansion.: 校准前加热热床，以获得考虑热膨胀的精确偏移。
+  Heat nozzle: ''
   Heatbed Temperature: 热床温度
   Heated Bed: 加热床
   Heated Bed MPC Calibration: 热床 MPC 校准
@@ -767,6 +774,7 @@ translations:
   Heater: 加热器
   Heater Power: 加热器功率
   Heaters off: 加热器已关闭
+  Heating: ''
   Heating (%d°C below minimum): 加热中（低于最低温度 %d°C）
   Heating Bed...: 正在加热热床...
   Heating Nozzle...: 正在加热喷嘴...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: 加载可能仍在运行 — 响应超时
   Load the required filaments or start anyway?: 加载所需耗材还是直接开始？
   Loaded: 已加载
+  Loading: ''
   Loading Bed Mesh...: 正在加载热床网格...
   Loading Error: 加载错误
   Loading Filament...: 正在加载耗材...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': '重置失败: {}'
   Reset to Default: 重置为默认
   Reset to original values: 重置为原始值
+  Resetting: ''
   Resetting...: 正在重置...
   Response (Kp): 响应 (Kp)
   Restart: 重启
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: 选择耗材用尽时触发暂停的传感器
   Select your preferred language: 选择您的首选语言
   Selected: '已选择'
+  Selecting: ''
   Selecting slot...: 正在选择料仓...
   Self-Test: 自检
   Semantic Size Parameter Tests: 语义大小参数测试
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': '卸载失败: {}'
   Unload macro not configured: 卸载宏未配置
   Unload may still be running — response timed out: 卸载可能仍在运行 — 响应超时
+  Unloading: ''
   Unloading before bypass...: 旁通前正在卸载...
   Unloading filament ({}mm)...: 正在卸载耗材 ({}mm)...
   Unloading filament...: 正在卸载耗材...

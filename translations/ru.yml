@@ -161,6 +161,7 @@ translations:
   Automatic: Автоматический
   Automatic Heater Control Calibration: Автоматическая калибровка нагревателя
   Automatic LED Control: Автоматическое управление LED
+  Available: ''
   Available Networks: Доступные сети
   Available networks: Доступные сети
   Average: Среднее
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'Beta-функции: ВЫКЛ'
   'Beta features: ON': 'Beta-функции: ВКЛ'
   Black: Чёрный
+  Blocked: ''
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Ошибка инициализации Bluetooth
   Bluetooth is not available on this device: 'Bluetooth недоступен на этом устройстве'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: Проверить обновления
   Check the filament path and try again.: Проверьте путь филамента и попробуйте снова.
   Check your heater's rating (typically 40-60W for hotends): Проверьте мощность нагревателя (обычно 40–60W для хотэндов)
+  Checking: ''
   Checking Spoolman server...: Проверка сервера Spoolman...
   Checking accelerometer...: Проверка акселерометра...
   Checking for plugin...: Поиск плагина...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: Настроить макрос
   Customize preset temperatures: Настройка пресетов температур
   Cutter jam: Замятие резака
+  Cutting: ''
   Cutting filament...: Обрезка филамента...
   DETECTED USB PRINTERS: ОБНАРУЖЕННЫЕ USB-ПРИНТЕРЫ
   DISABLED: ОТКЛЮЧЕНО
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: Летающие тостеры
   Follow graph screen: Следовать экрану графика
   Forget: 'Забыть'
+  Forming Tip: ''
   Forming tip...: Формирование кончика...
   Found %zu printers: Найдено %zu принтеров
   Found 1 printer: Найден 1 принтер
   Framerate: Частота кадров
   Freq Graph: График частот
   Frequency Delta: Разница частот
+  From Buffer: ''
   Front: Спереди
   Full: 'Полный'
   G-code Console: Консоль G-code
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: Теплоёмкость
   Heat Soak: Прогрев
   Heat bed before calibrating for accurate offset with thermal expansion.: Нагрейте стол перед калибровкой для точного смещения с учётом теплового расширения.
+  Heat nozzle: ''
   Heatbed Temperature: Температура стола
   Heated Bed: Подогреваемый стол
   Heated Bed MPC Calibration: Калибровка MPC стола
@@ -767,6 +774,7 @@ translations:
   Heater: Нагреватель
   Heater Power: Мощность нагревателя
   Heaters off: Нагреватели выключены
+  Heating: ''
   Heating (%d°C below minimum): Нагрев (%d°C ниже минимума)
   Heating Bed...: Нагрев стола...
   Heating Nozzle...: Нагрев сопла...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: Загрузка может ещё выполняться — время ожидания истекло
   Load the required filaments or start anyway?: Загрузить нужные филаменты или начать без них?
   Loaded: Загружен
+  Loading: ''
   Loading Bed Mesh...: Загрузка сетки стола...
   Loading Error: Ошибка загрузки
   Loading Filament...: Загрузка филамента...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'Ошибка сброса: {}'
   Reset to Default: Сбросить до умолчания
   Reset to original values: Сбросить к исходным значениям
+  Resetting: ''
   Resetting...: Сброс...
   Response (Kp): Отклик (Kp)
   Restart: Перезапуск
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: Выберите датчик, который ставит на паузу при окончании филамента
   Select your preferred language: Выберите предпочитаемый язык
   Selected: 'Выбрано'
+  Selecting: ''
   Selecting slot...: Выбор слота...
   Self-Test: Самотестирование
   Semantic Size Parameter Tests: Тесты семантических параметров размера
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'Ошибка выгрузки: {}'
   Unload macro not configured: Макрос выгрузки не настроен
   Unload may still be running — response timed out: Выгрузка может ещё выполняться — время ожидания истекло
+  Unloading: ''
   Unloading before bypass...: Выгрузка перед байпасом...
   Unloading filament ({}mm)...: Выгрузка филамента ({}мм)...
   Unloading filament...: Выгрузка филамента...

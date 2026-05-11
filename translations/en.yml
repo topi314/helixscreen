@@ -161,6 +161,7 @@ translations:
   Automatic: Automatic
   Automatic Heater Control Calibration: Automatic Heater Control Calibration
   Automatic LED Control: Automatic LED Control
+  Available: Available
   Available Networks: Available Networks
   Available networks: Available networks
   Average: Average
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'Beta features: OFF'
   'Beta features: ON': 'Beta features: ON'
   Black: Black
+  Blocked: Blocked
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Bluetooth initialization failed
   Bluetooth is not available on this device: Bluetooth is not available on this device
@@ -311,6 +313,7 @@ translations:
   Check for Updates: Check for Updates
   Check the filament path and try again.: Check the filament path and try again.
   Check your heater's rating (typically 40-60W for hotends): Check your heater's rating (typically 40-60W for hotends)
+  Checking: Checking
   Checking Spoolman server...: Checking Spoolman server...
   Checking accelerometer...: Checking accelerometer...
   Checking for plugin...: Checking for plugin...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: Customize Macro
   Customize preset temperatures: Customize preset temperatures
   Cutter jam: Cutter jam
+  Cutting: Cutting
   Cutting filament...: Cutting filament...
   DETECTED USB PRINTERS: DETECTED USB PRINTERS
   DISABLED: DISABLED
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: Flying Toasters
   Follow graph screen: Follow graph screen
   Forget: Forget
+  Forming Tip: Forming Tip
   Forming tip...: Forming tip...
   Found %zu printers: Found %zu printers
   Found 1 printer: Found 1 printer
   Framerate: Framerate
   Freq Graph: Freq Graph
   Frequency Delta: Frequency Delta
+  From Buffer: From Buffer
   Front: Front
   Full: Full
   G-code Console: G-code Console
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: Heat Capacity
   Heat Soak: Heat Soak
   Heat bed before calibrating for accurate offset with thermal expansion.: Heat bed before calibrating for accurate offset with thermal expansion.
+  Heat nozzle: Heat nozzle
   Heatbed Temperature: Heatbed Temperature
   Heated Bed: Heated Bed
   Heated Bed MPC Calibration: Heated Bed MPC Calibration
@@ -767,6 +774,7 @@ translations:
   Heater: Heater
   Heater Power: Heater Power
   Heaters off: Heaters off
+  Heating: Heating
   Heating (%d°C below minimum): Heating (%d°C below minimum)
   Heating Bed...: Heating Bed...
   Heating Nozzle...: Heating Nozzle...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: Load may still be running — response timed out
   Load the required filaments or start anyway?: Load the required filaments or start anyway?
   Loaded: Loaded
+  Loading: Loading
   Loading Bed Mesh...: Loading Bed Mesh...
   Loading Error: Loading Error
   Loading Filament...: Loading Filament...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'Reset failed: {}'
   Reset to Default: Reset to Default
   Reset to original values: Reset to original values
+  Resetting: Resetting
   Resetting...: Resetting...
   Response (Kp): Response (Kp)
   Restart: Restart
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: Select which sensor triggers pause on filament runout
   Select your preferred language: Select your preferred language
   Selected: Selected
+  Selecting: Selecting
   Selecting slot...: Selecting slot...
   Self-Test: Self-Test
   Semantic Size Parameter Tests: Semantic Size Parameter Tests
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'Unload failed: {}'
   Unload macro not configured: Unload macro not configured
   Unload may still be running — response timed out: Unload may still be running — response timed out
+  Unloading: Unloading
   Unloading before bypass...: Unloading before bypass...
   Unloading filament ({}mm)...: Unloading filament ({}mm)...
   Unloading filament...: Unloading filament...

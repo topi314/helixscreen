@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 // Forward declarations
@@ -1049,6 +1050,26 @@ class AmsState {
     lv_subject_t slots_version_;
     lv_subject_t tool_map_version_;
     std::vector<int> last_tool_map_; ///< Cached for change detection in sync_from_backend
+
+    /// Most recent backend-supplied operation detail (cached so the print-state
+    /// observer can rerun the action-detail derivation without re-querying the
+    /// backend). Updated from sync_from_backend() and set_action_detail().
+    std::string last_operation_detail_;
+
+    /// Observer that re-runs compute_action_detail() when PrinterState's
+    /// print_state_enum subject changes, so the sidebar flips between
+    /// "Idle" / "Printing" / "Paused" without waiting for the next backend sync.
+    /// print_state_enum is a *static* PrinterState subject, so no
+    /// SubjectLifetime token is required.
+    ObserverGuard print_state_observer_;
+
+    /// Recompute the ams_action_detail subject from current AMS action +
+    /// cached operation_detail + PrinterState print state.
+    /// Caller must hold mutex_.
+    void recompute_action_detail();
+
+    /// Wire (or rewire) the print_state_observer_. Idempotent.
+    void install_print_state_observer();
 
     /// In-memory override for external spool info. Set by set_external_spool_info_in_memory()
     /// to allow live tracker updates without touching settings.json. When set, takes priority

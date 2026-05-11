@@ -161,6 +161,7 @@
   <translation tag="Automatic" zh="自动"/>
   <translation tag="Automatic Heater Control Calibration" zh="自动加热控制校准"/>
   <translation tag="Automatic LED Control" zh="自动 LED 控制"/>
+  <translation tag="Available"/>
   <translation tag="Available Networks" zh="可用网络"/>
   <translation tag="Available networks" zh="可用网络"/>
   <translation tag="Average" zh="平均值"/>
@@ -201,6 +202,7 @@
   <translation tag="Beta features: OFF" zh="测试版功能: 关"/>
   <translation tag="Beta features: ON" zh="测试版功能: 开"/>
   <translation tag="Black" zh="黑色"/>
+  <translation tag="Blocked"/>
   <translation tag="Bluetooth" zh="蓝牙"/>
   <translation tag="Bluetooth initialization failed" zh="蓝牙初始化失败"/>
   <translation tag="Bluetooth is not available on this device" zh="此设备不支持蓝牙"/>
@@ -311,6 +313,7 @@
   <translation tag="Check for Updates" zh="检查更新"/>
   <translation tag="Check the filament path and try again." zh="检查耗材路径并重试。"/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" zh="检查加热器功率（热端通常为 40-60W）"/>
+  <translation tag="Checking"/>
   <translation tag="Checking Spoolman server..." zh="正在检查 Spoolman 服务器..."/>
   <translation tag="Checking accelerometer..." zh="正在检查加速度计..."/>
   <translation tag="Checking for plugin..." zh="正在检查插件..."/>
@@ -451,6 +454,7 @@
   <translation tag="Customize Macro" zh="自定义宏"/>
   <translation tag="Customize preset temperatures" zh="自定义预设温度"/>
   <translation tag="Cutter jam" zh="切刀卡住"/>
+  <translation tag="Cutting"/>
   <translation tag="Cutting filament..." zh="正在切断耗材..."/>
   <translation tag="DETECTED USB PRINTERS" zh="已检测到的 USB 打印机"/>
   <translation tag="DISABLED" zh="已禁用"/>
@@ -721,12 +725,14 @@
   <translation tag="Flying Toasters" zh="飞行烤面包机"/>
   <translation tag="Follow graph screen" zh="跟随图表屏幕"/>
   <translation tag="Forget" zh="忘记"/>
+  <translation tag="Forming Tip"/>
   <translation tag="Forming tip..." zh="正在成型尖端..."/>
   <translation tag="Found %zu printers" zh="找到 %zu 台打印机"/>
   <translation tag="Found 1 printer" zh="找到 1 台打印机"/>
   <translation tag="Framerate" zh="帧率"/>
   <translation tag="Freq Graph" zh="频率图"/>
   <translation tag="Frequency Delta" zh="频率差"/>
+  <translation tag="From Buffer"/>
   <translation tag="Front" zh="前"/>
   <translation tag="Full" zh="完整"/>
   <translation tag="G-code Console" zh="G-code 控制台"/>
@@ -759,6 +765,7 @@
   <translation tag="Heat Capacity" zh="热容量"/>
   <translation tag="Heat Soak" zh="预热浸泡"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." zh="校准前加热热床，以获得考虑热膨胀的精确偏移。"/>
+  <translation tag="Heat nozzle"/>
   <translation tag="Heatbed Temperature" zh="热床温度"/>
   <translation tag="Heated Bed" zh="加热床"/>
   <translation tag="Heated Bed MPC Calibration" zh="热床 MPC 校准"/>
@@ -766,6 +773,7 @@
   <translation tag="Heater" zh="加热器"/>
   <translation tag="Heater Power" zh="加热器功率"/>
   <translation tag="Heaters off" zh="加热器已关闭"/>
+  <translation tag="Heating"/>
   <translation tag="Heating (%d°C below minimum)" zh="加热中（低于最低温度 %d°C）"/>
   <translation tag="Heating Bed..." zh="正在加热热床..."/>
   <translation tag="Heating Nozzle..." zh="正在加热喷嘴..."/>
@@ -903,6 +911,7 @@
   <translation tag="Load may still be running — response timed out" zh="加载可能仍在运行 — 响应超时"/>
   <translation tag="Load the required filaments or start anyway?" zh="加载所需耗材还是直接开始？"/>
   <translation tag="Loaded" zh="已加载"/>
+  <translation tag="Loading"/>
   <translation tag="Loading Bed Mesh..." zh="正在加载热床网格..."/>
   <translation tag="Loading Error" zh="加载错误"/>
   <translation tag="Loading Filament..." zh="正在加载耗材..."/>
@@ -1393,6 +1402,7 @@
   <translation tag="Reset failed: {}" zh="重置失败: {}"/>
   <translation tag="Reset to Default" zh="重置为默认"/>
   <translation tag="Reset to original values" zh="重置为原始值"/>
+  <translation tag="Resetting"/>
   <translation tag="Resetting..." zh="正在重置..."/>
   <translation tag="Response (Kp)" zh="响应 (Kp)"/>
   <translation tag="Restart" zh="重启"/>
@@ -1523,6 +1533,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" zh="选择耗材用尽时触发暂停的传感器"/>
   <translation tag="Select your preferred language" zh="选择您的首选语言"/>
   <translation tag="Selected" zh="已选择"/>
+  <translation tag="Selecting"/>
   <translation tag="Selecting slot..." zh="正在选择料仓..."/>
   <translation tag="Self-Test" zh="自检"/>
   <translation tag="Semantic Size Parameter Tests" zh="语义大小参数测试"/>
@@ -1793,6 +1804,7 @@
   <translation tag="Unload failed: {}" zh="卸载失败: {}"/>
   <translation tag="Unload macro not configured" zh="卸载宏未配置"/>
   <translation tag="Unload may still be running — response timed out" zh="卸载可能仍在运行 — 响应超时"/>
+  <translation tag="Unloading"/>
   <translation tag="Unloading before bypass..." zh="旁通前正在卸载..."/>
   <translation tag="Unloading filament ({}mm)..." zh="正在卸载耗材 ({}mm)..."/>
   <translation tag="Unloading filament..." zh="正在卸载耗材..."/>

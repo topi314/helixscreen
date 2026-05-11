@@ -161,6 +161,7 @@ translations:
   Automatic: Automatico
   Automatic Heater Control Calibration: Calibrazione controllo automatico riscaldatore
   Automatic LED Control: Controllo LED automatico
+  Available: ''
   Available Networks: Reti disponibili
   Available networks: Reti disponibili
   Average: Media
@@ -201,6 +202,7 @@ translations:
   'Beta features: OFF': 'Funzioni Beta: OFF'
   'Beta features: ON': 'Funzioni Beta: ON'
   Black: Nero
+  Blocked: ''
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Inizializzazione Bluetooth fallita
   Bluetooth is not available on this device: 'Bluetooth non disponibile su questo dispositivo'
@@ -311,6 +313,7 @@ translations:
   Check for Updates: Verifica Aggiornamenti
   Check the filament path and try again.: Controllare il percorso del filamento e riprovare.
   Check your heater's rating (typically 40-60W for hotends): Controlla la potenza del riscaldatore (tipicamente 40-60W per gli hotend)
+  Checking: ''
   Checking Spoolman server...: Controllo server Spoolman...
   Checking accelerometer...: Controllo accelerometro...
   Checking for plugin...: Ricerca plugin...
@@ -451,6 +454,7 @@ translations:
   Customize Macro: Personalizza macro
   Customize preset temperatures: Personalizza le temperature preset
   Cutter jam: Inceppamento taglierina
+  Cutting: ''
   Cutting filament...: Taglio filamento...
   DETECTED USB PRINTERS: STAMPANTI USB RILEVATE
   DISABLED: DISABILITATO
@@ -721,12 +725,14 @@ translations:
   Flying Toasters: Tostapane volanti
   Follow graph screen: Segui schermata grafico
   Forget: 'Dimentica'
+  Forming Tip: ''
   Forming tip...: Formazione punta...
   Found %zu printers: '%zu stampanti trovate'
   Found 1 printer: 1 stampante trovata
   Framerate: Frequenza fotogrammi
   Freq Graph: Grafico freq.
   Frequency Delta: Delta di frequenza
+  From Buffer: ''
   Front: Anteriore
   Full: 'Completo'
   G-code Console: Console G-code
@@ -760,6 +766,7 @@ translations:
   Heat Capacity: Capacità termica
   Heat Soak: Preriscaldamento
   Heat bed before calibrating for accurate offset with thermal expansion.: Riscalda il piano prima di calibrare per un offset preciso con espansione termica.
+  Heat nozzle: ''
   Heatbed Temperature: Temperatura piano riscaldato
   Heated Bed: Piano riscaldato
   Heated Bed MPC Calibration: Calibrazione MPC piano riscaldato
@@ -767,6 +774,7 @@ translations:
   Heater: Riscaldatore
   Heater Power: Potenza riscaldatore
   Heaters off: Riscaldatori spenti
+  Heating: ''
   Heating (%d°C below minimum): Riscaldamento (%d°C sotto il minimo)
   Heating Bed...: Riscaldamento piatto...
   Heating Nozzle...: Riscaldamento ugello...
@@ -905,6 +913,7 @@ translations:
   Load may still be running — response timed out: Il caricamento potrebbe essere ancora in corso — tempo scaduto
   Load the required filaments or start anyway?: Caricare i filamenti richiesti o avviare comunque?
   Loaded: Caricato
+  Loading: ''
   Loading Bed Mesh...: Caricamento mesh del piatto...
   Loading Error: Errore caricamento
   Loading Filament...: Caricamento filamento...
@@ -1396,6 +1405,7 @@ translations:
   'Reset failed: {}': 'Reset fallito: {}'
   Reset to Default: Ripristina predefinito
   Reset to original values: Ripristina valori originali
+  Resetting: ''
   Resetting...: Ripristino...
   Response (Kp): Risposta (Kp)
   Restart: Riavvia
@@ -1527,6 +1537,7 @@ translations:
   Select which sensor triggers pause on filament runout: Seleziona quale sensore attiva la pausa all'esaurimento filamento
   Select your preferred language: Seleziona la lingua preferita
   Selected: 'Selezionato'
+  Selecting: ''
   Selecting slot...: Selezione slot...
   Self-Test: Auto-test
   Semantic Size Parameter Tests: Test parametri dimensione semantici
@@ -1803,6 +1814,7 @@ translations:
   'Unload failed: {}': 'Scaricamento fallito: {}'
   Unload macro not configured: Macro scaricamento non configurata
   Unload may still be running — response timed out: Lo scaricamento potrebbe essere ancora in corso — tempo scaduto
+  Unloading: ''
   Unloading before bypass...: Scaricamento prima del bypass...
   Unloading filament ({}mm)...: Scaricamento filamento ({}mm)...
   Unloading filament...: Scaricamento filamento...

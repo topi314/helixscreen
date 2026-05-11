@@ -13,6 +13,7 @@
 
 #include "ams_state.h"
 
+#include "observer_factory.h"
 #include "ui_color_picker.h"
 #include "ui_update_queue.h"
 
@@ -153,6 +154,13 @@ void AmsState::init_subjects(bool register_xml) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (initialized_) {
+        // Even on a re-entry no-op, make sure the print-state observer is
+        // attached. Tests share the singleton across cases; a prior test may
+        // have initialized AmsState before PrinterState was ready (so the
+        // observer was never installed) — re-attach here.
+        if (!print_state_observer_) {
+            install_print_state_observer();
+        }
         return;
     }
 
@@ -414,6 +422,26 @@ void AmsState::init_subjects(bool register_xml) {
     // Self-register cleanup — ensures deinit runs before lv_deinit()
     StaticSubjectRegistry::instance().register_deinit(
         "AmsState", []() { AmsState::instance().deinit_subjects(); });
+
+    // Observe PrinterState's print state so the ams_action_detail label can
+    // flip between "Idle" / "Printing" / "Paused" when the AMS itself is IDLE
+    // but a print is in progress. print_state_enum is a *static* PrinterState
+    // subject — no SubjectLifetime token required.
+    //
+    // Wire the observer here rather than inside the `if (initialized_)` guard
+    // so tests that re-enter init_subjects() on the shared singleton (after
+    // a prior test left it initialized) still get the observer attached.
+    // PrinterState::init_subjects() must run before this point; tests/main
+    // do so during fixture setup / app boot.
+    install_print_state_observer();
+}
+
+void AmsState::install_print_state_observer() {
+    // Idempotent: reset any prior guard before installing a fresh one.
+    print_state_observer_.reset();
+    print_state_observer_ = helix::ui::observe_int_sync<AmsState>(
+        get_printer_state().get_print_state_enum_subject(), this,
+        [](AmsState* self, int /*print_state*/) { self->recompute_action_detail(); });
 }
 
 void AmsState::deinit_subjects() {
@@ -429,6 +457,11 @@ void AmsState::deinit_subjects() {
     // before AmsState re-initializes. Without this, sync_from_backend() would
     // dereference a freed pointer on the next init_subjects() cycle.
     api_ = nullptr;
+
+    // Tear down the print-state observer BEFORE deiniting subjects so the
+    // LVGL observer is removed cleanly (reset(), not release() — see project
+    // CLAUDE.md § "ObserverGuard::reset() is the default").
+    print_state_observer_.reset();
 
     // IMPORTANT: clear_backends() MUST precede subjects_.deinit_all() because
     // BackendSlotSubjects are managed outside SubjectManager for lifetime reasons
@@ -958,12 +991,10 @@ void AmsState::sync_from_backend() {
         lv_subject_set_int(&ams_number_of_toolchanges_, info.number_of_toolchanges);
     }
 
-    // Update action detail string
-    const char* detail_str = !info.operation_detail.empty() ? info.operation_detail.c_str()
-                                                            : ams_action_to_string(info.action);
-    if (strcmp(lv_subject_get_string(&ams_action_detail_), detail_str) != 0) {
-        lv_subject_copy_string(&ams_action_detail_, detail_str);
-    }
+    // Cache the backend-supplied operation_detail so the print-state observer
+    // can recompute the displayed string later without re-querying the backend.
+    last_operation_detail_ = info.operation_detail;
+    recompute_action_detail();
 
     // Update path visualization subjects
     int new_topology = static_cast<int>(backend->get_topology());
@@ -1665,9 +1696,71 @@ void AmsState::set_danger_threshold_override(int pct) {
 
 void AmsState::set_action_detail(const std::string& detail) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (strcmp(lv_subject_get_string(&ams_action_detail_), detail.c_str()) != 0) {
-        lv_subject_copy_string(&ams_action_detail_, detail.c_str());
-        spdlog::debug("[AMS State] Action detail set: {}", detail);
+    // Treat UI-managed detail like a backend-supplied operation_detail: it's
+    // the highest-priority source for the displayed string. Empty clears it
+    // and falls through to the action/print-state derivation.
+    last_operation_detail_ = detail;
+    spdlog::debug("[AMS State] Action detail set: {}", detail);
+    recompute_action_detail();
+}
+
+// Translation hints for AMS status strings looked up dynamically via
+// ams_action_to_string() / slot_status_to_string(). These never run — they
+// exist so the translation extractor can find the literals. The enum→string
+// helpers themselves stay un-translated because they're also used for logs.
+// clang-format off
+static void ams_status_translation_hints_() {
+    // AmsAction values
+    (void)lv_tr("Idle"); (void)lv_tr("Loading"); (void)lv_tr("Unloading");
+    (void)lv_tr("Selecting"); (void)lv_tr("Resetting"); (void)lv_tr("Forming Tip");
+    (void)lv_tr("Heating"); (void)lv_tr("Checking"); (void)lv_tr("Paused");
+    (void)lv_tr("Error"); (void)lv_tr("Cutting"); (void)lv_tr("Purging");
+    // SlotStatus values
+    (void)lv_tr("Empty"); (void)lv_tr("Available"); (void)lv_tr("Loaded");
+    (void)lv_tr("From Buffer"); (void)lv_tr("Blocked"); (void)lv_tr("Unknown");
+}
+// clang-format on
+
+void AmsState::recompute_action_detail() {
+    // Caller holds mutex_ (this is a private helper).
+    auto action = static_cast<AmsAction>(lv_subject_get_int(&ams_action_));
+
+    // Priority:
+    //   1. Backend / UI-supplied operation_detail (non-empty)
+    //   2. Action != IDLE → translated action string
+    //   3. PrintJobState::PRINTING → "Printing"
+    //   4. PrintJobState::PAUSED  → "Paused"
+    //   5. Otherwise              → "Idle"
+    //
+    // Translation note (L067): the literals "Idle"/"Printing"/"Paused" and
+    // the AmsAction strings are user-visible — translate at this UI binding
+    // site, not in ams_action_to_string() which is also used for logs.
+    const char* new_detail = "";
+    if (!last_operation_detail_.empty()) {
+        // Backend strings are intentionally NOT lv_tr()'d — the backend may
+        // emit dynamic content ("Waiting for slot 2", "Heating to 230°C") that
+        // isn't a fixed translation key. Pass through as-is.
+        new_detail = last_operation_detail_.c_str();
+    } else if (action != AmsAction::IDLE) {
+        new_detail = lv_tr(ams_action_to_string(action));
+    } else {
+        auto print_state = static_cast<PrintJobState>(
+            lv_subject_get_int(get_printer_state().get_print_state_enum_subject()));
+        switch (print_state) {
+        case PrintJobState::PRINTING:
+            new_detail = lv_tr("Printing");
+            break;
+        case PrintJobState::PAUSED:
+            new_detail = lv_tr("Paused");
+            break;
+        default:
+            new_detail = lv_tr("Idle");
+            break;
+        }
+    }
+
+    if (strcmp(lv_subject_get_string(&ams_action_detail_), new_detail) != 0) {
+        lv_subject_copy_string(&ams_action_detail_, new_detail);
     }
 }
 
@@ -1677,6 +1770,9 @@ void AmsState::set_action(AmsAction action) {
     if (lv_subject_get_int(&ams_action_) != val) {
         lv_subject_set_int(&ams_action_, val);
         spdlog::debug("[AMS State] Action set: {}", ams_action_to_string(action));
+        // Action change must propagate to the displayed detail string (e.g.
+        // LOADING → IDLE while still printing should flip "Loading" → "Printing").
+        recompute_action_detail();
     }
 }
 
