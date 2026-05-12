@@ -179,11 +179,13 @@ static const std::unordered_map<std::string, CfsErrorEntry> CFS_ERROR_TABLE = {
     {"key836", {"Filament jammed between CFS and sensor", "Check the Bowden tube for kinks or debris", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key837", {"Filament jammed before extruder gear", "Check for tangles on the spool and clear the filament path to the printhead", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key838", {"Filament reached extruder but won't feed", "Check for a clog in the hotend or a worn drive gear", AmsAlertLevel::SLOT, fmt_unit_slot}},
+    {"key839", {"No filament detected at CFS extrude position", "The selected slot may be empty or the filament didn't reach the CFS extruder", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key840", {"CFS unit state error", "A unit reported an unexpected state — check its current operation", AmsAlertLevel::UNIT, fmt_unit_only}},
     {"key841", {"Filament cutter stuck", "The cutter blade didn't return — check for filament wrapped around the cutting mechanism", AmsAlertLevel::SYSTEM, nullptr}},
     {"key843", {"Can't read filament RFID tag", "Re-seat the spool in the slot, ensure the RFID label faces the reader", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key844", {"PTFE tube connection loose", "Re-seat the Bowden tube connector on the CFS unit", AmsAlertLevel::UNIT, fmt_unit_only}},
     {"key845", {"Nozzle clog detected", "Run a cold pull or replace the nozzle", AmsAlertLevel::SYSTEM, nullptr}},
+    {"key846", {"Empty print detected — feed rate too slow", "CFS feed rate fell below extruder demand. The spool may be empty or jammed", AmsAlertLevel::SYSTEM, nullptr}},
     {"key847", {"Empty spool — filament wound around hub", "Remove the empty spool and clear wound filament from the CFS hub", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key848", {"Filament snapped inside CFS", "Open the CFS unit and remove the broken filament from the slot", AmsAlertLevel::SLOT, fmt_unit_slot}},
     {"key849", {"Retract failed — filament stuck in connector", "Manually pull the filament back through the connector", AmsAlertLevel::SLOT, fmt_unit_slot}},
@@ -1246,17 +1248,31 @@ void AmsBackendCfs::end_phase_tracking() {
 }
 
 void AmsBackendCfs::on_filament_transition_locked(bool new_detected) {
-    if (!phase_tracker_.active) return;
+    if (!phase_tracker_.active) {
+        spdlog::debug("[AMS CFS] Phase: filament {} -> {} (no active op)",
+                      last_filament_detected_, new_detected);
+        return;
+    }
     if (last_filament_detected_ && !new_detected) {
         phase_tracker_.seen_filament_drop = true;
+        spdlog::info("[AMS CFS] Phase: filament drop (cut completed)");
     } else if (!last_filament_detected_ && new_detected &&
                phase_tracker_.seen_filament_drop) {
         phase_tracker_.seen_filament_rise = true;
+        spdlog::info("[AMS CFS] Phase: filament rise after drop (swap feed complete)");
     } else if (!last_filament_detected_ && new_detected &&
                !phase_tracker_.started_with_filament) {
         // Fresh-load case: filament arrives without a prior drop. Treat the
         // rise as the start of the post-feed phase.
         phase_tracker_.seen_filament_rise = true;
+        spdlog::info("[AMS CFS] Phase: filament rise (fresh feed complete)");
+    }
+    // Promote a pending purge target (latched earlier when the target rose
+    // before feed completed) once the rise actually happens.
+    if (phase_tracker_.seen_filament_rise && phase_tracker_.pending_purge_target &&
+        !phase_tracker_.seen_purge_signal) {
+        phase_tracker_.seen_purge_signal = true;
+        spdlog::info("[AMS CFS] Phase: purge promoted (pending target jump + feed complete)");
     }
     apply_synthesized_action_locked();
 }
@@ -1275,16 +1291,26 @@ void AmsBackendCfs::on_extruder_temp_change_locked(int new_temp_centi,
         }
     }
 
-    // Purge detection: after heating completes, target rises >10°C above the
-    // baseline to flush_max_temp (the K2 jumps print-temp → flush_max_temp,
-    // e.g. 220→240, right before CR_BOX_WASTE/FLUSH).
+    // Purge detection: target rises >10°C above the post-heat baseline. The
+    // K2 macro raises target multiple times — a 220→235 "operational" jump
+    // very early (before cut), then 235→240 (flush_max_temp) at purge.
+    // Macro variants may also do a single 220→240 jump well before feed.
+    // Latch the target-jump observation in pending_purge_target regardless
+    // of filament state, then promote to seen_purge_signal once the feed
+    // physically completes (seen_filament_rise = true). UNLOAD has no rise,
+    // so promotion never happens and purge correctly stays off.
     if (phase_tracker_.reached_target_once &&
         phase_tracker_.baseline_target_centi > 0 &&
         new_target_centi > phase_tracker_.baseline_target_centi + 100 /* 10°C centi */ &&
+        !phase_tracker_.pending_purge_target) {
+        phase_tracker_.pending_purge_target = true;
+        spdlog::debug("[AMS CFS] Phase: purge target jump latched (target {}°C > baseline {}°C + 10)",
+                      new_target_centi / 10, phase_tracker_.baseline_target_centi / 10);
+    }
+    if (phase_tracker_.pending_purge_target && phase_tracker_.seen_filament_rise &&
         !phase_tracker_.seen_purge_signal) {
         phase_tracker_.seen_purge_signal = true;
-        spdlog::info("[AMS CFS] Phase: purge detected (target {}°C > baseline {}°C + 10)",
-                     new_target_centi / 10, phase_tracker_.baseline_target_centi / 10);
+        spdlog::info("[AMS CFS] Phase: purge promoted (target jump + feed complete)");
     }
 
     apply_synthesized_action_locked();

@@ -2960,6 +2960,21 @@ void Application::init_action_prompt() {
                         return;
                     }
 
+                    // CFS box-driver errors (key8xx range) describe real
+                    // hardware faults — stuck cutter, retract failure, RFID
+                    // jam. The box driver emits them via respond_raw, which
+                    // is a log message: the Klipper script still returns
+                    // success and the AMS step indicator hides. Without a
+                    // modal the user has no acknowledgment that the
+                    // operation physically failed. Modal also deduplicates
+                    // by title (ui_notification.cpp), so a burst collapses
+                    // to one dialog.
+                    if (code.size() >= 4 && code.compare(0, 4, "key8") == 0) {
+                        ui_notification_error(lv_tr("Filament System Error"),
+                                              clean.c_str(), /*modal=*/true);
+                        return;
+                    }
+
                     ui_notification_error("Klipper Error", clean.c_str(), false);
                     return;
                 }

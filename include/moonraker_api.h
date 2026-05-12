@@ -283,6 +283,27 @@ class MoonrakerAPI : public IMoonrakerAPI {
     void restart_klipper(SuccessCallback on_success, ErrorCallback on_error);
 
     /**
+     * @brief Restart a system service via Moonraker's `machine.services.restart`.
+     *
+     * Unlike `restart_klipper()` (which sends Klipper's `RESTART` gcode and
+     * therefore requires Klippy alive to receive it), this calls into
+     * Moonraker's host-side service controller. Required when Klipper is
+     * fully shut down — e.g. K2 `key298` rpi MCU bridge shutdown, where
+     * `FIRMWARE_RESTART` only resets the gd32 MCUs and leaves the host
+     * `klipper_mcu` process stuck. A full `/etc/init.d/klipper restart`
+     * (which this RPC triggers) is the only thing that recovers.
+     *
+     * The service name must be in Moonraker's `[machine] allowed_services`
+     * allowlist (default includes klipper, moonraker).
+     *
+     * @param service_name Service to restart (e.g. "klipper")
+     * @param on_success   Success callback
+     * @param on_error     Error callback
+     */
+    void restart_service(const std::string& service_name,
+                         SuccessCallback on_success, ErrorCallback on_error);
+
+    /**
      * @brief Run a Moonraker `[shell_command]` by name.
      *
      * Targets the JSON-RPC method `machine.shell_command:<name>` (HTTP equiv:

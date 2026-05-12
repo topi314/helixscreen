@@ -265,7 +265,8 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
         bool seen_filament_drop = false;      // true→false transition (cut completed)
         bool seen_filament_rise = false;      // false→true transition after a drop (new filament fed)
         bool reached_target_once = false;     // current_temp ever within 5°C of target this op
-        bool seen_purge_signal = false;       // target jumped >10°C above baseline after reaching it
+        bool pending_purge_target = false;    // target rose >10°C above baseline (waits for rise)
+        bool seen_purge_signal = false;       // pending_purge_target gated by seen_filament_rise
         int  baseline_target_centi = 0;       // extruder target when heating first completed
     };
     PhaseTracker phase_tracker_;

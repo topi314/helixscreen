@@ -35,24 +35,44 @@ void PrinterRecoveryService::recover(SuccessCallback on_success, ErrorCallback o
         return;
     }
 
-    // Capability gate: if Moonraker discovery told us shell_command isn't
-    // loaded, skip the helix_recover RPC entirely. Saves ~3s of timeout on
-    // hosts that can't host it (Bambu, RatOS-lite, vendor-locked Moonraker).
-    if (!get_printer_state().is_shell_command_available()) {
-        spdlog::info("[Recovery] shell_command component absent — going straight "
-                     "to printer.firmware_restart");
-        api_->restart_firmware(on_success, on_error);
-        return;
-    }
-
-    spdlog::info("[Recovery] Trying [shell_command helix_recover]…");
-
     // [L072] Capture api_ by value, not bare `this` — the PrinterRecoveryService
     // may be a short-lived holder owned by a widget that gets destroyed between
     // click and ack. MoonrakerAPI lives as long as MoonrakerManager (well past
     // any widget). Caller's on_success/on_error captures are the caller's
     // problem to make lifetime-safe.
     MoonrakerAPI* api = api_;
+
+    // Fallback chain when helix_recover isn't available or fails:
+    //   firmware_restart → machine.services.restart klipper
+    //
+    // key298 ("rpi MCU is shutdown") needs a full klipper service bounce —
+    // FIRMWARE_RESTART only resets the gd32 MCUs and leaves the host
+    // klipper_mcu daemon stuck. On platforms where shell_command can't
+    // ship (Bambu, vendor-locked Moonraker), service-restart is the only
+    // remaining path that recovers the rpi MCU bridge.
+    auto try_service_restart = [api, on_success, on_error]() {
+        spdlog::info("[Recovery] firmware_restart didn't recover; "
+                     "trying machine.services.restart klipper");
+        api->restart_service("klipper", on_success, [on_error](const MoonrakerError& err) {
+            spdlog::warn("[Recovery] machine.services.restart failed: {}", err.message);
+            on_error(err);
+        });
+    };
+
+    // Capability gate: if Moonraker discovery told us shell_command isn't
+    // loaded, skip the helix_recover RPC entirely. Saves ~3s of timeout on
+    // hosts that can't host it (Bambu, RatOS-lite, vendor-locked Moonraker).
+    if (!get_printer_state().is_shell_command_available()) {
+        spdlog::info("[Recovery] shell_command component absent — going straight "
+                     "to printer.firmware_restart");
+        api_->restart_firmware(on_success,
+                               [try_service_restart](const MoonrakerError&) {
+                                   try_service_restart();
+                               });
+        return;
+    }
+
+    spdlog::info("[Recovery] Trying [shell_command helix_recover]…");
     api_->run_shell_command(
         "helix_recover",
         [on_success](const std::string& output) {
@@ -60,12 +80,16 @@ void PrinterRecoveryService::recover(SuccessCallback on_success, ErrorCallback o
                          output.empty() ? "(no output)" : output);
             on_success();
         },
-        [api, on_success, on_error](const MoonrakerError& err) {
+        [api, on_success, on_error,
+         try_service_restart](const MoonrakerError& err) {
             if (looks_like_command_undefined(err)) {
                 spdlog::info("[Recovery] helix_recover not defined on this platform "
                              "({}); falling back to printer.firmware_restart",
                              err.message);
-                api->restart_firmware(on_success, on_error);
+                api->restart_firmware(on_success,
+                                      [try_service_restart](const MoonrakerError&) {
+                                          try_service_restart();
+                                      });
                 return;
             }
             spdlog::warn("[Recovery] helix_recover failed: {}", err.message);

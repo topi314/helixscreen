@@ -544,6 +544,20 @@ void MoonrakerAPI::restart_klipper(SuccessCallback on_success, ErrorCallback on_
         on_error);
 }
 
+void MoonrakerAPI::restart_service(const std::string& service_name,
+                                    SuccessCallback on_success, ErrorCallback on_error) {
+    spdlog::info("[Moonraker API] Restarting service '{}' via machine.services.restart",
+                 service_name);
+
+    client_.send_jsonrpc(
+        "machine.services.restart", json{{"service", service_name}},
+        [on_success, service_name](json) {
+            spdlog::info("[Moonraker API] Service '{}' restart initiated", service_name);
+            on_success();
+        },
+        on_error);
+}
+
 void MoonrakerAPI::restart_moonraker(SuccessCallback on_success, ErrorCallback on_error) {
     spdlog::info("[Moonraker API] Restarting Moonraker");
 
