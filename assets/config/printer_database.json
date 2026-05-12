@@ -1095,7 +1095,8 @@
             "label_key": "pre_print_option.ai_detect.label",
             "description_key": "pre_print_option.ai_detect.description",
             "strategy": "pre_start_gcode",
-            "gcode_template": "LOAD_AI_RUN SWITCH={value}"
+            "gcode_template": "LOAD_AI_RUN SWITCH={value}",
+            "requires_macro": "LOAD_AI_RUN"
           }
         ]
       },

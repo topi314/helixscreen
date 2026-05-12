@@ -90,6 +90,7 @@ std::optional<PrePrintOption> parse_pre_print_option(const nlohmann::json& j) {
     opt.icon = j.value("icon", "");
     opt.default_enabled = j.value("default_enabled", false);
     opt.order = j.value("order", 0);
+    opt.requires_macro = j.value("requires_macro", "");
 
     // category — defaults to Mechanical if absent or unknown (warned).
     if (j.contains("category") && j["category"].is_string()) {

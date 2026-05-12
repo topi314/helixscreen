@@ -12,6 +12,7 @@
 #include "app_globals.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_modification_manager.h"
+#include "macro_param_cache.h"
 #include "memory_monitor.h"
 #include "memory_utils.h"
 #include "moonraker_manager.h"
@@ -65,6 +66,19 @@ const PrePrintOptionSet& PrintPreparationManager::get_cached_options() const {
 // ============================================================================
 
 PrePrintOptionState PrintPreparationManager::get_option_state(const std::string& id) const {
+    const auto& opts = get_cached_options();
+
+    // Option gated on a required macro that isn't registered with Klipper:
+    // surface as NOT_APPLICABLE so the UI hides the toggle and
+    // collect_pre_start_gcode_lines skips it. (e.g. K2 AI detect requires
+    // LOAD_AI_RUN — only present on Creality OS variants.)
+    if (const PrePrintOption* opt = opts.find(id)) {
+        if (!opt->requires_macro.empty() &&
+            !MacroParamCache::instance().has_macro(opt->requires_macro)) {
+            return PrePrintOptionState::NOT_APPLICABLE;
+        }
+    }
+
     // 1. Provider takes priority. The detail panel registers a provider that
     //    reads from per-option dynamic subjects. The provider returns 0/1
     //    when bound; any other value means "not bound" — fall through.
@@ -82,7 +96,6 @@ PrePrintOptionState PrintPreparationManager::get_option_state(const std::string&
     //    This is the right answer when no panel is attached (e.g. macro
     //    analysis runs in headless contexts and asks for the option's
     //    intended state).
-    const auto& opts = get_cached_options();
     if (const PrePrintOption* opt = opts.find(id)) {
         return opt->default_enabled ? PrePrintOptionState::ENABLED
                                     : PrePrintOptionState::DISABLED;
@@ -951,6 +964,17 @@ std::vector<std::string> PrintPreparationManager::collect_pre_start_gcode_lines(
 
     for (const auto& opt : db_options.options) {
         if (opt.strategy_kind != PrePrintStrategyKind::PreStartGcode) {
+            continue;
+        }
+
+        // Skip options whose required macro isn't registered with Klipper
+        // (e.g. K2 AI detect uses LOAD_AI_RUN, which only exists on Creality
+        // OS variants — sending it on stock K2 fires "Unknown command:key61").
+        if (!opt.requires_macro.empty() &&
+            !MacroParamCache::instance().has_macro(opt.requires_macro)) {
+            spdlog::debug("[PrintPreparationManager] Skipping pre-start option '{}': "
+                          "required macro '{}' not registered",
+                          opt.id, opt.requires_macro);
             continue;
         }
 

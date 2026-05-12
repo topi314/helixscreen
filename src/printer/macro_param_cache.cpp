@@ -108,6 +108,16 @@ CachedMacroInfo MacroParamCache::get(const std::string& macro_name) const {
     return CachedMacroInfo{MacroParamKnowledge::UNKNOWN, {}};
 }
 
+bool MacroParamCache::has_macro(const std::string& macro_name) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string lower = macro_name;
+    to_lower_inplace(lower);
+    // Every entry in cache_ comes from either configfile or known_macros —
+    // both signal the macro is registered with Klipper. The UNKNOWN tag means
+    // "no params parsed"; it still indicates the macro exists.
+    return cache_.find(lower) != cache_.end();
+}
+
 void MacroParamCache::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     cache_.clear();

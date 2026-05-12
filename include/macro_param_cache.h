@@ -38,6 +38,11 @@ class MacroParamCache {
     /// Lookup cached info for a macro (case-insensitive).
     [[nodiscard]] CachedMacroInfo get(const std::string& macro_name) const;
 
+    /// True if the macro is registered with Klipper (case-insensitive). Used to
+    /// gate features that require a specific gcode_macro to be defined in the
+    /// firmware (e.g. K2 AI detect needs LOAD_AI_RUN — not all variants ship it).
+    [[nodiscard]] bool has_macro(const std::string& macro_name) const;
+
     /// Clear all cached state (call on disconnect/reconnect).
     void clear();
 

@@ -94,6 +94,13 @@ struct PrePrintOption {
     bool default_enabled = false;
     int order = 0; ///< Sort order within category (ascending)
 
+    /// Hide and skip this option when the named macro is not present on the
+    /// connected printer. Set on options whose gcode_template/macro_param
+    /// targets a feature that ships with some firmware variants but not
+    /// others (e.g. K2 Plus AI detect — "LOAD_AI_RUN" exists on Creality OS
+    /// variants but not on the user's K2). Empty = no gate (always shown).
+    std::string requires_macro;
+
     PrePrintStrategyKind strategy_kind = PrePrintStrategyKind::MacroParam;
     PrePrintStrategyPayload strategy{PrePrintStrategyMacroParam{}};
 };

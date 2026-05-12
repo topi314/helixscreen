@@ -3,6 +3,8 @@
 
 #include "ui_print_preparation_manager.h"
 
+#include "macro_param_cache.h"
+
 #include "../test_helpers/printer_state_test_access.h"
 
 class PrintPreparationManagerTestAccess {
@@ -827,6 +829,16 @@ TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines (K2 Plus ai_de
     printer_state.init_subjects(false);
     printer_state.set_printer_type_sync("Creality K2 Plus");
 
+    // ai_detect is gated by requires_macro=LOAD_AI_RUN — only fires when the
+    // firmware registers that macro. Populate the cache so the option is
+    // applicable in this test (real K2 Plus firmware variants that ship AI
+    // detect declare LOAD_AI_RUN; stock variants don't, and the option is
+    // correctly skipped on those).
+    MacroParamCache::instance().clear();
+    nlohmann::json config = nlohmann::json::object();
+    config["gcode_macro LOAD_AI_RUN"] = {{"gcode", "{action_respond_info('ai run')}"}};
+    MacroParamCache::instance().populate_from_configfile(config, {"LOAD_AI_RUN"});
+
     PrintPreparationManager manager;
     manager.set_dependencies(nullptr, &printer_state);
 
@@ -848,6 +860,13 @@ TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines (K2 Plus ai_de
         ai_detect_on = false;
         auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
         REQUIRE(lines == std::vector<std::string>{"LOAD_AI_RUN SWITCH=0"});
+    }
+
+    SECTION("ai_detect skipped entirely when LOAD_AI_RUN macro is absent") {
+        MacroParamCache::instance().clear();
+        ai_detect_on = true;
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.empty());
     }
 }
 
@@ -2676,6 +2695,13 @@ TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines emits ai_detec
     PrinterStateTestAccess::reset(printer_state);
     printer_state.init_subjects(false);
     printer_state.set_printer_type_sync("Creality K2 Plus");
+
+    // ai_detect is gated by requires_macro=LOAD_AI_RUN. Mark the macro as
+    // registered so this K2 Plus test fixture exercises the macro-present path.
+    MacroParamCache::instance().clear();
+    nlohmann::json config = nlohmann::json::object();
+    config["gcode_macro LOAD_AI_RUN"] = {{"gcode", "{action_respond_info('ai run')}"}};
+    MacroParamCache::instance().populate_from_configfile(config, {"LOAD_AI_RUN"});
 
     PrintPreparationManager manager;
     manager.set_dependencies(nullptr, &printer_state);
