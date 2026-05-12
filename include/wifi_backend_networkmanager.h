@@ -204,6 +204,21 @@ class WifiBackendNetworkManager : public WifiBackend {
     void scan_thread_func();
     void connect_thread_func(std::string ssid, std::string password);
 
+    // Result of one nmcli connect attempt (fork/exec, captures stderr).
+    struct ConnectAttempt {
+        int exit_code = -1;      // -1 = internal failure (fork/pipe/timeout)
+        bool timed_out = false;  // true => killed after CONNECT_TIMEOUT_SECONDS
+        std::string stderr_out;
+    };
+
+    // Single fork/exec of `nmcli device wifi connect`. Returns exit_code + stderr.
+    // Honours connect_active_ for cancellation.
+    ConnectAttempt try_nmcli_connect(const std::string& ssid, const std::string& password);
+
+    // Delete a saved connection profile by id. Best-effort, fork/exec to avoid
+    // shell injection with caller-supplied SSIDs. Returns true if nmcli exited 0.
+    bool delete_connection_profile(const std::string& profile_id);
+
     // Status polling
     void status_thread_func();
     ConnectionStatus poll_status_now(); // Actual nmcli calls (background thread only)

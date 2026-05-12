@@ -16,6 +16,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <sstream>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -693,79 +694,64 @@ WiFiError WifiBackendNetworkManager::connect_network(const std::string& ssid,
     return WiFiErrorHelper::success();
 }
 
-void WifiBackendNetworkManager::connect_thread_func(std::string ssid, std::string password) {
-    spdlog::debug("[WifiBackend] NM: Connect thread started for '{}'", ssid);
+WifiBackendNetworkManager::ConnectAttempt
+WifiBackendNetworkManager::try_nmcli_connect(const std::string& ssid,
+                                             const std::string& password) {
+    ConnectAttempt result;
 
-    // SECURITY: Use fork/exec to avoid shell injection with SSID/password
-    // nmcli device wifi connect "<ssid>" password "<pass>" ifname <iface>
-    // Capture child's stderr via pipe to detect polkit permission errors.
+    // SECURITY: fork/exec (no shell) so SSID/password can't be interpreted by sh.
+    // Capture child's stderr via pipe so the caller can distinguish failure modes
+    // (polkit denial, stale-profile key-mgmt error, etc.).
 
     int stderr_pipe[2];
     if (pipe(stderr_pipe) < 0) {
         spdlog::error("[WifiBackend] NM: pipe() failed: {}", strerror(errno));
-        if (connect_active_) {
-            fire_event("DISCONNECTED", "Internal error");
-            request_status_refresh();
-        }
-        return;
+        return result; // exit_code stays -1
     }
 
     pid_t pid = fork();
-
     if (pid < 0) {
         spdlog::error("[WifiBackend] NM: Fork failed: {}", strerror(errno));
         close(stderr_pipe[0]);
         close(stderr_pipe[1]);
-        if (connect_active_) {
-            fire_event("DISCONNECTED", "Fork failed");
-            request_status_refresh();
-        }
-        return;
+        return result;
     }
 
     if (pid == 0) {
-        // Child process - redirect stderr to pipe, exec nmcli directly (no shell)
-        close(stderr_pipe[0]); // Close read end
+        // Child: stderr → pipe, exec nmcli with no shell interpretation
+        close(stderr_pipe[0]);
         dup2(stderr_pipe[1], STDERR_FILENO);
         close(stderr_pipe[1]);
 
         if (password.empty()) {
-            // Open network
             execlp("nmcli", "nmcli", "device", "wifi", "connect", ssid.c_str(), "ifname",
                    wifi_interface_.c_str(), nullptr);
         } else {
-            // Secured network
             execlp("nmcli", "nmcli", "device", "wifi", "connect", ssid.c_str(), "password",
                    password.c_str(), "ifname", wifi_interface_.c_str(), nullptr);
         }
-        // exec failed
-        _exit(127);
+        _exit(127); // exec failed
     }
 
-    // Parent process - close write end, will read stderr after child exits
     close(stderr_pipe[1]);
 
-    // Wait for child with timeout
     constexpr int CONNECT_TIMEOUT_SECONDS = 30;
     constexpr int POLL_INTERVAL_MS = 100;
     auto start_time = std::chrono::steady_clock::now();
 
     int status = 0;
-    bool timed_out = false;
     bool child_done = false;
 
     while (!child_done) {
-        // Check cancellation
         if (!connect_active_) {
             kill(pid, SIGTERM);
             waitpid(pid, &status, 0);
             close(stderr_pipe[0]);
             spdlog::debug("[WifiBackend] NM: Connect cancelled");
-            return;
+            return result; // caller will see !connect_active_ and bail
         }
 
         pid_t wait_result = waitpid(pid, &status, WNOHANG);
-
         if (wait_result == pid) {
             child_done = true;
         } else if (wait_result < 0) {
@@ -774,16 +760,11 @@ void WifiBackendNetworkManager::connect_thread_func(std::string ssid, std::strin
             }
             spdlog::error("[WifiBackend] NM: waitpid error: {}", strerror(errno));
             close(stderr_pipe[0]);
-            if (connect_active_) {
-                fire_event("DISCONNECTED", "Internal error");
-                request_status_refresh();
-            }
-            return;
+            return result;
         } else {
-            // Check timeout
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             if (elapsed > std::chrono::seconds(CONNECT_TIMEOUT_SECONDS)) {
-                timed_out = true;
+                result.timed_out = true;
                 kill(pid, SIGTERM);
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 kill(pid, SIGKILL);
@@ -795,59 +776,120 @@ void WifiBackendNetworkManager::connect_thread_func(std::string ssid, std::strin
         }
     }
 
-    // Read child's stderr output now that the child has exited
-    std::string child_stderr;
-    {
-        char buf[512];
-        ssize_t n;
-        while ((n = read(stderr_pipe[0], buf, sizeof(buf) - 1)) > 0) {
-            buf[n] = '\0';
-            child_stderr += buf;
-        }
+    char buf[512];
+    ssize_t n;
+    while ((n = read(stderr_pipe[0], buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        result.stderr_out += buf;
     }
     close(stderr_pipe[0]);
+
+    result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return result;
+}
+
+bool WifiBackendNetworkManager::delete_connection_profile(const std::string& profile_id) {
+    // SECURITY: fork/exec so profile_id (SSID-derived) can't be shell-interpreted.
+    pid_t pid = fork();
+    if (pid < 0) {
+        spdlog::warn("[WifiBackend] NM: delete profile fork failed: {}", strerror(errno));
+        return false;
+    }
+    if (pid == 0) {
+        // Suppress stdout/stderr — we only care about exit code
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        execlp("nmcli", "nmcli", "connection", "delete", "id", profile_id.c_str(), nullptr);
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return false;
+    }
+    int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return code == 0;
+}
+
+void WifiBackendNetworkManager::connect_thread_func(std::string ssid, std::string password) {
+    spdlog::debug("[WifiBackend] NM: Connect thread started for '{}'", ssid);
+
+    ConnectAttempt attempt = try_nmcli_connect(ssid, password);
 
     if (!connect_active_) {
         return;
     }
 
-    if (timed_out) {
+    // nmcli quirk: `device wifi connect <ssid> password <psk>` reuses any
+    // existing saved profile with the same SSID. If that profile is malformed
+    // (e.g. created earlier without security), the password write lands but
+    // key-mgmt stays empty and NM refuses with:
+    //   Error: 802-11-wireless-security.key-mgmt: property is missing.
+    // Self-heal once: delete the stale profile and retry.
+    auto looks_like_stale_profile = [](const std::string& err) {
+        return err.find("key-mgmt") != std::string::npos &&
+               err.find("property is missing") != std::string::npos;
+    };
+
+    if (attempt.exit_code != 0 && !attempt.timed_out &&
+        looks_like_stale_profile(attempt.stderr_out)) {
+        spdlog::warn("[WifiBackend] NM: '{}' has a stale/malformed saved profile "
+                     "(key-mgmt missing); deleting and retrying",
+                     ssid);
+        if (delete_connection_profile(ssid)) {
+            spdlog::info("[WifiBackend] NM: Deleted stale profile for '{}', retrying connect",
+                         ssid);
+            attempt = try_nmcli_connect(ssid, password);
+            if (!connect_active_) {
+                return;
+            }
+        } else {
+            spdlog::warn("[WifiBackend] NM: Could not delete stale profile for '{}' "
+                         "(nmcli connection delete failed)",
+                         ssid);
+        }
+    }
+
+    if (attempt.timed_out) {
         spdlog::warn("[WifiBackend] NM: Connection to '{}' timed out", ssid);
         fire_event("DISCONNECTED", "Connection timed out");
         request_status_refresh();
         return;
     }
 
-    int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-
-    if (exit_code == 0) {
+    if (attempt.exit_code == 0) {
         spdlog::info("[WifiBackend] NM: Connected to '{}'", ssid);
         fire_event("CONNECTED");
         request_status_refresh();
-    } else {
-        // Check stderr for polkit/permission denial before generic failure
-        if (is_polkit_permission_error(child_stderr)) {
-            spdlog::warn("[WifiBackend] NM: Permission denied connecting to '{}': {}", ssid,
-                         child_stderr);
-            fire_event("AUTH_FAILED",
-                       "Permission denied - check WiFi permissions. Re-run the HelixScreen "
-                       "installer, or see Troubleshooting docs");
-            request_status_refresh();
-        } else {
-            // nmcli exit codes: 0=success, non-zero=failure
-            // Common failures: wrong password, network not found, timeout
-            spdlog::warn("[WifiBackend] NM: Connection to '{}' failed (exit code {}{})", ssid,
-                         exit_code, child_stderr.empty() ? "" : ", stderr: " + child_stderr);
-            // nmcli uses exit code 10 for connection timeout, but doesn't distinguish
-            // auth failure well. Fire AUTH_FAILED as best guess for secured networks.
-            if (!password.empty()) {
-                fire_event("AUTH_FAILED", "Connection failed");
-            } else {
-                fire_event("DISCONNECTED", "Connection failed");
-            }
-            request_status_refresh();
-        }
+        return;
     }
+
+    // Failure path
+    if (is_polkit_permission_error(attempt.stderr_out)) {
+        spdlog::warn("[WifiBackend] NM: Permission denied connecting to '{}': {}", ssid,
+                     attempt.stderr_out);
+        fire_event("AUTH_FAILED",
+                   "Permission denied - check WiFi permissions. Re-run the HelixScreen "
+                   "installer, or see Troubleshooting docs");
+        request_status_refresh();
+        return;
+    }
+
+    spdlog::warn("[WifiBackend] NM: Connection to '{}' failed (exit code {}{})", ssid,
+                 attempt.exit_code,
+                 attempt.stderr_out.empty() ? "" : ", stderr: " + attempt.stderr_out);
+    // nmcli exit code 10 = connection timeout; doesn't cleanly distinguish auth
+    // failure. Fire AUTH_FAILED as the best guess for secured networks.
+    if (!password.empty()) {
+        fire_event("AUTH_FAILED", "Connection failed");
+    } else {
+        fire_event("DISCONNECTED", "Connection failed");
+    }
+    request_status_refresh();
 }
 
 WiFiError WifiBackendNetworkManager::disconnect_network() {
