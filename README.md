@@ -18,7 +18,7 @@
 
 Your printer can do way more than your current touchscreen lets you. Bed mesh visualization, input shaper graphs, multi-material management, print history — it's all trapped in a browser tab. HelixScreen puts it at your fingertips.
 
-Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a tricked-out Voron or RatRig.
+Fast, beautiful, and frugal enough to run on hardware you already own — your printer's onboard SoC, a Raspberry Pi from a drawer, or anything newer.
 
 ---
 
@@ -30,7 +30,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 
 - **Customizable dashboard** — Multi-page grid with drag-to-reposition, edge resize, and 30+ widgets including temperature graphs, fan arcs, and power toggles
 - **Every feature at your fingertips** — 30+ panels, 20+ overlays, 20+ modals, 280+ XML layouts
-- **Runs on anything** — ~13MB RAM, from a Creality K1 to a Raspberry Pi 5
+- **~15MB RAM on embedded targets, ~75MB disk** — sips memory on a Creality K1 or Flashforge AD5M; a few times more on 64-bit Pi, still well under what other touchscreen UIs need. Your printer's onboard SoC or an older Pi is plenty — no need to buy new hardware.
 - **70+ printers in the database** — Auto-detects your hardware and configures itself
 - **Multi-material ready** — AFC, Happy Hare, ACE, AD5X IFS, CFS, tool changers, Spoolman
 - **Exclude objects** — Tap-to-exclude overhead map view with object outlines during prints
@@ -45,7 +45,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 |---------|-------------|-------------|---------------|
 | UI Framework | LVGL 9 XML | LVGL 8 C | GTK 3 (Python) |
 | Declarative UI | Full XML with reactive bindings | C only | Python only |
-| RAM Usage | ~13MB | ~15-20MB | ~50MB |
+| RAM Usage | ~15MB (32-bit) | ~15-20MB | ~50MB |
 | Disk Size | ~75-115MB | ~60-80MB | ~50MB |
 | Multi-Material | 6 backends | Limited | Basic |
 | Printer Database | 70+ models | — | Manual config |
@@ -187,7 +187,7 @@ See [docs/devel/DEVELOPMENT.md](docs/devel/DEVELOPMENT.md) for detailed setup, c
 ## FAQ
 
 **How is this different from GuppyScreen/KlipperScreen?**
-More features, less resource usage (~13MB RAM vs ~50MB for KlipperScreen), and actively developed. See the [comparison table](#why-helixscreen).
+More features, far lower RAM use (~15MB on embedded targets vs ~50MB for KlipperScreen), and actively developed. The lighter footprint means the printer you have or a Pi you've owned for years is plenty — no need to chase new SBC hardware. See the [comparison table](#why-helixscreen).
 
 **Which printers are supported?**
 Any Klipper + Moonraker printer. 70+ models in the auto-detection database spanning Voron, Creality, QIDI, Anycubic, Flashforge, Sovol, RatRig, FLSUN, Elegoo, Prusa, and more. The wizard auto-discovers your printer's capabilities even if it's not in the database.
