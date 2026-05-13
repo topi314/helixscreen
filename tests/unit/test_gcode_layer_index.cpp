@@ -221,6 +221,36 @@ G1 X30 Y30 E0.3
     REQUIRE(index.get_entry(1).file_offset < index.get_entry(2).file_offset);
 }
 
+TEST_CASE("GCodeLayerIndex - LAYER_CHANGE_HOOK is not a marker",
+          "[gcode][layer_index]") {
+    // Locks in the terminator check in is_layer_marker: a comment whose
+    // name starts with LAYER_CHANGE but continues into a longer identifier
+    // (e.g. a custom ;LAYER_CHANGE_HOOK macro) must not flip the indexer
+    // into marker-based mode.
+    //
+    // Pre-fix behavior (no terminator check): ;LAYER_CHANGE_HOOK matches,
+    // use_layer_markers becomes true, and subsequent Z-changes are ignored
+    // because no real marker re-arms pending_layer_start. The whole file
+    // collapses to a single layer.
+    //
+    // Post-fix behavior: ;LAYER_CHANGE_HOOK is rejected, the indexer stays
+    // in Z-change mode, and we get one entry per Z transition (3 here).
+    std::string gcode = R"(
+;LAYER_CHANGE_HOOK
+G1 Z0.2 F1000
+G1 X10 Y10 E0.1
+G1 Z0.4 F1000
+G1 X20 Y20 E0.2
+G1 Z0.6 F1000
+G1 X30 Y30 E0.3
+)";
+
+    TempGCodeFile file(gcode);
+    GCodeLayerIndex index;
+    REQUIRE(index.build_from_file(file.path()));
+    REQUIRE(index.get_layer_count() == 3);
+}
+
 TEST_CASE("GCodeLayerIndex - Real file", "[gcode][layer_index][integration]") {
     // Test with the real benchy file if it exists
     std::ifstream check("assets/test_gcodes/3DBenchy.gcode");
