@@ -4,6 +4,8 @@
 #include "fan_widget.h"
 
 #include "ui_event_safety.h"
+#include "ui_fan_control_overlay.h"
+#include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
 
@@ -175,6 +177,7 @@ void FanWidget::detach() {
         widget_obj_ = nullptr;
     }
     parent_screen_ = nullptr;
+    fan_control_panel_ = nullptr;
     speed_label_ = nullptr;
     name_label_ = nullptr;
     fan_icon_ = nullptr;
@@ -183,8 +186,29 @@ void FanWidget::detach() {
 }
 
 void FanWidget::handle_clicked() {
-    spdlog::info("[FanWidget] Clicked - showing fan picker");
-    show_fan_picker();
+    spdlog::debug("[FanWidget] Clicked - opening fan control overlay");
+
+    if (!fan_control_panel_ && parent_screen_) {
+        auto& overlay = get_fan_control_overlay();
+
+        if (!overlay.are_subjects_initialized()) {
+            overlay.init_subjects();
+        }
+        overlay.register_callbacks();
+        overlay.set_api(get_moonraker_api());
+
+        fan_control_panel_ = overlay.create(parent_screen_);
+        if (!fan_control_panel_) {
+            spdlog::error("[FanWidget] Failed to create fan control overlay");
+            return;
+        }
+        NavigationManager::instance().register_overlay_instance(fan_control_panel_, &overlay);
+    }
+
+    if (fan_control_panel_) {
+        get_fan_control_overlay().set_api(get_moonraker_api());
+        NavigationManager::instance().push_overlay(fan_control_panel_);
+    }
 }
 
 void FanWidget::resolve_display_name() {

@@ -58,8 +58,11 @@ class FanWidget : public PanelWidget {
     helix::AsyncLifetimeGuard lifetime_;
     char speed_buffer_[16] = {};
 
-    // Fan picker context menu
+    // Fan picker context menu (edit-mode gear only)
     lv_obj_t* picker_backdrop_ = nullptr;
+
+    // Cached fan-control overlay opened on normal tap
+    lv_obj_t* fan_control_panel_ = nullptr;
 
     void auto_select_first_fan();
     void bind_speed_observer();
