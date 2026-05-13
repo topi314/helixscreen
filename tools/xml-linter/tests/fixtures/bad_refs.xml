@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- File with cross-reference issues: undefined constants, subjects, styles -->
+<component>
+  <consts>
+    <px name="known_pad" value="16"/>
+  </consts>
+  <styles>
+    <style name="known_style" border_width="2"/>
+  </styles>
+  <subjects>
+    <subject name="known_subject" type="string" value=""/>
+  </subjects>
+  <view name="bad_refs_view" extends="lv_obj" width="100%" height="content">
+    <lv_obj width="#unknown_const" height="#known_pad"/>
+    <lv_label text="test" bind_text="unknown_subject"/>
+    <lv_label text="test2" bind_text="known_subject"/>
+    <bind_style name="unknown_style_name"/>
+  </view>
+</component>

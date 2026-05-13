@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- File with subjects and event_cb references -->
+<component>
+  <subjects>
+    <subject name="ssid" type="string" value=""/>
+    <subject name="password" type="string" value=""/>
+  </subjects>
+  <view name="ref_view" extends="lv_obj" width="100%" height="content">
+    <lv_textarea text="" placeholder_text="Enter SSID" bind_text="ssid"/>
+    <lv_textarea text="" placeholder_text="Enter password" bind_text="password"/>
+    <event_cb trigger="clicked" callback="on_submit"/>
+  </view>
+</component>

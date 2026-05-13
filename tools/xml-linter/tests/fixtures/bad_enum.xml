@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- File with invalid enum and bool values -->
+<component>
+  <view name="bad_enum_view" extends="lv_obj" width="100%" height="content">
+    <lv_label text="test" long_mode="invalid_mode"/>
+    <lv_obj width="100%" height="50" hidden="yes" align="bad_align"/>
+  </view>
+</component>

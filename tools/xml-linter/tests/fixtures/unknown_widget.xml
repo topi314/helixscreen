@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- File with unknown widget type -->
+<component>
+  <view name="bad_widget_view" extends="lv_obj" width="100%" height="content">
+    <lv_unknown_widget text="test"/>
+    <lv_imaginary_thing width="100"/>
+  </view>
+</component>

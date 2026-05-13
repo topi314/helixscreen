@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- File using state-qualified attributes (attr:state="value") -->
+<component>
+  <consts>
+    <color name="text" value="#FFFFFF"/>
+    <color name="text_muted" value="#888888"/>
+    <color name="primary" value="#3366FF"/>
+  </consts>
+  <view name="state_view" extends="lv_obj" width="100%" height="content">
+    <!-- Simple state qualifier on style attribute -->
+    <lv_label text="Checked Label" style_text_color:checked="#text"/>
+    <!-- Multiple state-qualified attributes on same element -->
+    <lv_obj style_bg_opa="0" style_bg_opa:checked="200" style_bg_color:checked="#primary"
+            style_border_color:checked="#primary"/>
+    <!-- Combined part selector + state qualifier -->
+    <lv_slider style_bg_color-indicator__checked="#primary"
+               style_bg_opa-knob__pressed="200"/>
+    <!-- Valid state: disabled -->
+    <lv_obj style_bg_opa:disabled="100" style_text_opa:disabled="100"/>
+    <!-- Valid state: focused -->
+    <lv_obj style_border_color:focused="#primary"/>
+    <!-- Valid state: hovered -->
+    <lv_obj style_bg_color:hovered="#primary"/>
+  </view>
+</component>

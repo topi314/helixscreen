@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- Malformed XML -->
+<component>
+  <view name="broken" extends="lv_obj"
+    <lv_label text="unclosed"
+  </view>
+</component>
