@@ -19,7 +19,7 @@
               style_pad_top="0" style_pad_bottom="#space_md" style_pad_left="0" style_pad_right="0"
               style_pad_gap="#space_xs" scrollable="false">
         <lv_image src="A:assets/images/about-logo.bin" align="center"
-                  width="120" height="120" inner_align="contain"/>
+                  width="120" height="content" inner_align="contain"/>
         <text_body text="by Preston Brown" style_text_align="center" width="100%"/>
         <text_small name="copyright_text" bind_text="about_copyright" style_text_color="#text_muted" style_text_align="center" width="100%"/>
         <!-- Scrolling contributor marquee (populated by C++) -->
