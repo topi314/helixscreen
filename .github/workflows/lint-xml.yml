@@ -1,0 +1,43 @@
+name: XML Lint
+
+on:
+  push:
+    branches: [ main, "claude/**" ]
+    paths:
+      - 'ui_xml/**'
+      - 'src/ui/**'
+      - 'lib/helix-xml/**'
+      - 'tools/xml-linter/**'
+      - 'assets/config/themes/**'
+      - 'mk/tools.mk'
+      - '.github/workflows/lint-xml.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ui_xml/**'
+      - 'src/ui/**'
+      - 'lib/helix-xml/**'
+      - 'tools/xml-linter/**'
+      - 'assets/config/themes/**'
+      - 'mk/tools.mk'
+      - '.github/workflows/lint-xml.yml'
+
+jobs:
+  lint-xml:
+    name: helix-xml-linter
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run helix-xml-linter (errors fail the build)
+        run: make lint-xml

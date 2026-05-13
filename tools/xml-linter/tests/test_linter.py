@@ -383,8 +383,12 @@ class TestLinterStyleSelectors:
         assert len(style_errors) == 1
         assert "Did you mean" not in style_errors[0].message
 
-    def test_style_x_and_y_valid(self, schema: Schema) -> None:
-        """Test style_x and style_y are accepted as valid style properties."""
+    def test_style_x_and_y_flagged(self, schema: Schema) -> None:
+        """style_x and style_y are NOT exposed by helix-xml's style parser
+        (see lib/helix-xml/src/xml/lv_xml_style.c — only style_translate_x and
+        style_translate_y are present). Even though they exist in vanilla
+        LVGL, our XML wrapper silently drops them. The linter should flag.
+        """
         from helix_xml_linter.xml_parser import ParsedElement
 
         linter = Linter(schema, LinterConfig(enable_xref=False))
@@ -397,7 +401,8 @@ class TestLinterStyleSelectors:
         )
         diagnostics = linter.lint_element(elem)
         errors = [d for d in diagnostics if d.severity == Severity.ERROR]
-        assert len(errors) == 0, f"Unexpected errors: {[d.message for d in errors]}"
+        flagged = {d.attribute for d in errors}
+        assert flagged == {"style_x", "style_y"}, f"Expected style_x/style_y flagged, got: {flagged}"
 
     def test_selector_like_valid_property_no_suggestion(self, schema: Schema) -> None:
         """Valid properties ending with selector-like words are not altered."""
