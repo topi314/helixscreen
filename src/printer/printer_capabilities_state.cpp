@@ -86,6 +86,15 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
     lv_subject_set_int(&printer_has_led_, hardware.has_led() ? 1 : 0);
     lv_subject_set_int(&printer_has_accelerometer_, hardware.has_accelerometer() ? 1 : 0);
 
+    // Install M300 (Klipper gcode beeper) backend now that we know whether
+    // the printer's Klipper config actually has a beeper output_pin. This
+    // MUST happen before flipping printer_has_speaker_ so any UI/handlers
+    // observing the subject see a working backend. SoundManager no-ops if
+    // a real audio backend (SDL/ALSA/PWM) is already installed.
+    if (hardware.has_speaker()) {
+        SoundManager::instance().try_install_m300_backend();
+    }
+
     // Speaker capability — uses override system so presets can disable it
     // for printers without speakers (e.g., K1C has no beeper/buzzer).
     // AUTO mode: true if hardware beeper detected OR local sound backend exists.

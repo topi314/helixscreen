@@ -47,6 +47,20 @@ SoundManager& SoundManager::instance() {
 void SoundManager::set_moonraker_client(MoonrakerClient* client) {
     client_ = client;
     spdlog::debug("[SoundManager] Moonraker client set: {}", client ? "connected" : "nullptr");
+
+    // If the client is being cleared (printer switch / app shutdown) and the
+    // active backend is M300, drop it. The next printer's hardware discovery
+    // will reinstall via try_install_m300_backend() only if appropriate —
+    // otherwise we'd carry M300 over to a new printer that has no beeper,
+    // resurrecting the "!! Unknown command:M300" feedback loop.
+    if (!client && backend_ && dynamic_cast<M300SoundBackend*>(backend_.get())) {
+        spdlog::info("[SoundManager] Dropping M300 backend (client cleared)");
+        if (sequencer_) {
+            sequencer_->shutdown();
+            sequencer_.reset();
+        }
+        backend_.reset();
+    }
 }
 
 void SoundManager::initialize() {
@@ -71,27 +85,74 @@ void SoundManager::initialize() {
         }
     }
 
-    // Create the best available backend
+    // Create the best available host-side backend (SDL/ALSA/PWM). M300 is
+    // NOT a fallback here — it's installed lazily once hardware discovery
+    // confirms the printer's Klipper config has a beeper. Selecting M300
+    // for any Moonraker-connected printer would let the
+    // M300 → "!! Unknown command:M300" → error toast → error_tone → M300
+    // feedback loop fire on any host where local audio fails.
     backend_ = create_backend();
     if (!backend_) {
-        spdlog::info("[SoundManager] No sound backend available, sounds disabled");
+        // Mark initialized so try_install_m300_backend() can still install
+        // an M300 backend later when discovery confirms the printer has a
+        // beeper. Without this, has_backend() would gate on initialized_
+        // and miss the late install.
+        initialized_ = true;
+        spdlog::info(
+            "[SoundManager] No host audio backend; awaiting hardware discovery for M300 gate");
+        return;
+    }
+
+    finalize_backend_setup();
+}
+
+void SoundManager::try_install_m300_backend() {
+    if (backend_) {
+        return; // Real audio already winning — don't displace it.
+    }
+    if (!client_) {
+        spdlog::debug("[SoundManager] try_install_m300_backend: no Moonraker client");
+        return;
+    }
+    if (get_runtime_config()->disable_sound) {
+        return;
+    }
+    Config* cfg = Config::get_instance();
+    if (cfg && cfg->get<bool>("/disable_sound", false)) {
+        return;
+    }
+
+    spdlog::info("[SoundManager] Installing M300 backend (Klipper beeper confirmed)");
+    backend_ = std::make_shared<M300SoundBackend>([this](const std::string& gcode) -> int {
+        auto* c = client_;
+        return c ? c->gcode_script(gcode) : -1;
+    });
+
+    finalize_backend_setup();
+}
+
+void SoundManager::finalize_backend_setup() {
+    if (!backend_) {
         return;
     }
 
     // Defer theme loading until sounds are actually needed
-    theme_name_ = AudioSettingsManager::instance().get_sound_theme();
-    if (AudioSettingsManager::instance().get_sounds_enabled()) {
-        load_theme(theme_name_);
-    } else {
-        spdlog::info("[SoundManager] Sounds disabled, deferring theme load");
+    if (current_theme_.sounds.empty()) {
+        theme_name_ = AudioSettingsManager::instance().get_sound_theme();
+        if (AudioSettingsManager::instance().get_sounds_enabled()) {
+            load_theme(theme_name_);
+        } else {
+            spdlog::info("[SoundManager] Sounds disabled, deferring theme load");
+        }
     }
 
-    // Create and start the sequencer
-    sequencer_ = std::make_unique<SoundSequencer>(backend_);
-    sequencer_->start();
+    if (!sequencer_) {
+        sequencer_ = std::make_unique<SoundSequencer>(backend_);
+        sequencer_->start();
+    }
 
     initialized_ = true;
-    spdlog::info("[SoundManager] Initialized with theme '{}', backend ready", theme_name_);
+    spdlog::info("[SoundManager] Backend ready, theme '{}'", theme_name_);
 }
 
 void SoundManager::shutdown() {
@@ -262,12 +323,15 @@ bool SoundManager::has_backend() const {
 }
 
 std::shared_ptr<SoundBackend> SoundManager::create_backend() {
+    // Host-side audio backends only. M300 (Klipper beeper) is installed
+    // separately via try_install_m300_backend() once hardware discovery
+    // confirms the printer's Klipper config has a beeper output_pin.
+    //
     // Auto-detection order:
     // 1. SDL audio available (desktop build) -> SDLBackend
     // 2. ALSA PCM available (Linux with audio) -> ALSABackend
     // 3. /sys/class/pwm/pwmchip0 exists -> PWMBackend
-    // 4. Moonraker connected -> M300Backend
-    // 5. None -> sounds disabled
+    // 4. None -> wait for M300 gate, or sounds disabled
 
 #ifdef HELIX_DISPLAY_SDL
     auto sdl_backend = std::make_shared<SDLSoundBackend>();
@@ -295,15 +359,7 @@ std::shared_ptr<SoundBackend> SoundManager::create_backend() {
     }
     spdlog::debug("[SoundManager] PWM sysfs not available, falling back");
 
-    if (client_) {
-        spdlog::debug("[SoundManager] Creating M300 backend via Moonraker");
-        return std::make_shared<M300SoundBackend>([this](const std::string& gcode) -> int {
-            auto* c = client_;
-            return c ? c->gcode_script(gcode) : -1;
-        });
-    }
-
-    spdlog::debug("[SoundManager] No backend available");
+    spdlog::debug("[SoundManager] No host audio backend available");
     return nullptr;
 }
 

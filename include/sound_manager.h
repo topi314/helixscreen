@@ -24,7 +24,10 @@ namespace helix {
  * @brief Audio feedback manager using the synth engine
  *
  * Plays named sounds from JSON themes through a backend-agnostic sequencer.
- * Detects the best available backend (M300/Moonraker for now, SDL/PWM later).
+ * Auto-detects the best host-side backend (SDL/ALSA/PWM) at initialize();
+ * M300 (Klipper gcode beeper) is installed lazily via
+ * try_install_m300_backend() once hardware discovery confirms the printer's
+ * Klipper config has a `[output_pin beeper]` (and matching M300 macro).
  *
  * Respects SettingsManager toggles:
  * - sounds_enabled: master switch for all sounds
@@ -51,8 +54,28 @@ class SoundManager {
     /// Set Moonraker client for M300 backend
     void set_moonraker_client(MoonrakerClient* client);
 
-    /// Auto-detect backend, load theme, start sequencer
+    /// Auto-detect backend, load theme, start sequencer.
+    /// Only considers host-side audio backends (SDL/ALSA/PWM). The M300
+    /// (Klipper gcode beeper) backend is installed lazily via
+    /// try_install_m300_backend() once hardware discovery confirms the
+    /// printer's Klipper config declares a beeper output_pin.
     void initialize();
+
+    /// Install the M300 (Klipper gcode beeper) backend if no audio backend
+    /// is currently installed and a Moonraker client is available.
+    ///
+    /// Called from PrinterCapabilitiesState::set_hardware() after hardware
+    /// discovery confirms `hardware.has_speaker()`. Installing M300 only
+    /// when Klipper actually has a `[output_pin beeper]` (and matching
+    /// `[gcode_macro M300]`) prevents the feedback loop where M300 commands
+    /// to a printer without the macro produce `!! Unknown command:M300`,
+    /// surface as error toasts, and trigger the error_tone sound — which
+    /// goes back out as another M300, ad infinitum.
+    ///
+    /// No-op if a backend is already installed, if no client has been set,
+    /// if sounds are globally disabled, or if SoundManager has been
+    /// shutdown.
+    void try_install_m300_backend();
 
     /// Stop sequencer, cleanup
     void shutdown();
@@ -114,8 +137,13 @@ class SoundManager {
     SoundManager() = default;
     ~SoundManager() = default;
 
-    /// Detect best available backend
+    /// Detect best available host-side audio backend (SDL/ALSA/PWM).
+    /// Does NOT include M300 — see try_install_m300_backend().
     std::shared_ptr<SoundBackend> create_backend();
+
+    /// Common setup after a backend is installed: load theme, create and
+    /// start sequencer, mark initialized. Idempotent.
+    void finalize_backend_setup();
 
     /// Load theme JSON from config/sounds/
     void load_theme(const std::string& theme_name);
