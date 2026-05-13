@@ -292,6 +292,52 @@ G1 X110 Y120 E0.3
     REQUIRE(e2.start_z == Approx(0.4f));
 }
 
+TEST_CASE("GCodeLayerIndex - Z-only move carries X/Y forward",
+          "[gcode][layer_index]") {
+    // A Z-only inter-layer move (common with retract+lift slicers) must not
+    // reset X/Y on the next layer's snapshot — the head is still at the end
+    // of the previous layer's print move.
+    std::string gcode = R"(
+G1 X10 Y20 Z0.2 F1000
+G1 X30 Y40 E0.1
+G1 Z0.4
+G1 X50 Y60 E0.2
+)";
+
+    TempGCodeFile file(gcode);
+    GCodeLayerIndex index;
+    REQUIRE(index.build_from_file(file.path()));
+    REQUIRE(index.get_layer_count() == 2);
+
+    auto e1 = index.get_entry(1);
+    // Z-only move triggers the layer-1 entry; head is still at (30,40) from
+    // the previous extrusion move, NOT reset to (0,0) just because this line
+    // has no X/Y.
+    REQUIRE(e1.start_x == Approx(30.0f));
+    REQUIRE(e1.start_y == Approx(40.0f));
+    REQUIRE(e1.start_z == Approx(0.2f));
+}
+
+TEST_CASE("GCodeLayerIndex - axis extraction ignores comments",
+          "[gcode][layer_index]") {
+    // Defensive: a trailing ;X100 retract comment must not poison the X
+    // tracked for the next layer's snapshot.
+    std::string gcode = R"(
+G1 X10 Y20 Z0.2 F1000 ; X999 retract
+G1 X30 Y40 E0.1 ; comment with Y888
+G1 X50 Y60 Z0.4
+)";
+
+    TempGCodeFile file(gcode);
+    GCodeLayerIndex index;
+    REQUIRE(index.build_from_file(file.path()));
+    REQUIRE(index.get_layer_count() == 2);
+
+    auto e1 = index.get_entry(1);
+    REQUIRE(e1.start_x == Approx(30.0f));
+    REQUIRE(e1.start_y == Approx(40.0f));
+}
+
 TEST_CASE("GCodeLayerIndex - Real file", "[gcode][layer_index][integration]") {
     // Test with the real benchy file if it exists
     std::ifstream check("assets/test_gcodes/3DBenchy.gcode");

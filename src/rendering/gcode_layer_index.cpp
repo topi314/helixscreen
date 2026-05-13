@@ -29,6 +29,14 @@ constexpr float Z_EPSILON = 0.001f;
 bool extract_axis_param(const char* line, size_t len, char axis, float& out_value) {
     char upper = axis;
     char lower = static_cast<char>(axis | 0x20);
+    // Truncate at first comment so e.g. `G1 X10 Y20 ; X100 retract` doesn't
+    // pick up the X inside the comment.
+    for (size_t i = 0; i < len; ++i) {
+        if (line[i] == ';') {
+            len = i;
+            break;
+        }
+    }
     for (size_t i = 0; i < len; ++i) {
         if (line[i] != upper && line[i] != lower) {
             continue;
