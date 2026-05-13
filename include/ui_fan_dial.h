@@ -117,18 +117,24 @@ class FanDial {
     void update_button_states(int percent);
     void animate_speed_label(int from, int to);
     void handle_arc_changed();
+    void handle_arc_released();
 
     void handle_off_clicked();
     void handle_on_clicked();
     void handle_icon_clicked();
 
+    void cancel_pending_send();
+    void flush_pending_send();
+
     // Static callbacks
     static void on_arc_value_changed(lv_event_t* e);
+    static void on_arc_released(lv_event_t* e);
     static void on_off_clicked(lv_event_t* e);
     static void on_on_clicked(lv_event_t* e);
     static void on_icon_clicked(lv_event_t* e);
     static void label_anim_exec_cb(void* var, int32_t value);
     static void anim_completed_cb(lv_anim_t* anim);
+    static void on_debounce_timer(lv_timer_t* t);
 
     void update_knob_glow(int percent);
     void update_fan_animation(int speed_pct);
@@ -147,6 +153,12 @@ class FanDial {
     IconClickCallback on_icon_clicked_;
     bool syncing_ = false;         // Prevent callback loops during set_speed()
     uint32_t last_user_input_ = 0; // Tick of last user interaction (for suppression window)
+
+    // Debounce: coalesce mid-drag VALUE_CHANGED bursts into one Moonraker send.
+    // Fires after 500 ms of slider idleness, OR immediately on touch RELEASED.
+    lv_timer_t* debounce_timer_ = nullptr;
+    int pending_speed_ = 0;
+    bool has_pending_send_ = false;
 };
 
 /**

@@ -78,6 +78,11 @@ FanDial::FanDial(lv_obj_t* parent, const std::string& name, const std::string& f
 
     // Add event callbacks with this pointer as user data
     lv_obj_add_event_cb(arc_, on_arc_value_changed, LV_EVENT_VALUE_CHANGED, this);
+    // Touch release flushes any pending debounced send immediately so the user
+    // sees the printer react the moment they let go (5X touchscreens may also
+    // miss intermediate VALUE_CHANGED ticks; the timer is the safety net).
+    lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_RELEASED, this);
+    lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_PRESS_LOST, this);
     lv_obj_add_event_cb(btn_off_, on_off_clicked, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(btn_on_, on_on_clicked, LV_EVENT_CLICKED, this);
 
@@ -95,6 +100,9 @@ FanDial::FanDial(lv_obj_t* parent, const std::string& name, const std::string& f
 }
 
 FanDial::~FanDial() {
+    // Cancel pending debounce send — its user_data points at this.
+    cancel_pending_send();
+
     // Stop any running animation BEFORE destruction.
     // The animation's var points to `this` (FanDial*), not the lv_obj_t*,
     // so lv_obj_delete() on the widget does NOT clean it up.
@@ -106,8 +114,10 @@ FanDial::~FanDial() {
 
     // Remove event callbacks to prevent stale 'this' dispatch if events
     // are still pending in the LVGL event queue after widget deletion
-    if (arc_)
+    if (arc_) {
         lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+        lv_obj_remove_event_cb(arc_, on_arc_released);
+    }
     if (btn_off_)
         lv_obj_remove_event_cb(btn_off_, on_off_clicked);
     if (btn_on_)
@@ -125,6 +135,11 @@ FanDial::FanDial(FanDial&& other) noexcept
       current_speed_(other.current_speed_), on_speed_changed_(std::move(other.on_speed_changed_)),
       on_icon_clicked_(std::move(other.on_icon_clicked_)), syncing_(other.syncing_),
       last_user_input_(other.last_user_input_) {
+    // Drop any pending debounce timer on the source — its user_data still points
+    // at the moved-from instance and we don't bother re-targeting it (drag
+    // straddling a move is not a real use case).
+    other.cancel_pending_send();
+
     // Clear the source pointers so other's destructor is a no-op
     other.root_ = nullptr;
     other.arc_ = nullptr;
@@ -139,7 +154,10 @@ FanDial::FanDial(FanDial&& other) noexcept
     // Update event callback user_data to point to this instance
     if (arc_) {
         lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+        lv_obj_remove_event_cb(arc_, on_arc_released);
         lv_obj_add_event_cb(arc_, on_arc_value_changed, LV_EVENT_VALUE_CHANGED, this);
+        lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_RELEASED, this);
+        lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_PRESS_LOST, this);
     }
     if (btn_off_) {
         lv_obj_remove_event_cb(btn_off_, on_off_clicked);
@@ -157,11 +175,17 @@ FanDial::FanDial(FanDial&& other) noexcept
 
 FanDial& FanDial::operator=(FanDial&& other) noexcept {
     if (this != &other) {
+        // Cancel pending debounce on both sides — see move-ctor comment.
+        cancel_pending_send();
+        other.cancel_pending_send();
+
         // Clean up current resources: stop animations and remove callbacks first
         lv_anim_delete(this, label_anim_exec_cb);
         helix::ui::fan_spin_stop(fan_icon_);
-        if (arc_)
+        if (arc_) {
             lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+            lv_obj_remove_event_cb(arc_, on_arc_released);
+        }
         if (btn_off_)
             lv_obj_remove_event_cb(btn_off_, on_off_clicked);
         if (btn_on_)
@@ -201,7 +225,10 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
         // Update event callback user_data to point to this instance
         if (arc_) {
             lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+            lv_obj_remove_event_cb(arc_, on_arc_released);
             lv_obj_add_event_cb(arc_, on_arc_value_changed, LV_EVENT_VALUE_CHANGED, this);
+            lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_RELEASED, this);
+            lv_obj_add_event_cb(arc_, on_arc_released, LV_EVENT_PRESS_LOST, this);
         }
         if (btn_off_) {
             lv_obj_remove_event_cb(btn_off_, on_off_clicked);
@@ -356,11 +383,56 @@ void FanDial::handle_arc_changed() {
     update_knob_glow(value);
     update_fan_animation(value);
 
+    // Coalesce mid-drag bursts: stash the latest value and (re)arm a one-shot
+    // 500 ms timer. Touch RELEASED flushes immediately, so dragging fast and
+    // letting go still feels responsive; the timer is the safety net for when
+    // the release event never arrives (e.g. AD5X touchscreen quirks).
+    pending_speed_ = value;
+    has_pending_send_ = true;
+    constexpr uint32_t kDebounceMs = 500;
+    if (debounce_timer_) {
+        lv_timer_reset(debounce_timer_);
+        lv_timer_set_period(debounce_timer_, kDebounceMs);
+    } else {
+        debounce_timer_ = lv_timer_create(on_debounce_timer, kDebounceMs, this);
+        lv_timer_set_repeat_count(debounce_timer_, 1);
+    }
+
+    spdlog::trace("[FanDial] '{}' arc changed to {}% (debounced)", name_, value);
+}
+
+void FanDial::handle_arc_released() {
+    // Touch released (or press lost) — flush whatever the user landed on now.
+    flush_pending_send();
+}
+
+void FanDial::cancel_pending_send() {
+    if (debounce_timer_) {
+        lv_timer_delete(debounce_timer_);
+        debounce_timer_ = nullptr;
+    }
+    has_pending_send_ = false;
+}
+
+void FanDial::flush_pending_send() {
+    if (!has_pending_send_)
+        return;
+    int value = pending_speed_;
+    cancel_pending_send();
     if (on_speed_changed_) {
         on_speed_changed_(fan_id_, value);
     }
+    spdlog::debug("[FanDial] '{}' flushed pending speed {}%", name_, value);
+}
 
-    spdlog::trace("[FanDial] '{}' arc changed to {}%", name_, value);
+void FanDial::on_debounce_timer(lv_timer_t* t) {
+    auto* self = static_cast<FanDial*>(lv_timer_get_user_data(t));
+    if (!self)
+        return;
+    // One-shot timer auto-deletes after firing; clear our pointer first so
+    // flush_pending_send → cancel_pending_send doesn't double-delete.
+    self->debounce_timer_ = nullptr;
+    self->flush_pending_send();
 }
 
 void FanDial::label_anim_exec_cb(void* var, int32_t value) {
@@ -507,6 +579,7 @@ void FanDial::update_fan_animation(int speed_pct) {
 // ============================================================================
 
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_arc_value_changed, handle_arc_changed)
+DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_arc_released, handle_arc_released)
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_off_clicked, handle_off_clicked)
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_on_clicked, handle_on_clicked)
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_icon_clicked, handle_icon_clicked)
