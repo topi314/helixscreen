@@ -939,9 +939,15 @@ extract_release() {
     # Config::init()'s restore_from_backup() safety net kicks in.
     # Without this, a failed restore leaves the tarball defaults in place,
     # which Config::init() loads without attempting backup recovery.
+    #
+    # Note: helixscreen.env is NOT removed here — there is no Config::init
+    # safety net for env files, and the restore step below uses `cp` which
+    # overwrites, so leaving the tarball's bundled copy in place gives both
+    # behaviors (user backup wins if present, bundled default stays otherwise).
+    # Removing it caused the env file to disappear permanently across upgrades
+    # when no backup existed (Pi user report 2026-05-13).
     if [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
         rm -f "${INSTALL_DIR}/config/settings.json" 2>/dev/null
-        rm -f "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null
     fi
 
     # _restore_config_file SRC DEST LABEL — copy a single config file with
