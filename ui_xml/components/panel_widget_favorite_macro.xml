@@ -5,6 +5,8 @@
   <view name="panel_widget_favorite_macro" extends="lv_obj"
         height="100%" flex_grow="1" scrollable="false"
         style_pad_all="0"
+        flex_flow="column" style_flex_main_place="center"
+        style_flex_cross_place="center" style_flex_track_place="center"
         clickable="true">
     <bind_state_if_not_eq subject="printer_connection_state" state="disabled" ref_value="2"/>
     <event_cb trigger="clicked" callback="favorite_macro_clicked_cb"/>
@@ -12,19 +14,19 @@
     <lv_obj name="fav_macro_badge" width="48" height="48"
             style_radius="24" style_bg_opa="40"
             style_bg_color="#secondary" style_border_width="0"
-            style_pad_all="0" align="center"
+            style_pad_all="0"
             clickable="false" scrollable="false" event_bubble="true">
       <icon name="fav_macro_icon" src="script_text" size="md" variant="secondary"
             clickable="false" event_bubble="true"
             align="center"/>
     </lv_obj>
-    <!-- Macro name label: overlay at bottom, truncated with ellipsis so long
-         user-configured names don't wrap and cut the badge. Hidden via the
-         global show_widget_labels setting, matching sibling widgets. -->
+    <!-- Macro name label: truncated with ellipsis so long user-configured names
+         don't wrap. Hidden via the global show_widget_labels setting; when
+         hidden, LV_OBJ_FLAG_HIDDEN also removes it from flex layout so the
+         badge re-centers in the cell. -->
     <text_tiny name="fav_macro_name" text="Configure" translation_tag="Configure"
               style_text_align="center" style_text_color="#text_muted"
               long_mode="dots" width="100%"
-              align="bottom_mid" y="-#space_md"
               clickable="false" event_bubble="true">
       <bind_flag_if_eq subject="show_widget_labels" flag="hidden" ref_value="0"/>
     </text_tiny>
