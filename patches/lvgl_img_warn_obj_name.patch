@@ -1,0 +1,28 @@
+diff --git a/src/widgets/image/lv_image.c b/src/widgets/image/lv_image.c
+index bb5ae693e..6e1293def 100644
+--- a/src/widgets/image/lv_image.c
++++ b/src/widgets/image/lv_image.c
+@@ -180,11 +180,21 @@ void lv_image_set_src(lv_obj_t * obj, const void * src)
+     lv_image_header_t header;
+     lv_result_t res = lv_image_decoder_get_info(src, &header);
+     if(res != LV_RESULT_OK) {
++        /* HelixScreen: include obj + parent name so telemetry can locate the
++         * broken image in the XML tree. Stock LVGL only logged the dsc pointer
++         * for variable sources, which is useless for postmortem analysis. */
++        const char * obj_name = lv_obj_get_name(obj);
++        if(obj_name == NULL) obj_name = "<unnamed>";
++        lv_obj_t * parent = lv_obj_get_parent(obj);
++        const char * parent_name = parent ? lv_obj_get_name(parent) : NULL;
++        if(parent_name == NULL) parent_name = "<unparented>";
+         if(src_type == LV_IMAGE_SRC_FILE) {
+-            LV_LOG_WARN("failed to get image info: %s", (const char *)src);
++            LV_LOG_WARN("failed to get image info: %s [obj=%s, parent=%s]",
++                        (const char *)src, obj_name, parent_name);
+         }
+         else {
+-            LV_LOG_WARN("failed to get image info: %p", src);
++            LV_LOG_WARN("failed to get image info: %p [obj=%s, parent=%s]",
++                        src, obj_name, parent_name);
+         }
+         reset_image_attributes(obj);
+         return;
