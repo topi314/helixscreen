@@ -35,7 +35,7 @@
             style_bg_opa="0%" style_border_width="0"
             flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
             clickable="false" scrollable="false">
-      <text_body name="queue_state_label" text="Queue: Ready" variant="muted"/>
+      <text_muted name="queue_state_label" text="Queue: Ready"/>
       <ui_button name="btn_toggle_queue" text="Pause" variant="primary"
                  height="#button_height_sm">
         <event_cb trigger="clicked" callback="on_jq_modal_toggle_queue"/>
@@ -54,7 +54,7 @@
     </lv_obj>
 
     <!-- Empty state -->
-    <text_body name="modal_empty_state" text="No jobs in queue" variant="muted"
+    <text_muted name="modal_empty_state" text="No jobs in queue"
                style_text_align="center" width="100%"
                style_pad_top="#space_md" style_pad_bottom="#space_md"
                translation_tag="No jobs in queue"

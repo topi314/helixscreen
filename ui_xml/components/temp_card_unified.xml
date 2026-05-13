@@ -25,7 +25,7 @@
                     bind_current="extruder_temp" bind_target="extruder_target" flex_grow="1"
                     clickable="false" event_bubble="true"/>
       <text_small name="nozzle_status" bind_text="print_nozzle_status"
-                  style_text_align="right" style_min_width="50" variant="muted"
+                  style_text_align="right" style_min_width="50"
                   clickable="false" event_bubble="true"/>
     </lv_obj>
 
@@ -45,7 +45,7 @@
                     bind_current="bed_temp" bind_target="bed_target" flex_grow="1"
                     clickable="false" event_bubble="true"/>
       <text_small name="bed_status" bind_text="print_bed_status"
-                  style_text_align="right" style_min_width="50" variant="muted"
+                  style_text_align="right" style_min_width="50"
                   clickable="false" event_bubble="true"/>
     </lv_obj>
 
@@ -67,7 +67,7 @@
                     bind_current="chamber_temp" bind_target="chamber_target" flex_grow="1"
                     clickable="false" event_bubble="true"/>
       <text_small name="chamber_status" bind_text="print_chamber_status"
-                  style_text_align="right" style_min_width="50" variant="muted"
+                  style_text_align="right" style_min_width="50"
                   clickable="false" event_bubble="true"/>
     </lv_obj>
 

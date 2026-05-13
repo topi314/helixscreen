@@ -234,10 +234,10 @@
                     style_flex_cross_place="center" scrollable="false">
               <text_small name="layer_progress_label"
                           text="Layer 0 / 0" bind_text="print_layer_text" style_text_align="left"/>
-              <text_small name="objects_count_label" text="" bind_text="print_objects_text" variant="muted">
+              <text_small name="objects_count_label" text="" bind_text="print_objects_text">
                 <bind_flag_if_eq subject="exclude_objects_available" flag="hidden" ref_value="0"/>
               </text_small>
-              <text_small name="filament_used_label" text="" bind_text="print_filament_used_text" variant="muted"/>
+              <text_small name="filament_used_label" text="" bind_text="print_filament_used_text"/>
             </lv_obj>
             <!-- File Name (shared subject from ActivePrintMediaManager) -->
             <text_body name="file_name"
@@ -252,10 +252,10 @@
                       style_pad_all="0" flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center"
                       scrollable="false">
                 <text_small name="print_elapsed" text="0m" bind_text="print_elapsed"/>
-                <text_small text=" elapsed · " translation_tag=" elapsed · " variant="muted"/>
+                <text_small text=" elapsed · " translation_tag=" elapsed · "/>
                 <text_small name="print_remaining" text="0m" bind_text="print_remaining"/>
-                <text_small text=" left" translation_tag=" left" variant="muted"/>
-                <text_small name="print_eta" text="" bind_text="print_eta" variant="muted"
+                <text_small text=" left" translation_tag=" left"/>
+                <text_small name="print_eta" text="" bind_text="print_eta"
                             style_pad_left="#space_xs"/>
               </lv_obj>
               <text_small name="print_percent" text="0%" bind_text="print_progress_text"/>
@@ -287,10 +287,10 @@
           <bind_flag_if_eq subject="ui_breakpoint" flag="hidden" ref_value="1"/>
           <bind_flag_if_eq subject="ui_breakpoint" flag="hidden" ref_value="2"/>
           <event_cb trigger="clicked" callback="on_print_status_tune"/>
-          <text_small text="Speed" variant="muted" clickable="false" event_bubble="true"/>
+          <text_small text="Speed" clickable="false" event_bubble="true"/>
           <text_small name="speed_value" bind_text="print_speed_text" clickable="false" event_bubble="true"/>
-          <text_small text=" · " variant="muted" clickable="false" event_bubble="true"/>
-          <text_small text="Flow" variant="muted" clickable="false" event_bubble="true"/>
+          <text_small text=" · " clickable="false" event_bubble="true"/>
+          <text_small text="Flow" clickable="false" event_bubble="true"/>
           <text_small name="flow_value" bind_text="print_flow_text" clickable="false" event_bubble="true"/>
         </lv_obj>
 

@@ -16,7 +16,7 @@
             style_pad_all="0" clickable="false" event_bubble="true">
       <icon src="progress_clock" size="#icon_size" variant="secondary" event_bubble="true"/>
       <text_heading text="Job Queue" flex_grow="1" translation_tag="Job Queue" event_bubble="true"/>
-      <text_small bind_text="job_queue_state_text" variant="muted" event_bubble="true"/>
+      <text_small bind_text="job_queue_state_text" event_bubble="true"/>
     </lv_obj>
 
     <!-- Summary text -->
@@ -33,7 +33,7 @@
     </lv_obj>
 
     <!-- Empty state (visibility controlled by rebuild_job_list) -->
-    <text_small name="jq_empty_state" text="No jobs in queue" variant="muted"
+    <text_small name="jq_empty_state" text="No jobs in queue"
                 style_text_align="center" width="100%" translation_tag="No jobs in queue"
                 hidden="true" event_bubble="true"/>
   </view>
