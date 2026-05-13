@@ -243,8 +243,6 @@ void SensorState::on_sensor_update(const nlohmann::json& msg) {
     }
 
     auto tok = lifetime_.token();
-    if (tok.expired())
-        return;
 
     for (auto it = params.begin(); it != params.end(); ++it) {
         const std::string& sensor_id = it.key();

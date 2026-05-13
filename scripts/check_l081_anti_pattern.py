@@ -180,33 +180,44 @@ def trailing_after_paren(line: str) -> str:
 DEFER_CALL_RE = re.compile(r'\b\w+\s*\.\s*defer(?:_critical)?\s*\(')
 
 
-def scan_file(path: Path) -> list[tuple[int, str]]:
-    """Return list of (line_no, snippet) for each suspect site in `path`.
+def scan_file(path: Path) -> list[tuple[int, str, str]]:
+    """Return list of (line_no, snippet, kind) for each suspect site in `path`.
 
-    Only the worst form of L081 is flagged: bg-thread `tok.expired()` followed
-    by direct `this`/member access on the bg thread BEFORE any `tok.defer(...)`.
-    The "guard-then-defer" form (`if (tok.expired()) return; tok.defer(...)`)
-    is intentionally NOT flagged here — it's suboptimal (still fires the
-    runtime warning) but not a UAF risk. Sweep those as follow-up.
+    Two patterns flagged (both fire the runtime `bg_tok_expired_check` warning
+    when reached on a bg thread):
+
+    - **UAF** (`kind="uaf"`): bg-thread `tok.expired()` followed by direct
+      `this`/member access BEFORE any `tok.defer(...)`. Real
+      use-after-free risk if the owner is destroyed between check and access.
+
+    - **REDUNDANT** (`kind="redundant"`): bg-thread `tok.expired()` immediately
+      followed by `tok.defer(...)` with no member access in between. Not a
+      UAF, but the bare check is dead code — `tok.defer()` already performs an
+      atomic expiration check on the main thread. The bare check trips the
+      runtime detector for nothing. Swept across the codebase 2026-05-13.
+
+    The `// L081_OK: <reason>` per-line opt-out silences both forms.
     """
     lines = file_lines(path)
     if not lines:
         return []
-    hits: list[tuple[int, str]] = []
+    hits: list[tuple[int, str, str]] = []
     for i, line in enumerate(lines):
         if OPT_OUT in line:
             continue
         m = EXPIRED_CHECK_RE.search(line)
         if not m:
             continue
-        # If the rest of the same line is just `return;`, trivially safe.
+        # If the rest of the same line is just `return;`, the lambda body
+        # is a no-op past the gate — neither UAF nor redundant-with-defer.
+        # The check might still trip the runtime detector, but the lint
+        # only flags forms that have a clearer fix path.
         same_line_after = trailing_after_paren(line)
         if same_line_after.startswith('return'):
             continue
-        # Look ahead a few lines INSIDE the lambda. If we hit a `.defer(`
-        # before any member access, the body is correctly marshalled — skip.
-        # Stop at obvious block-end markers too.
-        flagged = False
+        # Look ahead a few lines INSIDE the lambda for either a `.defer(`
+        # call (REDUNDANT) or a `this`/member access (UAF). Stop at obvious
+        # block-end markers so we don't bleed into the enclosing scope.
         for j in range(i + 1, min(i + 1 + LOOKAHEAD_LINES, len(lines))):
             look = lines[j]
             if OPT_OUT in look:
@@ -215,20 +226,15 @@ def scan_file(path: Path) -> list[tuple[int, str]]:
             if stripped == '':
                 continue
             if stripped in ('}', '});', '},', '});;'):
-                # End of immediate block / lambda. Stop scanning so we don't
-                # mistake outer-scope (main-thread) member access for bg-thread.
                 break
             if DEFER_CALL_RE.search(look):
-                # Body is being deferred — remaining lines are on main thread.
+                snippet = '\n  '.join(lines[i:j + 1])
+                hits.append((i + 1, snippet, 'redundant'))
                 break
             if THIS_ACCESS_RE.search(look):
                 snippet = '\n  '.join(lines[i:j + 1])
-                hits.append((i + 1, snippet))
-                flagged = True
+                hits.append((i + 1, snippet, 'uaf'))
                 break
-        # If we never hit defer or member access in the lookahead window,
-        # assume the body is harmless or out of our scan range.
-        _ = flagged
     return hits
 
 
@@ -466,13 +472,21 @@ def main() -> int:
     total = 0
     for f in mech_c_files:
         hits = scan_file(f)
-        for line_no, snippet in hits:
-            print(f"{f}:{line_no}: L081 Mechanism C: bg-thread tok.expired() "
-                  f"followed by `this`/member access")
+        for line_no, snippet, kind in hits:
+            if kind == 'uaf':
+                print(f"{f}:{line_no}: L081 Mechanism C: bg-thread tok.expired() "
+                      f"followed by `this`/member access")
+            else:  # 'redundant'
+                print(f"{f}:{line_no}: L081 Mechanism C (redundant guard): bg-thread "
+                      f"tok.expired() immediately before tok.defer() — bare check is "
+                      f"dead code and trips the runtime detector")
             for ln in snippet.split('\n'):
                 print(f"    {ln}")
-            print(f"    Fix: wrap body in `tok.defer(\"Class::method\", [this, ...]() {{ ... }})` "
-                  f"or use `lifetime_.bg_cb(\"Class::method\", [this](...) {{ ... }})`.")
+            print(f"    Fix: drop the bare `if (X.expired()) return;` line — "
+                  f"`X.defer(...)` already performs an atomic expiration check on the "
+                  f"main thread. For non-defer bodies, wrap the work in "
+                  f"`tok.defer(\"Class::method\", [this, ...]() {{ ... }})` or "
+                  f"`lifetime_.bg_cb(\"Class::method\", [this](...) {{ ... }})`.")
             print(f"    Opt-out (only if you really need bg-thread `expired()`): "
                   f"add `// {OPT_OUT}: <reason>` on the same line.")
             print()

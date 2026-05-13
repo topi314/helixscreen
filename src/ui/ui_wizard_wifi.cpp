@@ -531,26 +531,21 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
             spdlog::debug("[{}] Starting network scan", get_name());
             wifi_manager_->start_scan([this, token,
                                        weak_mgr](const std::vector<WiFiNetwork>& networks) {
-                if (token.expired()) {
-                    spdlog::debug("[{}] Lifetime expired, ignoring stale scan callback",
-                                  get_name());
-                    return;
-                }
-
-                // Check if manager still exists
-                if (weak_mgr.expired()) {
-                    spdlog::trace("[{}] WiFiManager destroyed, ignoring callback", get_name());
-                    return;
-                }
-
-                spdlog::info("[{}] Scan callback with {} networks", get_name(), networks.size());
-
                 // Marshal to UI thread via token.defer() — TOCTOU-safe lifetime
-                // guard + UI thread safety. Move the vector into the lambda so
-                // cached_networks_ is only written on the UI thread; otherwise
-                // a back-to-back scan callback on the BG thread could rewrite
-                // cached_networks_ while the UI thread is mid-sort (#769).
-                token.defer([this, scanned = networks]() mutable {
+                // guard + UI thread safety. The defer body's `this` access only
+                // happens on main after an atomic expiration check, so no bare
+                // bg-thread `token.expired()` gate is needed (detector hates it).
+                // Move the vector into the lambda so cached_networks_ is only
+                // written on the UI thread; back-to-back scan callbacks on the BG
+                // thread could otherwise rewrite cached_networks_ while the UI
+                // thread is mid-sort (#769).
+                token.defer([this, weak_mgr, scanned = networks]() mutable {
+                    if (weak_mgr.expired()) {
+                        spdlog::trace("[{}] WiFiManager destroyed, ignoring callback",
+                                      get_name());
+                        return;
+                    }
+                    spdlog::info("[{}] Scan callback with {} networks", get_name(), scanned.size());
                     cached_networks_ = std::move(scanned);
                     lv_subject_set_int(&wifi_scanning_, 0);
                     populate_network_list(cached_networks_);

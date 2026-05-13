@@ -546,11 +546,13 @@ void PrintStartEnhancer::list_backups(
     spdlog::debug("[PrintStartEnhancer] Listing backups");
     auto token = lifetime_.token();
 
-    // Wrap error callback with lifetime check
+    // Defer error callback to main so the lifetime check is atomic and
+    // on_error's captured caller state is only touched from the main thread.
     auto safe_error = [on_error, token](const MoonrakerError& err) {
-        if (!token.expired() && on_error) {
-            on_error(err);
-        }
+        token.defer("PrintStartEnhancer::list_backups_error", [on_error, err]() {
+            if (on_error)
+                on_error(err);
+        });
     };
 
     // List files in config root matching printer.cfg.backup.*
@@ -558,22 +560,22 @@ void PrintStartEnhancer::list_backups(
     api->files().list_files(
         "config", "", false,
         [on_complete, token](const std::vector<FileInfo>& file_infos) {
-            if (token.expired()) return;
-
-            std::vector<std::string> backups;
-            for (const auto& info : file_infos) {
-                if (info.filename.find("printer.cfg.backup.") == 0) {
-                    backups.push_back(info.filename);
+            // Defer to main: lifetime check is atomic there, and on_complete's
+            // own `this` capture (owned by the caller) is only safe on main.
+            token.defer("PrintStartEnhancer::list_backups",
+                        [on_complete, file_infos]() {
+                std::vector<std::string> backups;
+                for (const auto& info : file_infos) {
+                    if (info.filename.find("printer.cfg.backup.") == 0) {
+                        backups.push_back(info.filename);
+                    }
                 }
-            }
-
-            // Sort by name (which is timestamp-based, so newest first)
-            std::sort(backups.rbegin(), backups.rend());
-
-            spdlog::debug("[PrintStartEnhancer] Found {} backups", backups.size());
-            if (on_complete) {
-                on_complete(backups);
-            }
+                std::sort(backups.rbegin(), backups.rend());
+                spdlog::debug("[PrintStartEnhancer] Found {} backups", backups.size());
+                if (on_complete) {
+                    on_complete(backups);
+                }
+            });
         },
         safe_error);
 }
@@ -604,8 +606,13 @@ void PrintStartEnhancer::modify_and_upload_config(
         "config", source_file,
         [api, macro_name, source_file, enhancements, on_success, on_error,
          token](const std::string& content) {
-            if (token.expired()) return;
-
+            // Defer parse + caller-callback to main. Body is bounded (a few
+            // string ops on a config file); detector hates a bare bg-thread
+            // expired check, and on_success/on_error capture caller state
+            // that's only safe to touch from main.
+            token.defer("PrintStartEnhancer::modify_and_upload_config",
+                        [api, macro_name, source_file, enhancements, on_success, on_error,
+                         content]() {
             // Find the macro section
             std::string section_start = "[gcode_macro " + macro_name + "]";
 
@@ -703,6 +710,7 @@ void PrintStartEnhancer::modify_and_upload_config(
                     }
                 },
                 on_error);
+            });
         },
         on_error);
 }

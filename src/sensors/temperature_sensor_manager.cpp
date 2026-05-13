@@ -235,11 +235,9 @@ void TemperatureSensorManager::update_from_status(const nlohmann::json& status) 
                 spdlog::trace(
                     "[TemperatureSensorManager] async_mode: deferring via ui_queue_update");
                 auto tok = lifetime_.token();
-                if (!tok.expired()) {
-                    tok.defer("TemperatureSensorManager::update_subjects", [] {
-                        TemperatureSensorManager::instance().update_subjects_on_main_thread();
-                    });
-                }
+                tok.defer("TemperatureSensorManager::update_subjects", [] {
+                    TemperatureSensorManager::instance().update_subjects_on_main_thread();
+                });
             }
         }
     }

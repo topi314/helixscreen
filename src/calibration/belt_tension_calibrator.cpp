@@ -478,13 +478,10 @@ void BeltTensionCalibrator::set_strobe_frequency(float frequency_hz) {
 
     strobe_frequency_ = frequency_hz;
 
-    auto token = lifetime_.token();
     api_->advanced().set_strobe_frequency(
         hardware_.pwm_led_pin, frequency_hz,
         []() {},
-        [token](const MoonrakerError& err) {
-            if (token.expired())
-                return;
+        [](const MoonrakerError& err) {
             spdlog::warn("[BeltTension] Failed to update strobe frequency: {}", err.message);
         });
 }
@@ -501,13 +498,10 @@ void BeltTensionCalibrator::stop_strobe() {
     spdlog::info("[BeltTension] Stopping strobe");
 
     if (api_ && !hardware_.pwm_led_pin.empty()) {
-        auto token = lifetime_.token();
         api_->advanced().set_strobe_frequency(
             hardware_.pwm_led_pin, 0.0f, // 0 = turn off
             []() {},
-            [token](const MoonrakerError& err) {
-                if (token.expired())
-                    return;
+            [](const MoonrakerError& err) {
                 spdlog::warn("[BeltTension] Failed to stop strobe: {}", err.message);
             });
     }

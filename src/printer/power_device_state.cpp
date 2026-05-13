@@ -144,8 +144,6 @@ void PowerDeviceState::update_device_status(const std::string& device, const std
     spdlog::debug("[PowerDeviceState] update_device_status: device='{}' status='{}'", device,
                   status);
     auto tok = lifetime_.token();
-    if (tok.expired())
-        return;
     tok.defer("PowerDeviceState::update_device_status", [this, device, new_raw]() {
         auto it = devices_.find(device);
         if (it == devices_.end())
@@ -175,8 +173,6 @@ void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
     }
 
     auto tok = lifetime_.token();
-    if (tok.expired())
-        return;
 
     for (const auto& param : msg["params"]) {
         if (!param.is_object() || !param.contains("device") || !param.contains("status")) {
