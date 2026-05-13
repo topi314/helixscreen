@@ -146,6 +146,20 @@ def _create_extract_parser() -> argparse.ArgumentParser:
         default=None,
         help="XML directories to scan for runtime constant names",
     )
+    parser.add_argument(
+        "--theme-dirs",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="Theme JSON directories to scan for color/style tokens",
+    )
+    parser.add_argument(
+        "--cpp-const-dirs",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="C++ directories to scan recursively for lv_xml_register_const() calls",
+    )
     return parser
 
 
@@ -262,9 +276,11 @@ def _handle_extract_schema_cmd(argv: list[str]) -> int:
     try:
         # Try to import the extraction module
         from schema.extract_schema import (
+            extract_cpp_registered_constants,
             extract_cpp_widgets,
             extract_runtime_constants,
             extract_schema,
+            extract_theme_constants,
         )
     except ImportError:
         print(
@@ -278,10 +294,16 @@ def _handle_extract_schema_cmd(argv: list[str]) -> int:
         schema = extract_schema(source_dir)
         if args.cpp_src and args.cpp_src.is_dir():
             extract_cpp_widgets(args.cpp_src, schema)
+        all_consts: set[str] = set()
         if args.xml_roots:
-            runtime_consts = extract_runtime_constants(args.xml_roots)
-            if runtime_consts:
-                schema["runtime_constants"] = sorted(runtime_consts)
+            all_consts |= extract_runtime_constants(args.xml_roots)
+        const_dirs = args.cpp_const_dirs or ([args.cpp_src] if args.cpp_src else [])
+        if const_dirs:
+            all_consts |= extract_cpp_registered_constants(const_dirs)
+        if args.theme_dirs:
+            all_consts |= extract_theme_constants(args.theme_dirs)
+        if all_consts:
+            schema["runtime_constants"] = sorted(all_consts)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(schema, indent=2), encoding="utf-8")
         print(f"Schema extracted to {output_path}")

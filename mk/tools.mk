@@ -211,3 +211,41 @@ $(VALIDATE_ATTRS_LIB_OBJ): $(VALIDATE_ATTRS_LIB_SRC)
 validate-xml-attrs: $(VALIDATE_ATTRS_BIN)
 	$(ECHO) "$(CYAN)Usage: $(YELLOW)./$(VALIDATE_ATTRS_BIN) [--warn-only] [--verbose] [files...]$(RESET)"
 	$(ECHO) "$(CYAN)Run from repo root to validate XML attributes$(RESET)"
+
+# ==============================================================================
+# helix-xml-linter (Python)
+# ==============================================================================
+# Schema-driven Python linter for ui_xml/. Catches unknown attributes, invalid
+# enum values, bad style props, undefined cross-refs. Pure stdlib — no install.
+#
+# Targets:
+#   make lint-xml            — run linter against ui_xml/, errors-only (CI gate)
+#   make lint-xml-all        — run linter, include warnings (local dev)
+#   make regen-xml-schema    — regenerate tools/xml-linter/schema/schema.json
+#                              from lib/helix-xml/src/xml/ + src/ui/ + ui_xml/
+
+XML_LINTER_DIR   := $(TOOLS_DIR)/xml-linter
+XML_LINTER_PY    := PYTHONPATH=$(XML_LINTER_DIR)/src python3 -m helix_xml_linter.cli
+XML_LINTER_EXTRACT := PYTHONPATH=$(XML_LINTER_DIR)/src python3 $(XML_LINTER_DIR)/schema/extract_schema.py
+XML_LINTER_SCHEMA := $(XML_LINTER_DIR)/schema/schema.json
+
+.PHONY: lint-xml lint-xml-all regen-xml-schema
+
+lint-xml:
+	$(ECHO) "$(BLUE)[LINT]$(RESET) helix-xml-linter (errors only) on ui_xml/"
+	$(Q)$(XML_LINTER_PY) --schema $(XML_LINTER_SCHEMA) --severity error ui_xml/
+
+lint-xml-all:
+	$(ECHO) "$(BLUE)[LINT]$(RESET) helix-xml-linter (errors + warnings) on ui_xml/"
+	$(Q)$(XML_LINTER_PY) --schema $(XML_LINTER_SCHEMA) --severity info ui_xml/
+
+regen-xml-schema:
+	$(ECHO) "$(BLUE)[GEN]$(RESET) regenerating $(XML_LINTER_SCHEMA)"
+	$(Q)$(XML_LINTER_EXTRACT) \
+		lib/helix-xml/src/xml \
+		--cpp-src src/ui \
+		--cpp-const-dirs src \
+		--xml-roots ui_xml \
+		--theme-dirs assets/config/themes/defaults \
+		-o $(XML_LINTER_SCHEMA)
+	$(ECHO) "$(GREEN)✓ schema regenerated — commit $(XML_LINTER_SCHEMA) if it changed$(RESET)"

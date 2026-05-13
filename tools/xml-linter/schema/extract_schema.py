@@ -1257,10 +1257,16 @@ def _infer_cpp_attr_type(source: str, attr_name: str) -> dict[str, Any]:
 def extract_cpp_widgets(cpp_src_dir: Path, schema: dict[str, Any]) -> None:
     """Extract C++ widget definitions from src/ui/ directory.
 
-    Scans C++ files for lv_xml_register_widget() calls and attribute usage,
-    then adds the widgets to the schema.
+    Two passes:
+    1. Hand-curated entries in CPP_WIDGET_FILES / CPP_SIMPLE_WIDGETS — preserves
+       custom enums and extra_attrs that can't be inferred from .cpp alone.
+    2. Auto-discovery for any widget registered via lv_xml_register_widget() in
+       cpp_src_dir but not covered by pass 1. Inheritance is inferred from the
+       apply function name in the registration call. This means adding a new
+       widget no longer requires editing CPP_WIDGET_FILES to avoid
+       unknown-widget false positives.
     """
-    # Merge the two config dicts
+    # Pass 1: hand-curated configs
     all_configs: dict[str, dict[str, Any]] = {**CPP_WIDGET_FILES, **CPP_SIMPLE_WIDGETS}
 
     for config_key, config in all_configs.items():
@@ -1294,8 +1300,68 @@ def extract_cpp_widgets(cpp_src_dir: Path, schema: dict[str, Any]) -> None:
 
             schema["widgets"][widget_name] = widget_entry
 
+    # Pass 2: auto-discover anything not yet covered
+    _auto_discover_cpp_widgets(cpp_src_dir, schema)
+
     # Add C++ specific enums
     _add_cpp_enums(schema)
+
+
+# Apply-function names passed to lv_xml_register_widget(), mapped to the base
+# widget whose attributes the registered widget inherits. Unknown apply fns
+# default to lv_obj.
+_APPLY_FN_TO_INHERITS: dict[str, str] = {
+    "lv_xml_obj_apply": "lv_obj",
+    "lv_xml_label_apply": "lv_label",
+    "lv_xml_button_apply": "lv_button",
+    "lv_xml_image_apply": "lv_image",
+    "lv_xml_textarea_apply": "lv_textarea",
+    "lv_xml_bar_apply": "lv_bar",
+    "lv_xml_slider_apply": "lv_slider",
+    "lv_xml_arc_apply": "lv_arc",
+}
+
+
+_REGISTER_WIDGET_RE = re.compile(
+    r'lv_xml_register_widget\(\s*"([^"]+)"\s*,\s*\w+\s*,\s*(\w+)\s*\)'
+)
+
+
+def _auto_discover_cpp_widgets(cpp_src_dir: Path, schema: dict[str, Any]) -> None:
+    """Scan cpp_src_dir recursively for lv_xml_register_widget() calls.
+
+    Any widget not already present in schema['widgets'] gets added with
+    attributes parsed from its .cpp source and inheritance inferred from the
+    apply function name passed to register_widget().
+    """
+    for cpp_file in sorted(cpp_src_dir.rglob("*.cpp")):
+        try:
+            source = cpp_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        matches = list(_REGISTER_WIDGET_RE.finditer(source))
+        if not matches:
+            continue
+
+        # Parse attrs once per file — multiple widgets in one file share them
+        parsed_attrs = extract_cpp_widget_attrs(source)
+
+        for m in matches:
+            widget_name = m.group(1)
+            apply_fn = m.group(2)
+
+            if widget_name in schema["widgets"]:
+                continue  # Already curated or already discovered
+
+            inherits = _APPLY_FN_TO_INHERITS.get(apply_fn, "lv_obj")
+
+            schema["widgets"][widget_name] = {
+                "attributes": parsed_attrs,
+                "inherits": inherits,
+            }
+            if widget_name not in schema["registered_widgets"]:
+                schema["registered_widgets"].append(widget_name)
 
 
 def _add_cpp_enums(schema: dict[str, Any]) -> None:
@@ -1335,11 +1401,25 @@ _RESPONSIVE_SUFFIXES = [
 ]
 
 
-def extract_runtime_constants(xml_roots: list[Path]) -> set[str]:
-    """Scan XML files to collect all constant names from <consts> blocks.
+# Tags that define a named constant when they have a `name` attribute. Per the
+# helix-xml engine, these register a constant when they appear inside a
+# <consts> block — but helixscreen's theme_manager also walks every XML file at
+# startup and registers any <px>/<color>/<string> regardless of nesting, so we
+# treat all occurrences as constants.
+_CONST_TAGS = frozenset(
+    {"px", "color", "string", "int", "percentage", "font", "tiny_ttf", "bin"}
+)
 
-    Returns the set of constant names (both full names and base names
-    with responsive suffixes stripped).
+
+def extract_runtime_constants(xml_roots: list[Path]) -> set[str]:
+    """Scan XML files for every constant name the runtime can resolve.
+
+    Collects:
+    - Any <px>/<color>/<string>/<int>/<percentage>/<font>/<tiny_ttf>/<bin>
+      element with a `name` attribute, regardless of whether it sits inside
+      <consts> (helixscreen's theme_manager harvests these globally at startup).
+    - Base names with responsive suffixes stripped (e.g. `chip_height_small`
+      → also adds `chip_height`).
     """
     import xml.etree.ElementTree as ET
 
@@ -1354,16 +1434,16 @@ def extract_runtime_constants(xml_roots: list[Path]) -> set[str]:
             except ET.ParseError:
                 continue
             root = tree.getroot()
-            # Find <consts> blocks
-            for consts_elem in root.iter("consts"):
-                for child in consts_elem:
-                    name = child.get("name")
-                    if name:
-                        constants.add(name)
-                        # Also add base name (strip responsive suffix)
-                        base = _strip_responsive_suffix(name)
-                        if base != name:
-                            constants.add(base)
+            for elem in root.iter():
+                if elem.tag not in _CONST_TAGS:
+                    continue
+                name = elem.get("name")
+                if not name:
+                    continue
+                constants.add(name)
+                base = _strip_responsive_suffix(name)
+                if base != name:
+                    constants.add(base)
 
     return constants
 
@@ -1374,6 +1454,67 @@ def _strip_responsive_suffix(name: str) -> str:
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return name
+
+
+_CPP_REGISTER_CONST_RE = re.compile(
+    r'lv_xml_register_const\s*\(\s*[^,]+,\s*"([a-zA-Z_][a-zA-Z0-9_]*)"'
+)
+
+
+def extract_cpp_registered_constants(cpp_src_dirs: list[Path]) -> set[str]:
+    """Scan C++ source for every literal lv_xml_register_const() call site.
+
+    Catches constants the runtime registers via C++ (responsive spacing tokens
+    like nav_width / overlay_panel_width / hue_height) which would otherwise
+    be flagged as unknown-const-ref.
+    """
+    constants: set[str] = set()
+    for src_dir in cpp_src_dirs:
+        if not src_dir.is_dir():
+            continue
+        for path in src_dir.rglob("*.cpp"):
+            try:
+                source = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for m in _CPP_REGISTER_CONST_RE.finditer(source):
+                constants.add(m.group(1))
+    return constants
+
+
+def extract_theme_constants(theme_dirs: list[Path]) -> set[str]:
+    """Scan theme JSON files for color and style tokens.
+
+    Helixscreen theme JSONs have shape:
+        {"dark": {"primary": "#…", "card_bg": "#…", …},
+         "light": {…},
+         "border_width": 1, "shadow_opa": 0, …}
+
+    Both per-mode color keys and top-level scalar keys become runtime constants
+    via theme_manager_register_static_constants().
+    """
+    constants: set[str] = set()
+    for theme_dir in theme_dirs:
+        if not theme_dir.is_dir():
+            continue
+        for json_path in theme_dir.rglob("*.json"):
+            try:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    # "dark" / "light" — keys inside are color tokens
+                    for color_name in value:
+                        if isinstance(color_name, str):
+                            constants.add(color_name)
+                elif isinstance(value, (int, float, str)):
+                    # Top-level scalar — itself a token (e.g. border_width)
+                    if isinstance(key, str) and key != "name":
+                        constants.add(key)
+    return constants
 
 
 # ---------------------------------------------------------------------------
@@ -1405,6 +1546,20 @@ def main() -> None:
         help="XML directories to scan for runtime constant names.",
     )
     parser.add_argument(
+        "--theme-dirs",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="Theme JSON directories to scan for color/style tokens.",
+    )
+    parser.add_argument(
+        "--cpp-const-dirs",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="C++ directories to scan recursively for lv_xml_register_const() calls.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=Path,
@@ -1425,11 +1580,18 @@ def main() -> None:
     if args.cpp_src and args.cpp_src.is_dir():
         extract_cpp_widgets(args.cpp_src, schema)
 
-    # Extract runtime constants from XML files if specified
+    # Aggregate runtime constants from every source the runtime might register from
+    all_runtime_consts: set[str] = set()
     if args.xml_roots:
-        runtime_consts = extract_runtime_constants(args.xml_roots)
-        if runtime_consts:
-            schema["runtime_constants"] = sorted(runtime_consts)
+        all_runtime_consts |= extract_runtime_constants(args.xml_roots)
+    # Default: scan the cpp-src dir for register_const() if --cpp-const-dirs not given
+    const_dirs = args.cpp_const_dirs or ([args.cpp_src] if args.cpp_src else [])
+    if const_dirs:
+        all_runtime_consts |= extract_cpp_registered_constants(const_dirs)
+    if args.theme_dirs:
+        all_runtime_consts |= extract_theme_constants(args.theme_dirs)
+    if all_runtime_consts:
+        schema["runtime_constants"] = sorted(all_runtime_consts)
 
     # Summary
     widget_count = len(schema["widgets"])
