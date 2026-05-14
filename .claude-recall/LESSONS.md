@@ -20,8 +20,8 @@
 - **Uses**: 10 | **Velocity**: 0.09375 | **Learned**: 2025-12-14 | **Last**: 2026-04-15 | **Category**: gotcha | **Type**: constraint
 > No mutex locks in dtors during static destruction — other objects may already be gone, deadlocks/crashes on exit.
 
-### [L014] [***--|**---] Register all XML components
-- **Uses**: 40 | **Velocity**: 0.625 | **Learned**: 2025-12-14 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
+### [L014] [***--|***--] Register all XML components
+- **Uses**: 41 | **Velocity**: 1.625 | **Learned**: 2025-12-14 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > New XML components need `lv_xml_component_register_from_file()` in main.cpp. Forgetting = silent failure.
 
 ### [L020] [***--|*----] ObserverGuard for cleanup
@@ -37,7 +37,7 @@
 > Text-only buttons: `align="center"` on child. Icon+text with `flex_flow="row"` need all three: `style_flex_main_place="center"` (horiz), `style_flex_cross_place="center"` (cross), `style_flex_track_place="center"` (row position). Without track_place content sits at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 10.031484375 | **Learned**: 2025-12-27 | **Last**: 2026-05-12 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 12.031484375 | **Learned**: 2025-12-27 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > ui_xml/*.xml loads at RUNTIME — never rebuild for XML-only changes (layout, styling, bindings, event cbs). Just relaunch. Rebuild only for C++ changes.
 
 ### [L039] [**---|*----] Unique XML callback names
@@ -60,16 +60,16 @@
 - **Uses**: 1 | **Velocity**: 0.125 | **Learned**: 2026-01-06 | **Last**: 2026-04-20 | **Category**: correction | **Type**: constraint
 > An XML `<subjects>` declaration shadows a same-named C++ subject (UI_SUBJECT_INIT_AND_REGISTER_*) — the local one wins, bindings stick at default. Don't declare XML subjects for values C++ owns.
 
-### [L048] [*----|**---] Async tests need queue drain
-- **Uses**: 4 | **Velocity**: 0.625 | **Learned**: 2026-01-08 | **Last**: 2026-05-11 | **Category**: pattern | **Type**: constraint
+### [L048] [**---|***--] Async tests need queue drain
+- **Uses**: 5 | **Velocity**: 1.625 | **Learned**: 2026-01-08 | **Last**: 2026-05-14 | **Category**: pattern | **Type**: constraint
 > Tests calling async setters (helix::async::invoke / ui_queue_update) must `UpdateQueue::instance().drain_queue_for_testing()` before assertions, else the update is still queued and the subject reads stale. Pattern: test_printer_state.cpp.
 
 ### [L051] [*----|*----] LVGL timer lifetime safety
 - **Uses**: 1 | **Velocity**: 0.0625 | **Learned**: 2026-01-08 | **Last**: 2026-03-28 | **Category**: gotcha | **Type**: constraint
 > `lv_timer_create` cb fires after the owning object may be destroyed. Don't pass raw `this` as user_data. Use `AsyncLifetimeGuard::token()` (CLAUDE.md § Threading): capture `tok` in the timer cb, call `tok.defer([this](){ ... })` so the body only runs if `this` is still alive. Older `alive_guard` / `weak_ptr<bool>` patterns are deprecated.
 
-### [L052] [***--|***--] Tag thread/network tests as [slow] to prevent hangs
-- **Uses**: 25 | **Velocity**: 1 | **Learned**: 2026-01-09 | **Last**: 2026-04-18 | **Category**: gotcha | **Type**: constraint
+### [L052] [***--|****-] Tag thread/network tests as [slow] to prevent hangs
+- **Uses**: 26 | **Velocity**: 2 | **Learned**: 2026-01-09 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > Tests using `std::thread` / `std::condition_variable` / `hv::EventLoop` MUST be tagged `[slow]` — `make test-run` filters `~[.] ~[slow]`, so untagged thread tests deadlock parallel shards. Concurrency, not speed. Known offenders: MoonrakerRobustnessFixture, MoonrakerClientSecurityFixture, NewFeaturesTestFixture, EventTestFixture, BedMeshRenderThread tests. When tests hang, check untagged thread tests FIRST.
 
 ### [L053] [*----|*----] Reset static fixture state in destructor
@@ -80,8 +80,8 @@
 - **Uses**: 3 | **Velocity**: 0.0625 | **Learned**: 2026-01-10 | **Last**: 2026-02-25 | **Category**: gotcha | **Type**: constraint
 > Singleton queues (UpdateQueue) MUST clear pending callbacks in shutdown(), not just null the timer — stale entries fire on next init() against destroyed pointers → UAF. Pattern: `std::queue<T>().swap(pending_)`, then null the timer.
 
-### [L055] [*----|*----] LVGL pad_all excludes flex gaps
-- **Uses**: 4 | **Velocity**: 0.1875 | **Learned**: 2026-01-10 | **Last**: 2026-03-28 | **Category**: gotcha | **Type**: constraint
+### [L055] [**---|***--] LVGL pad_all excludes flex gaps
+- **Uses**: 5 | **Velocity**: 1.1875 | **Learned**: 2026-01-10 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > `style_pad_all` only sets edge padding (top/bottom/left/right), NOT inter-item spacing. For zero-gap flex layouts, also need `style_pad_row="0"` (column) or `style_pad_column="0"` (row), or `style_pad_gap="0"` for both.
 
 ### [L056] [*----|-----] lv_subject_t no shallow copy
@@ -102,7 +102,7 @@
 > NEVER `lv_async_call(..., lv_obj_delete)` — uncancellable. NEVER `safe_delete()` inside `queue_update`/`async_call` lambdas — multiple sync deletes in one batch corrupt LVGL's event list (#356). ALWAYS cancel anims first ([L068]).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 10.4378125 | **Learned**: 2026-02-01 | **Last**: 2026-05-13 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 16.4378125 | **Learned**: 2026-02-01 | **Last**: 2026-05-14 | **Category**: correction | **Type**: constraint
 > Don't fake automation with timed delays. Pattern:
 > 1. `Bash` with `run_in_background: true`: `./build/bin/helix-screen --test -vv -p panel_name 2>&1 | tee /tmp/test.log` — NOT shell `&` or `timeout`.
 > 2. Tell user exactly what to click.
@@ -122,8 +122,8 @@
 - **Uses**: 27 | **Velocity**: 1.8125 | **Learned**: 2026-02-10 | **Last**: 2026-05-11 | **Category**: i18n
 > After syncing translation YAMLs, also stage the compiled artifacts: `src/generated/lv_i18n_translations.{c,h}` and `ui_xml/translations/translations.xml`. Tracked (not gitignored) for cross-compile, regenerated by build, but not auto-staged.
 
-### [L065] [**---|**---] No test-only methods on production classes
-- **Uses**: 6 | **Velocity**: 0.625 | **Learned**: 2026-02-11 | **Last**: 2026-05-04 | **Category**: patterns
+### [L065] [**---|***--] No test-only methods on production classes
+- **Uses**: 7 | **Velocity**: 1.625 | **Learned**: 2026-02-11 | **Last**: 2026-05-14 | **Category**: patterns
 > WRONG: public `reset_for_testing()` / `clear_*_for_testing()` on production classes — pollutes API, ships test code to users, creates coupling. Audit found 40+ instances (AbortManager 15 callback simulators, sensor managers, printer state). RIGHT: friend pattern — `friend class FooTestAccess;` in private section, define `FooTestAccess` in the test .cpp with statics that touch privates. Eg `FilamentSensorManagerTestAccess::reset(mgr)` instead of `mgr.reset_for_testing()`. For state-machine cbs (AbortManager) prefer a testable interface/mock over exposing every transition.
 
 ### [L066] [**---|*----] LVGL flex_grow row_wrap trick
@@ -187,7 +187,7 @@
 > Before asking user to interact on-device, verify in one pass: (1) NEW binary running (PID start time / version in log), (2) logs land where you expect (journalctl/file/console), (3) required state on (telemetry, debug level in helixscreen.env), (4) logs reachable via SSH. Each failed round-trip burns user patience. Pi: systemctl → journalctl; `deploy-pi-fg` uses `ssh -t` (console only); nohup drops output. Production log capture: systemd + journalctl.
 
 ### [L081] [***--|****-] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 17 | **Velocity**: 2.8125 | **Learned**: 2026-04-18 | **Last**: 2026-05-11 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 18 | **Velocity**: 3.8125 | **Learned**: 2026-04-18 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / our `helix::ui::async_call` are thin wrappers over `queue_update` — the cb fires in the next `process_pending` tick, still inside a UpdateQueue batch with other sync deletions. AsyncLifetimeGuard's gen counter only protects `this`, not LVGL event-list. Any comment claiming "defer is outside process_pending" is wrong — fix it. Observer cbs (`observe_int_sync`, `observe_string`) are also queued since #82, same batch. BANNED inside any queued/deferred cb: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's async list, outside our batch. Multiple sync deletes in one batch → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). CLAUDE.md § "No sync widget deletion in queued callbacks", `include/ui_utils.h`.
 
 ### [L082] [*----|*----] Percent size inside LV_SIZE_CONTENT parent collapses to 0
@@ -202,8 +202,8 @@
 > **Member `std::thread` joined in dtor** (WifiBackendNetworkManager::connect_thread_, CameraStream::stream_thread_) is fine — the issue is one-shot detached spawns under load.
 > Before adding a new `std::thread`, check if HttpExecutor or another managed pool already owns that domain.
 
-### [L084] [*----|*----] SubjectLifetime must be a member, never a local
-- **Uses**: 2 | **Velocity**: 0.375 | **Learned**: 2026-04-22 | **Last**: 2026-05-04 | **Category**: gotcha | **Type**: constraint
+### [L084] [*----|****-] SubjectLifetime must be a member, never a local
+- **Uses**: 4 | **Velocity**: 2.375 | **Learned**: 2026-04-22 | **Last**: 2026-05-14 | **Category**: gotcha | **Type**: constraint
 > Observing a dynamic subject (per-fan/per-sensor/per-extruder): the `SubjectLifetime` token MUST outlive the observer → it MUST be a member, never a local. A local `SubjectLifetime lt;` paired with a member `ObserverGuard` is a UAF: when `lt` falls off the stack, the observer's weak_ptr is dead but the observer is still registered against the (possibly recreated) subject. Companion to [L077].
 > Rule: every member `ObserverGuard` on a dynamic subject needs a paired member `SubjectLifetime` next to it in the header. Same for vector members.
 > Per-item collections (carousel pages, slot lists) → parallel vectors, kept in lockstep, lifetimes cleared BEFORE observers (#705):
@@ -212,8 +212,8 @@
 > Read-only one-shot reads can use a local — but prefer the no-lifetime overload (`tsm.get_temp_subject(name)`).
 > Reference: `src/ui/panel_widgets/fan_widget.cpp:218` (`speed_lifetime_`). Audit 2026-04-22 cleaned thermistor_widget.cpp; codebase clean.
 
-### [L085] [*----|-----] release() is NEVER the default — reset() is
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: correction | **Type**: constraint
+### [L085] [*----|***--] release() is NEVER the default — reset() is
+- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-04-22 | **Last**: 2026-05-14 | **Category**: correction | **Type**: constraint
 > New ObserverGuard cleanup: always `obs.reset()`. `release()` is NOT "safer" — it skips `lv_observer_remove()`, leaks the LambdaObserverContext, leaves a zombie observer whose deferred cb fires on stale `this`. `reset()` already handles shutdown via `s_subjects_valid` + `lv_is_initialized()`, safe even mid-`lv_deinit`.
 > Only correct uses of `release()`: (a) `StaticSubjectRegistry::register_deinit()` cbs (pre-`lv_deinit`), (b) explicit shutdown paths where the subject is already destroyed. Widget `LV_EVENT_DELETE` during normal runtime is NOT one of those — use `reset()`.
 > If you reason "release() seems safer because it skips the observer-remove" — that's the misconception that caused 17× #579. The remove call IS the point; skipping it leaks context and corrupts rendering state. Companion to [L073]. Audit 2026-04-22 fixed `ui_ams_current_tool.cpp`, `ui_heating_animator.cpp`, `ui_ams_mini_status.cpp`.

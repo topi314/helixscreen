@@ -3,15 +3,21 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <component>
   <consts>
-    <!-- Stroke thickness only — responsive per breakpoint. The arc's overall
-         diameter is flex-driven (sized by its column inside the main row),
-         not a fixed const. -->
+    <!-- Stroke thickness — responsive per breakpoint -->
     <px name="progress_arc_thickness_tiny"    value="3"/>
     <px name="progress_arc_thickness_small"   value="3"/>
     <px name="progress_arc_thickness_medium"  value="4"/>
     <px name="progress_arc_thickness_large"   value="4"/>
     <px name="progress_arc_thickness_xlarge"  value="5"/>
     <px name="progress_arc_thickness_xxlarge" value="6"/>
+    <!-- Diameter — derived from the existing responsive button-height token
+         set, doubled. Stays square in every breakpoint without bespoke values. -->
+    <px name="progress_arc_size_tiny"    value="56"/>
+    <px name="progress_arc_size_small"   value="64"/>
+    <px name="progress_arc_size_medium"  value="72"/>
+    <px name="progress_arc_size_large"   value="80"/>
+    <px name="progress_arc_size_xlarge"  value="92"/>
+    <px name="progress_arc_size_xxlarge" value="108"/>
   </consts>
   <view name="print_status_detailed_active" extends="lv_obj"
         width="100%" height="100%" style_pad_all="0" style_pad_gap="#space_xs"
@@ -28,27 +34,25 @@
               flex_grow="2" height="100%" style_pad_all="0" flex_flow="column"
               style_flex_main_place="center" style_flex_cross_place="center"
               style_pad_gap="#space_xxs" scrollable="false" clickable="false" event_bubble="true">
-        <!-- Arc container: fills the center column; arc + % label both center-aligned inside.
-             Container is flex-sized so arc diameter scales with available space (no fixed px). -->
-        <lv_obj name="detailed_arc_container"
-                width="100%" flex_grow="1" style_pad_all="0"
-                scrollable="false" clickable="false" event_bubble="true">
-          <lv_arc name="detailed_progress_arc"
-                  align="center" width="100%" height="100%" style_pad_all="0"
-                  min_value="0" max_value="100" value="0"
-                  bg_start_angle="135" bg_end_angle="45"
-                  rotation="0" mode="normal"
-                  style_arc_color="#border" style_arc_color-indicator="#primary"
-                  style_arc_width="#progress_arc_thickness"
-                  style_arc_width-indicator="#progress_arc_thickness"
-                  style_arc_rounded="true" style_arc_rounded-indicator="true"
-                  style_bg_opa="0" style_border_width="0"
-                  style_bg_opa-knob="0" style_shadow_width-knob="0"
-                  style_outline_width-knob="0" style_pad_all-knob="0"
-                  clickable="false" event_bubble="true"/>
+        <!-- Arc is a fixed responsive square so it's truly circular. The % label
+             is a CHILD of the arc, so LVGL auto-centers it inside the arc's bounds
+             (no flex stacking, real overlap). The column's flex_main_place=center
+             vertically centers this whole block within the available column height. -->
+        <lv_arc name="detailed_progress_arc"
+                width="#progress_arc_size" height="#progress_arc_size" style_pad_all="0"
+                min_value="0" max_value="100" value="0"
+                bg_start_angle="135" bg_end_angle="45"
+                rotation="0" mode="normal"
+                style_arc_color="#border" style_arc_color-indicator="#primary"
+                style_arc_width="4" style_arc_width-indicator="4"
+                style_arc_rounded="true" style_arc_rounded-indicator="true"
+                style_bg_opa="0" style_border_width="0"
+                style_bg_opa-knob="0" style_shadow_width-knob="0"
+                style_outline_width-knob="0" style_pad_all-knob="0"
+                clickable="false" event_bubble="true">
           <text_body name="detailed_progress_pct" align="center"
                      bind_text="print_status_progress_pct" clickable="false" event_bubble="true"/>
-        </lv_obj>
+        </lv_arc>
         <!-- Temps under arc/data when colspan>=3 -->
         <lv_obj name="detailed_temp_row_under_data"
                 width="100%" height="content" style_pad_all="0" flex_flow="row"
