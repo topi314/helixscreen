@@ -162,7 +162,7 @@ void PrinterPrintState::reset_for_new_print() {
     slicer_progress_ = 0.0;
     slicer_progress_active_ = false;
     lv_subject_copy_string(&display_message_, "");
-    lv_subject_set_int(&display_message_visible_, 0);
+    update_display_message_visible();
     lv_subject_copy_string(&print_message_, "");
     lv_subject_set_int(&print_duration_, 0);
     lv_subject_set_int(&print_elapsed_, 0);
@@ -256,7 +256,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                     slicer_progress_ = 0.0;
                     slicer_progress_active_ = false;
                     lv_subject_copy_string(&display_message_, "");
-                    lv_subject_set_int(&display_message_visible_, 0);
+                    update_display_message_visible();
                     lv_subject_copy_string(&print_message_, "");
                 }
             }
@@ -297,6 +297,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                                            static_cast<int>(PrintStartPhase::IDLE));
                         lv_subject_copy_string(&print_start_message_, "");
                         lv_subject_set_int(&print_start_progress_, 0);
+                        update_display_message_visible();
                     }
                 }
             }
@@ -466,23 +467,18 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             }
         }
         if (display.contains("message")) {
-            bool has_message = false;
             if (display["message"].is_string()) {
                 const auto& msg = display["message"].get_ref<const std::string&>();
                 if (strcmp(lv_subject_get_string(&display_message_), msg.c_str()) != 0) {
                     lv_subject_copy_string(&display_message_, msg.c_str());
                 }
-                has_message = !msg.empty();
             } else {
                 // null or non-string — clear the message
                 if (strcmp(lv_subject_get_string(&display_message_), "") != 0) {
                     lv_subject_copy_string(&display_message_, "");
                 }
             }
-            int visible = has_message ? 1 : 0;
-            if (lv_subject_get_int(&display_message_visible_) != visible) {
-                lv_subject_set_int(&display_message_visible_, visible);
-            }
+            update_display_message_visible();
         }
     }
 
@@ -647,6 +643,20 @@ void PrinterPrintState::update_print_show_progress() {
     }
 }
 
+void PrinterPrintState::update_display_message_visible() {
+    // Suppress the standalone display_message row during pre-print preparation:
+    // print_start_collector already pipes display_status.message into
+    // print_start_message, so showing it again on the print-status widget would
+    // duplicate the line (e.g. two "Heating..." rows on the preparing card).
+    bool has_message = strcmp(lv_subject_get_string(&display_message_), "") != 0;
+    bool is_preparing =
+        lv_subject_get_int(&print_start_phase_) != static_cast<int>(PrintStartPhase::IDLE);
+    int new_value = (has_message && !is_preparing) ? 1 : 0;
+    if (lv_subject_get_int(&display_message_visible_) != new_value) {
+        lv_subject_set_int(&display_message_visible_, new_value);
+    }
+}
+
 // ============================================================================
 // Setters
 // ============================================================================
@@ -742,6 +752,7 @@ void PrinterPrintState::set_print_start_state(PrintStartPhase phase, const char*
         }
         if (lv_subject_get_int(&print_start_phase_) != static_cast<int>(phase)) {
             lv_subject_set_int(&print_start_phase_, static_cast<int>(phase));
+            update_display_message_visible();
         }
         if (!msg.empty() &&
             strcmp(lv_subject_get_string(&print_start_message_), msg.c_str()) != 0) {
@@ -764,6 +775,7 @@ void PrinterPrintState::reset_print_start_state() {
             lv_subject_copy_string(&print_start_message_, "");
             lv_subject_set_int(&print_start_progress_, 0);
             update_print_show_progress();
+            update_display_message_visible();
         }
     });
 }

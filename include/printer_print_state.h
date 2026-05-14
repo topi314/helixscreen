@@ -382,6 +382,16 @@ class PrinterPrintState {
     void update_print_show_progress();
 
     /**
+     * @brief Update display_message_visible_ derived subject
+     *
+     * Visible when display_message is non-empty AND print_start_phase==IDLE. During
+     * pre-print, print_start_collector already pipes display_status.message into
+     * print_start_message, so showing display_message would duplicate it on the
+     * print-status widget.
+     */
+    void update_display_message_visible();
+
+    /**
      * @brief Internal setter for print-in-progress flag
      *
      * Called via helix::async::invoke from set_print_in_progress().

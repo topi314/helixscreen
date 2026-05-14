@@ -4,7 +4,10 @@
 <component>
   <!-- overlay_bg and overlay_text are theme-aware pairs defined in globals.xml -->
   <consts>
-    <!-- metadata_clip_height: Clip container for print status metadata overlay -->
+    <!-- metadata_clip_height: pad_bottom reservation used by the terminal-state -->
+    <!-- overlays (preparing/complete/cancelled/error/paused) so their badges don't -->
+    <!-- collide with the metadata strip. The clip/overlay themselves are now -->
+    <!-- height="content" and grow/shrink with display_message visibility. -->
     <px name="metadata_clip_height_micro" value="72"/>
     <px name="metadata_clip_height_tiny" value="82"/>
     <px name="metadata_clip_height_small" value="95"/>
@@ -12,12 +15,6 @@
     <px name="metadata_clip_height_large" value="113"/>
     <!-- Thumbnail vertical offset to clear metadata overlay at bottom -->
     <percentage name="thumbnail_offset_y" value="-15%"/>
-    <!-- metadata_overlay_height: Inner metadata overlay (slightly taller than clip) -->
-    <px name="metadata_overlay_height_micro" value="78"/>
-    <px name="metadata_overlay_height_tiny" value="88"/>
-    <px name="metadata_overlay_height_small" value="101"/>
-    <px name="metadata_overlay_height_medium" value="111"/>
-    <px name="metadata_overlay_height_large" value="119"/>
   </consts>
   <styles>
     <!-- Fully transparent but still takes up layout space -->
@@ -214,13 +211,14 @@
           </ui_button>
         </lv_obj>
 
-        <!-- Metadata container - fixed height at bottom, overlaying thumbnail -->
+        <!-- Metadata container - content-sized at bottom, overlaying thumbnail. -->
+        <!-- Grows when the optional M117 (display_message) row becomes visible. -->
         <lv_obj name="metadata_clip"
-                width="100%" height="#metadata_clip_height" style_radius="0" style_pad_all="0" align="bottom_mid"
+                width="100%" height="content" style_radius="0" style_pad_all="0" align="bottom_mid"
                 scrollable="false">
           <!-- Inner overlay with semi-transparent background and rounded corners -->
           <lv_obj name="metadata_overlay"
-                  width="100%" height="#metadata_overlay_height" align="bottom_mid" style_bg_opa="160"
+                  width="100%" height="content" align="bottom_mid" style_bg_opa="160"
                   style_radius="#border_radius" style_pad_left="#space_sm" style_pad_right="#space_sm"
                   style_pad_top="#space_md" style_pad_bottom="#space_md" style_pad_gap="#space_xs" flex_flow="column"
                   scrollable="false">
@@ -260,7 +258,16 @@
               </lv_obj>
               <text_small name="print_percent" text="0%" bind_text="print_progress_text"/>
             </lv_obj>
-
+            <!-- Klipper display_status.message (M117) — collapses to zero height when -->
+            <!-- empty, so the overlay reads as the existing four rows. During pre-print -->
+            <!-- preparation this row stays hidden (display_message_visible is 0 in that -->
+            <!-- phase) because print_start_collector already pipes M117 into -->
+            <!-- print_start_message on the preparing_overlay above. -->
+            <text_small name="display_message"
+                        width="100%" bind_text="display_message" style_text_align="left"
+                        long_mode="scroll_circular" style_text_color="#text_muted" hidden="true">
+              <bind_flag_if_eq subject="display_message_visible" flag="hidden" ref_value="0"/>
+            </text_small>
           </lv_obj>
           <!-- metadata_overlay -->
         </lv_obj>
