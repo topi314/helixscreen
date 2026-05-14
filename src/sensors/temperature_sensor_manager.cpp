@@ -410,6 +410,24 @@ void TemperatureSensorManager::set_sensor_role(const std::string& klipper_name,
 void TemperatureSensorManager::apply_chamber_sensor_override(const std::string& klipper_name) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
+    // Early-out when the named sensor is already the sole CHAMBER — avoids
+    // demoting + repromoting the same sensor and the accompanying log line on
+    // every reconnect for printers whose chamber sensor matches the
+    // auto-categorizer (e.g. literally named "chamber").
+    if (!klipper_name.empty()) {
+        bool needs_change = false;
+        for (const auto& config : sensors_) {
+            bool is_target = (config.klipper_name == klipper_name);
+            bool is_chamber = (config.role == TemperatureSensorRole::CHAMBER);
+            if (is_target != is_chamber) {
+                needs_change = true;
+                break;
+            }
+        }
+        if (!needs_change)
+            return;
+    }
+
     // Demote any existing CHAMBER sensor back to an inferred role
     for (auto& config : sensors_) {
         if (config.role == TemperatureSensorRole::CHAMBER) {
