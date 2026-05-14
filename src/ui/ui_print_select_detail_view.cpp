@@ -217,6 +217,18 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
 
         // Start paused — will resume in on_activate()
         ui_gcode_viewer_set_paused(gcode_viewer_, true);
+
+        // Memory-pressure responder calls ui_gcode_viewer_clear_all_active();
+        // flip the mode subject back to thumbnail so the user sees the slicer
+        // preview rather than a transparent rectangle.
+        ui_gcode_viewer_set_clear_callback(
+            gcode_viewer_,
+            [](lv_obj_t*, void* ud) {
+                auto* self = static_cast<PrintSelectDetailView*>(ud);
+                self->show_gcode_viewer(false);
+                self->gcode_loaded_ = false;
+            },
+            this);
     }
 
     // The pre-print option rows are populated dynamically from the active

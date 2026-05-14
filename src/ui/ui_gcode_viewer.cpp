@@ -231,6 +231,8 @@ class GCodeViewerState {
     void* object_long_press_user_data{nullptr};
     gcode_viewer_load_callback_t load_callback{nullptr};
     void* load_callback_user_data{nullptr};
+    ui_gcode_viewer_clear_cb_t clear_callback{nullptr};
+    void* clear_callback_user_data{nullptr};
 
     // Long-press state
     lv_timer_t* long_press_timer_{nullptr};
@@ -400,6 +402,17 @@ class GCodeViewerState {
 using gcode_viewer_state_t = GCodeViewerState;
 
 // Helper: Get widget state from object
+/// Registry of live gcode viewer widgets. Populated on create, drained on
+/// delete. Used by ui_gcode_viewer_clear_all_active() for the memory-pressure
+/// fallback (print_status + print_select_detail) so we can release every
+/// ParsedGCodeFile + GPU buffer system-wide in one call without having to
+/// know which panels currently hold a viewer. Main-thread-only access (LVGL
+/// widget lifecycle is main-thread by contract); no mutex needed.
+static std::vector<lv_obj_t*>& active_viewers() {
+    static std::vector<lv_obj_t*> instances;
+    return instances;
+}
+
 static gcode_viewer_state_t* get_state(lv_obj_t* obj) {
     return static_cast<gcode_viewer_state_t*>(lv_obj_get_user_data(obj));
 }
@@ -1090,6 +1103,10 @@ static void gcode_viewer_delete_cb(lv_event_t* e) {
     auto* state = static_cast<gcode_viewer_state_t*>(lv_obj_get_user_data(obj));
     lv_obj_set_user_data(obj, nullptr);
 
+    // Drain from active-viewers registry (mirror of the push in _create).
+    auto& reg = active_viewers();
+    reg.erase(std::remove(reg.begin(), reg.end(), obj), reg.end());
+
     if (state) {
         // Delete timers now while LVGL is guaranteed alive (the destructor's
         // lv_is_initialized() guard might skip this during shutdown)
@@ -1155,6 +1172,9 @@ lv_obj_t* ui_gcode_viewer_create(lv_obj_t* parent) {
     lv_obj_add_event_cb(obj, gcode_viewer_gesture_cb, LV_EVENT_GESTURE, nullptr);
 #endif
     lv_obj_add_event_cb(obj, gcode_viewer_delete_cb, LV_EVENT_DELETE, nullptr);
+
+    // Register in active-viewers list (drained in gcode_viewer_delete_cb).
+    active_viewers().push_back(obj);
 
     // Initialize viewport size based on current widget dimensions
     // This ensures correct aspect ratio from the start
@@ -1412,6 +1432,8 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
 
                     st->viewer_state = GcodeViewerState::Loaded;
                     st->first_render = false;
+                    helix::telemetry_context::gcode_renderer_loaded.store(
+                        true, std::memory_order_relaxed);
 
                     // Trigger initial render
                     lv_obj_invalidate(obj);
@@ -1778,6 +1800,7 @@ void ui_gcode_viewer_set_gcode_data(lv_obj_t* obj, void* gcode_data) {
     st->camera_->fit_to_bounds(st->gcode_file->global_bounding_box);
 
     st->viewer_state = GcodeViewerState::Loaded;
+    helix::telemetry_context::gcode_renderer_loaded.store(true, std::memory_order_relaxed);
 
     spdlog::info("[GCode Viewer] Set G-code data: {} layers, {} segments",
                  st->gcode_file->layers.size(), st->gcode_file->total_segments);
@@ -1811,6 +1834,7 @@ void ui_gcode_viewer_clear(lv_obj_t* obj) {
     st->has_external_color_override = false; // Clear external color override
     st->tool_color_overrides.clear();        // Clear per-tool AMS colors
     st->viewer_state = GcodeViewerState::Empty;
+    helix::telemetry_context::gcode_renderer_loaded.store(false, std::memory_order_relaxed);
 
     // Release all GPU and CPU geometry resources
 #ifdef ENABLE_3D_RENDERER
@@ -1822,6 +1846,40 @@ void ui_gcode_viewer_clear(lv_obj_t* obj) {
 
     lv_obj_invalidate(obj);
     spdlog::debug("[GCode Viewer] Cleared");
+
+    // Fire owner-installed clear callback (panels use this to flip mode
+    // subject back to thumbnail so the user doesn't see a transparent
+    // rectangle where the rendered model used to be).
+    if (st->clear_callback) {
+        st->clear_callback(obj, st->clear_callback_user_data);
+    }
+}
+
+void ui_gcode_viewer_set_clear_callback(lv_obj_t* obj, ui_gcode_viewer_clear_cb_t cb,
+                                        void* user_data) {
+    gcode_viewer_state_t* st = get_state(obj);
+    if (!st) {
+        return;
+    }
+    st->clear_callback = cb;
+    st->clear_callback_user_data = user_data;
+}
+
+void ui_gcode_viewer_clear_all_active() {
+    // Copy the list first — ui_gcode_viewer_clear() doesn't mutate it (only
+    // _delete_cb does), so a direct iteration would also be safe, but a copy
+    // future-proofs against subtle changes to the clear path.
+    auto snapshot = active_viewers();
+    if (snapshot.empty()) {
+        return;
+    }
+    spdlog::warn("[GCode Viewer] Pressure response: clearing {} active viewer(s)",
+                 snapshot.size());
+    for (lv_obj_t* obj : snapshot) {
+        if (obj && lv_obj_is_valid(obj)) {
+            ui_gcode_viewer_clear(obj);
+        }
+    }
 }
 
 GcodeViewerState ui_gcode_viewer_get_state(lv_obj_t* obj) {

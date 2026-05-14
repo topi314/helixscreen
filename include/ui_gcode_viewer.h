@@ -141,6 +141,32 @@ void ui_gcode_viewer_set_gcode_data(lv_obj_t* obj, void* gcode_data);
 void ui_gcode_viewer_clear(lv_obj_t* obj);
 
 /**
+ * @brief Clear every live G-code viewer widget process-wide
+ *
+ * Iterates the internal registry of created viewers and calls
+ * ui_gcode_viewer_clear() on each. Used by the memory pressure responder
+ * to release ParsedGCodeFile + renderer geometry on every active viewer
+ * (print_status + print_select_detail) when the system goes low on memory.
+ *
+ * Safe to call from the main thread only.
+ */
+void ui_gcode_viewer_clear_all_active();
+
+/**
+ * @brief Install a callback invoked when this viewer is cleared
+ *
+ * Fires from inside ui_gcode_viewer_clear() (and therefore also from
+ * ui_gcode_viewer_clear_all_active()). The owning panel uses this to flip
+ * its mode subject back to thumbnail so the user doesn't see a transparent
+ * rectangle where the rendered model used to be.
+ *
+ * Set during panel widget setup; auto-fired on every clear thereafter.
+ */
+typedef void (*ui_gcode_viewer_clear_cb_t)(lv_obj_t* viewer, void* user_data);
+void ui_gcode_viewer_set_clear_callback(lv_obj_t* obj, ui_gcode_viewer_clear_cb_t cb,
+                                        void* user_data);
+
+/**
  * @brief Get current loading state
  * @param obj Viewer widget
  * @return Current state

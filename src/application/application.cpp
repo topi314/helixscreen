@@ -803,6 +803,23 @@ int Application::run(int argc, char** argv) {
             }
         });
 
+    // Drop all live G-code viewer state on critical pressure. ParsedGCodeFile
+    // + GPU geometry can easily run hundreds of MB; on devices that nominally
+    // have plenty of RAM but accumulate process RSS (telemetry: pi32 held
+    // 632MB through and post-print), this is the largest single reclamation
+    // available. Each viewer's clear callback (installed by the owning panel)
+    // also flips the panel's mode subject back to thumbnail so the user sees
+    // the slicer preview rather than a blank rectangle.
+    helix::MemoryMonitor::instance().add_pressure_responder(
+        [](helix::MemoryPressureLevel level) {
+            if (level >= helix::MemoryPressureLevel::critical) {
+                helix::ui::queue_update([]() {
+                    crash_handler::breadcrumb::note("gcode_viewer", "pressure_clear");
+                    ui_gcode_viewer_clear_all_active();
+                });
+            }
+        });
+
     // Phase 16b: Force full screen refresh
     // On framebuffer displays with PARTIAL render mode, some widgets may not paint
     // on the first frame. Schedule a deferred refresh after the first few frames

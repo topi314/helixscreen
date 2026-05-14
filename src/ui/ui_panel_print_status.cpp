@@ -605,6 +605,18 @@ lv_obj_t* PrintStatusPanel::create(lv_obj_t* parent) {
 
         // Vertical offset to match thumbnail positioning (tuned empirically)
         ui_gcode_viewer_set_content_offset_y(gcode_viewer_, -0.10f);
+
+        // Memory-pressure responder calls ui_gcode_viewer_clear_all_active().
+        // Flip our mode subject back to thumbnail (0) so the user sees the
+        // slicer preview rather than a transparent rectangle.
+        ui_gcode_viewer_set_clear_callback(
+            gcode_viewer_,
+            [](lv_obj_t*, void* ud) {
+                auto* panel = static_cast<PrintStatusPanel*>(ud);
+                panel->show_gcode_viewer(false);
+                panel->gcode_loaded_ = false;
+            },
+            this);
     } else {
         spdlog::error("[{}]   ✗ G-code viewer widget NOT FOUND", get_name());
     }
@@ -822,32 +834,29 @@ void PrintStatusPanel::on_deactivate() {
     if (gcode_viewer_) {
         ui_gcode_viewer_set_paused(gcode_viewer_, true);
 
-        // Release heavy 3D resources when leaving the panel if:
-        // 1. Print is no longer active (keeps resources during printing/paused/preparing), AND
-        // 2. Device is memory-constrained OR currently under memory pressure.
-        // On devices with plenty of available RAM, keep resources cached so
-        // re-opening doesn't trigger a thumbnail→3D rebuild jump (issue #618).
+        // Release heavy renderer state when leaving the panel after a print has
+        // reached a terminal state. Previously gated on system-wide available
+        // memory (< 64MB) — that threshold is "kernel about to OOM," not "we're
+        // using too much," so devices with abundant free RAM but heavy process
+        // RSS would hold the ParsedGCodeFile + GPU geometry indefinitely after
+        // a print ended (telemetry: pi32 held 632MB for 1+ hour post-print).
+        // The user has navigated away, the print is over — drop the heavy
+        // state. Issue #618's smoothness gain only applies while the print is
+        // still active (handled by the state guard below).
         auto state = lifecycle_.state();
         if (state != PrintState::Printing && state != PrintState::Paused &&
             state != PrintState::Preparing) {
-            auto mem = helix::get_system_memory_info();
-            if (mem.is_low_memory()) {
-                ui_gcode_viewer_clear(gcode_viewer_);
-                gcode_loaded_ = false;
-                // Clear ALL dedup guards so on_activate() can re-download.
-                // loaded_thumbnail_filename_ gates the entire set_filename() block
-                // (thumbnail + gcode). Without clearing it, on_activate()'s reload
-                // path is silently blocked when the filename hasn't changed.
-                // The thumbnail re-fetch is a cache hit (file stays on disk).
-                loaded_thumbnail_filename_.clear();
-                requested_gcode_filename_.clear();
-                pending_gcode_filename_.clear();
-                spdlog::debug("[{}] Cleared gcode viewer ({}MB available, {}MB total)", get_name(),
-                              mem.available_mb(), mem.total_mb());
-            } else {
-                spdlog::debug("[{}] Keeping gcode viewer cached ({}MB available)", get_name(),
-                              mem.available_mb());
-            }
+            ui_gcode_viewer_clear(gcode_viewer_);
+            gcode_loaded_ = false;
+            // Clear ALL dedup guards so on_activate() can re-download.
+            // loaded_thumbnail_filename_ gates the entire set_filename() block
+            // (thumbnail + gcode). Without clearing it, on_activate()'s reload
+            // path is silently blocked when the filename hasn't changed.
+            // The thumbnail re-fetch is a cache hit (file stays on disk).
+            loaded_thumbnail_filename_.clear();
+            requested_gcode_filename_.clear();
+            pending_gcode_filename_.clear();
+            spdlog::debug("[{}] Cleared gcode viewer on deactivate (terminal state)", get_name());
         }
     }
 

@@ -75,6 +75,25 @@
 
 namespace helix {
 class PrinterDiscovery;
+
+/**
+ * @brief Thread-safe context published by main-thread producers so the memory
+ *        monitor (running on its own thread) can include it in memory_warning
+ *        events without locking.
+ *
+ * Set from main thread when state changes; read from monitor thread when
+ * building a memory_warning. Plain atomics — racy reads return a slightly
+ * stale value, which is fine for diagnostics.
+ */
+namespace telemetry_context {
+/// PrintState enum value (cast to int). -1 = unset.
+extern std::atomic<int> print_state_int;
+/// PanelId enum value (cast to int). -1 = unset (no active panel yet).
+extern std::atomic<int> active_panel_int;
+/// True while a GCodeViewer holds parser data + renderer geometry.
+extern std::atomic<bool> gcode_renderer_loaded;
+} // namespace telemetry_context
+
 } // namespace helix
 
 /**

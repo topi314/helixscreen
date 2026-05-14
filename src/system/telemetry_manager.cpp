@@ -78,6 +78,14 @@ std::string strip_instance_suffix(const std::string& id) {
 }
 } // namespace
 
+namespace helix {
+namespace telemetry_context {
+std::atomic<int> print_state_int{-1};
+std::atomic<int> active_panel_int{-1};
+std::atomic<bool> gcode_renderer_loaded{false};
+} // namespace telemetry_context
+} // namespace helix
+
 // =============================================================================
 // SHA-256 implementation
 // =============================================================================
@@ -1666,6 +1674,17 @@ TelemetryManager::build_memory_warning_event(const helix::MemoryWarningEvent& wa
     event["pss_kb"] = static_cast<int>(warning.smaps.pss_kb);
     event["swap_pss_kb"] = static_cast<int>(warning.smaps.swap_pss_kb);
 
+    // Context fields — populated by main-thread producers via plain atomics so
+    // the monitor thread can read them without locking. Lets us distinguish
+    // "3D-renderer-during-print holds memory" from "slow idle creep" without
+    // cross-referencing other event streams. (No string mirror — racing reads
+    // of std::string across threads is UB; the int IDs are sufficient.)
+    event["print_state"] = helix::telemetry_context::print_state_int.load(std::memory_order_relaxed);
+    event["active_panel"] =
+        helix::telemetry_context::active_panel_int.load(std::memory_order_relaxed);
+    event["gcode_renderer_loaded"] =
+        helix::telemetry_context::gcode_renderer_loaded.load(std::memory_order_relaxed);
+
     return event;
 }
 
@@ -2786,6 +2805,12 @@ float s_telemetry_filament_used_mm = 0.0f;
 void on_print_state_changed_for_telemetry(lv_observer_t* observer, lv_subject_t* subject) {
     (void)observer;
     auto current = static_cast<PrintJobState>(lv_subject_get_int(subject));
+
+    // Publish to off-main memory_warning context (relaxed: telemetry only).
+    // Stored as the raw PrintJobState int — small integer enum, value space
+    // matches what the receiver decodes.
+    helix::telemetry_context::print_state_int.store(static_cast<int>(current),
+                                                     std::memory_order_relaxed);
 
     // Skip the first callback -- state may be stale before Moonraker updates arrive
     if (!s_telemetry_first_update) {

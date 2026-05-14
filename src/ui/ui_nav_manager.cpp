@@ -18,6 +18,7 @@
 #include "display_settings_manager.h"
 #include "moonraker_client.h" // For ConnectionState enum
 #include "observer_factory.h"
+#include "system/telemetry_manager.h"
 #include "overlay_base.h"
 #include "printer_state.h" // For KlippyState enum
 #include "sound_manager.h"
@@ -1108,6 +1109,9 @@ void NavigationManager::set_active(PanelId panel_id) {
     // Update state
     lv_subject_set_int(&active_panel_subject_, static_cast<int>(panel_id));
     active_panel_ = panel_id;
+    // Publish for off-main memory_warning context (relaxed: telemetry only).
+    helix::telemetry_context::active_panel_int.store(static_cast<int>(panel_id),
+                                                      std::memory_order_relaxed);
 
     // Crash-diagnostic breadcrumb: records which panel transition was in flight
     // if we crash during on_activate/layout/first-paint.
