@@ -1599,8 +1599,7 @@ PrintStatusWidget::DetailedFormatter::~DetailedFormatter() {
 void PrintStatusWidget::DetailedFormatter::attach_arc(lv_obj_t* arc) {
     arc_widget_ = arc;
     if (arc) {
-        lv_arc_set_range(arc, 0, 100);
-        lv_arc_set_bg_angles(arc, 135, 45);
+        // Range + angles + styling come from XML; just seed the initial value.
         int pct = lv_subject_get_int(get_printer_state().get_print_progress_subject());
         lv_arc_set_value(arc, pct);
     }

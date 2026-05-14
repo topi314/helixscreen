@@ -45,18 +45,28 @@
             style_flex_cross_place="center" scrollable="false" clickable="false" event_bubble="true">
       <lv_image name="detailed_thumb"
                 width="35%" height="100%" src="A:assets/images/benchy_thumbnail_white.png"
-                inner_align="contain" clickable="false" event_bubble="true">
-        <bind_image_src subject="print_thumbnail_path"/>
-      </lv_image>
+                inner_align="contain" clickable="false" event_bubble="true"/>
       <lv_obj name="detailed_center_col"
               width="content" height="100%" style_pad_all="0" flex_flow="column"
               style_flex_main_place="center" style_flex_cross_place="center"
               style_pad_gap="#space_xxs" scrollable="false" clickable="false" event_bubble="true">
-        <lv_arc name="detailed_progress_arc"
+        <lv_obj name="detailed_arc_container"
                 width="80" height="80" style_pad_all="0"
-                clickable="false" event_bubble="true"/>
-        <text_heading name="detailed_progress_pct"
-                      bind_text="print_status_progress_pct" clickable="false" event_bubble="true"/>
+                scrollable="false" clickable="false" event_bubble="true">
+          <lv_arc name="detailed_progress_arc"
+                  align="center" width="80" height="80" style_pad_all="0"
+                  min_value="0" max_value="100" value="0"
+                  bg_start_angle="135" bg_end_angle="45"
+                  rotation="0" mode="normal"
+                  style_arc_color="#border" style_arc_color-indicator="#primary"
+                  style_arc_rounded="true" style_arc_rounded-indicator="true"
+                  style_bg_opa="0" style_border_width="0"
+                  style_bg_opa-knob="0" style_shadow_width-knob="0"
+                  style_outline_width-knob="0" style_pad_all-knob="0"
+                  clickable="false" event_bubble="true"/>
+          <text_heading name="detailed_progress_pct" align="center"
+                        bind_text="print_status_progress_pct" clickable="false" event_bubble="true"/>
+        </lv_obj>
         <!-- Temps under arc/data when colspan>=3 -->
         <lv_obj name="detailed_temp_row_under_data"
                 width="100%" height="content" style_pad_all="0" flex_flow="row"
@@ -108,9 +118,7 @@
             scrollable="false" clickable="false" event_bubble="true">
       <lv_image name="idle_thumb"
                 width="45%" height="100%" src="A:assets/images/benchy_thumbnail_white.png"
-                inner_align="contain" clickable="false" event_bubble="true">
-        <bind_image_src subject="print_thumbnail_path"/>
-      </lv_image>
+                inner_align="contain" clickable="false" event_bubble="true"/>
       <lv_obj name="idle_data_col"
               flex_grow="1" height="100%" style_pad_all="0" flex_flow="column"
               style_flex_main_place="center" style_pad_gap="#space_xs"
