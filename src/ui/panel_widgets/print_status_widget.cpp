@@ -349,9 +349,16 @@ void PrintStatusWidget::detach() {
 
     spdlog::debug("[PrintStatusWidget] Detached");
 
-    if (s_formatter_refcount_ > 0 && --s_formatter_refcount_ == 0) {
-        s_formatter_.reset();
-    }
+    // Decrement refcount but do NOT destroy the formatter — its instance subjects
+    // are referenced by bind_text observers in the widget tree, and helix-xml does
+    // not unregister scope entries on subject deinit. Destroying the formatter
+    // leaves dangling subject pointers in the global XML scope; the next
+    // bind_text observer-remove during widget delete then segfaults walking a
+    // freed linked list. Letting the formatter live for the process lifetime is
+    // safe (its memory + observers + history-callback are bounded) and matches
+    // the static-inline pattern used for the widget-level layout subjects.
+    if (s_formatter_refcount_ > 0)
+        --s_formatter_refcount_;
 }
 
 // ============================================================================
