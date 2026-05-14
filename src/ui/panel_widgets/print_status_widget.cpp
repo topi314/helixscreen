@@ -134,10 +134,26 @@ PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {
             }
         });
     }
+
+    // Eager DetailedFormatter creation — its subjects (print_status_progress_pct,
+    // print_status_bed_text, print_status_temp_under_thumb, etc.) MUST be
+    // registered BEFORE lv_xml_create parses the widget XML. helix-xml's
+    // bind_text/bind_flag_if_eq parser permanently skips bindings whose subject
+    // doesn't exist at parse time. Constructing the formatter here (before the
+    // ctor returns, and well before attach() runs lv_xml_create) ensures the
+    // subjects exist when the XML tree is built.
+    if (s_formatter_refcount_++ == 0) {
+        s_formatter_ = std::make_unique<DetailedFormatter>();
+    }
 }
 
 PrintStatusWidget::~PrintStatusWidget() {
     detach();
+    // Pair the eager ctor refcount bump. We never reset s_formatter_ even at
+    // refcount==0 (see detach() — destroying the formatter would dangle the
+    // helix-xml scope's subject pointers).
+    if (s_formatter_refcount_ > 0)
+        --s_formatter_refcount_;
 }
 
 void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
@@ -149,10 +165,8 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     parent_screen_ = parent_screen;
     live_instances().insert(this);
 
-    if (s_formatter_refcount_++ == 0) {
-        s_formatter_ = std::make_unique<DetailedFormatter>();
-    }
-
+    // Formatter is already alive (created in the ctor before XML parse).
+    // Just re-apply the per-instance nozzle override.
     if (s_formatter_) {
         s_formatter_->set_nozzle_tool_override(nozzle_tool_override_);
     }
@@ -1491,8 +1505,18 @@ void PrintStatusWidget::DetailedFormatter::update_nozzle_text() {
     lv_subject_t* temp_sub;
     lv_subject_t* tgt_sub;
     if (current_nozzle_override_ == "auto") {
-        temp_sub = ps.get_active_extruder_temp_subject();
-        tgt_sub  = ps.get_active_extruder_target_subject();
+        // The redirected active_extruder_* subjects are unreliable when no
+        // SET_ACTIVE_EXTRUDER has fired (mock + early boot). Read the primary
+        // "extruder" per-extruder subject directly — that one always tracks
+        // the real heater values for single-tool printers.
+        temp_sub = ps.get_extruder_temp_subject("extruder");
+        tgt_sub  = ps.get_extruder_target_subject("extruder");
+        if (!temp_sub || !tgt_sub) {
+            // Multi-tool printer with no "extruder" heater — fall back to
+            // whatever the active redirect currently points at.
+            temp_sub = ps.get_active_extruder_temp_subject();
+            tgt_sub  = ps.get_active_extruder_target_subject();
+        }
     } else {
         // Read-only access — prefer the no-lifetime overload per [L084] note
         temp_sub = ps.get_extruder_temp_subject(current_nozzle_override_);

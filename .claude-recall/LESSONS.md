@@ -102,7 +102,7 @@
 > NEVER `lv_async_call(..., lv_obj_delete)` — uncancellable. NEVER `safe_delete()` inside `queue_update`/`async_call` lambdas — multiple sync deletes in one batch corrupt LVGL's event list (#356). ALWAYS cancel anims first ([L068]).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 16.4378125 | **Learned**: 2026-02-01 | **Last**: 2026-05-14 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 17.4378125 | **Learned**: 2026-02-01 | **Last**: 2026-05-14 | **Category**: correction | **Type**: constraint
 > Don't fake automation with timed delays. Pattern:
 > 1. `Bash` with `run_in_background: true`: `./build/bin/helix-screen --test -vv -p panel_name 2>&1 | tee /tmp/test.log` — NOT shell `&` or `timeout`.
 > 2. Tell user exactly what to click.

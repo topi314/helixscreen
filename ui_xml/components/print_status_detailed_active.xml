@@ -3,21 +3,16 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <component>
   <consts>
-    <!-- Stroke thickness — responsive per breakpoint -->
+    <!-- Stroke thickness only — responsive per breakpoint. The arc's
+         overall diameter is computed dynamically in C++ from the actual
+         center-column height (on_size_changed). XML just specifies a
+         placeholder size that C++ overrides. -->
     <px name="progress_arc_thickness_tiny"    value="3"/>
     <px name="progress_arc_thickness_small"   value="3"/>
     <px name="progress_arc_thickness_medium"  value="4"/>
     <px name="progress_arc_thickness_large"   value="4"/>
     <px name="progress_arc_thickness_xlarge"  value="5"/>
     <px name="progress_arc_thickness_xxlarge" value="6"/>
-    <!-- Diameter — derived from the existing responsive button-height token
-         set, doubled. Stays square in every breakpoint without bespoke values. -->
-    <px name="progress_arc_size_tiny"    value="56"/>
-    <px name="progress_arc_size_small"   value="64"/>
-    <px name="progress_arc_size_medium"  value="72"/>
-    <px name="progress_arc_size_large"   value="80"/>
-    <px name="progress_arc_size_xlarge"  value="92"/>
-    <px name="progress_arc_size_xxlarge" value="108"/>
   </consts>
   <view name="print_status_detailed_active" extends="lv_obj"
         width="100%" height="100%" style_pad_all="0" style_pad_gap="#space_xs"
@@ -33,18 +28,20 @@
       <lv_obj name="detailed_center_col"
               flex_grow="2" height="100%" style_pad_all="0" flex_flow="column"
               style_flex_main_place="center" style_flex_cross_place="center"
-              style_pad_gap="#space_xxs" scrollable="false" clickable="false" event_bubble="true">
-        <!-- Arc is a fixed responsive square so it's truly circular. The % label
-             is a CHILD of the arc, so LVGL auto-centers it inside the arc's bounds
-             (no flex stacking, real overlap). The column's flex_main_place=center
-             vertically centers this whole block within the available column height. -->
+              style_pad_gap="0" scrollable="false" clickable="false" event_bubble="true">
+        <!-- Arc flex-grows to fill the column's remaining vertical space.
+             lv_arc internally renders a circle of radius min(w,h)/2 centered
+             in its bounds, so a tall-narrow bound box still produces a
+             vertically-centered circle. The % label is a child of the arc
+             with align="center", so it sits in the arc's bounds center. -->
         <lv_arc name="detailed_progress_arc"
-                width="#progress_arc_size" height="#progress_arc_size" style_pad_all="0"
+                flex_grow="1" width="100%" style_pad_all="0"
                 min_value="0" max_value="100" value="0"
                 bg_start_angle="135" bg_end_angle="45"
                 rotation="0" mode="normal"
                 style_arc_color="#border" style_arc_color-indicator="#primary"
-                style_arc_width="4" style_arc_width-indicator="4"
+                style_arc_width="4"
+                style_arc_width-indicator="4"
                 style_arc_rounded="true" style_arc_rounded-indicator="true"
                 style_bg_opa="0" style_border_width="0"
                 style_bg_opa-knob="0" style_shadow_width-knob="0"
@@ -88,7 +85,8 @@
       </lv_obj>
       <lv_obj name="detailed_data_col"
               flex_grow="3" height="100%" style_pad_all="0" flex_flow="column"
-              style_flex_main_place="space_evenly" style_pad_gap="#space_xxs"
+              style_flex_main_place="center" style_flex_cross_place="start"
+              style_pad_row="#space_xs"
               scrollable="false" clickable="false" event_bubble="true">
         <text_body name="detailed_filename" width="100%"
                    bind_text="print_display_filename" long_mode="scroll_circular"
