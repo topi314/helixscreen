@@ -184,6 +184,15 @@ static void on_start_calibration_clicked(lv_event_t* e) {
     if (calibrator) {
         calibrator->check_accelerometer(
             [token](float noise_level) {
+                // Token expired = user backed out of the step. The calibrator's
+                // cancel() can't stop Klipper's gcode chain (it only resets local
+                // state), so we must short-circuit here to prevent kicking off
+                // SHAPER_CALIBRATE X (and the cascading Y test) after cleanup.
+                if (token.expired()) {
+                    spdlog::info(
+                        "[Wizard Input Shaper] Noise check returned after cleanup, aborting chain");
+                    return;
+                }
                 // Noise check passed - continue to X axis calibration
                 spdlog::info("[Wizard Input Shaper] Noise check passed: {:.2f}", noise_level);
                 safe_update_status(token, "Calibrating X axis...");
@@ -201,6 +210,11 @@ static void on_start_calibration_clicked(lv_event_t* e) {
                         },
                         [token](const InputShaperResult& result) {
                             (void)result;
+                            if (token.expired()) {
+                                spdlog::info("[Wizard Input Shaper] X axis returned after "
+                                             "cleanup, aborting chain");
+                                return;
+                            }
                             spdlog::info("[Wizard Input Shaper] X axis complete");
                             safe_update_status(token, "Calibrating Y axis...");
 
@@ -294,6 +308,19 @@ void WizardInputShaperStep::cleanup() {
     // Cancel any in-progress calibration
     if (calibrator_) {
         calibrator_->cancel();
+    }
+
+    // If calibration didn't complete, reset step-local UI state so a
+    // subsequent visit (e.g., back → forward) starts fresh: Start button
+    // visible, progress cleared, status reset. Without this,
+    // calibration_started_ stays at 1 and the XML bind_flag_if_eq keeps the
+    // Start button hidden, leaving the user only able to Skip the step.
+    // When calibration has completed we keep the subjects so re-entry shows
+    // the completion summary.
+    if (subjects_initialized_ && !calibration_complete_) {
+        lv_subject_set_int(&calibration_started_, 0);
+        lv_subject_set_int(&calibration_progress_, 0);
+        lv_subject_copy_string(&calibration_status_, "Ready to calibrate");
     }
 
     // Reset footer subjects for next step
