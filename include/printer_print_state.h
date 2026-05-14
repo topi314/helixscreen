@@ -93,6 +93,20 @@ class PrinterPrintState {
         return &print_state_enum_;
     }
 
+    /**
+     * @brief Lifetime token for the "static" print subjects (e.g. print_state_enum).
+     *
+     * Production-wise these subjects live for the process, but tests call
+     * `deinit_subjects()` / `init_subjects()` between cases. Cross-singleton
+     * observers (e.g. AmsState's print-state observer) MUST pass this token to
+     * `observe_int_sync(...)` — otherwise an ObserverGuard outliving a
+     * `deinit_subjects()` cycle will UAF in `lv_observer_remove()` (subject
+     * deinit already freed the observer node).
+     */
+    [[nodiscard]] SubjectLifetime get_static_subjects_lifetime() const {
+        return static_subjects_lifetime_;
+    }
+
     /// 1 when PRINTING or PAUSED, 0 otherwise
     lv_subject_t* get_print_active_subject() {
         return &print_active_;
@@ -400,6 +414,11 @@ class PrinterPrintState {
 
     SubjectManager subjects_;
     bool subjects_initialized_ = false;
+
+    /// Lifetime for the "static" subjects below. Reset (to false then released)
+    /// in `deinit_subjects()` so cross-singleton observers can detect subject
+    /// death and skip `lv_observer_remove()` on freed observer nodes.
+    SubjectLifetime static_subjects_lifetime_;
 
     // Print progress subjects
     lv_subject_t print_progress_{};         // Integer 0-100

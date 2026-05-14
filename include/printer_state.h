@@ -382,6 +382,18 @@ class PrinterState {
     }
 
     /**
+     * @brief Lifetime token for the "static" print subjects.
+     *
+     * Cross-singleton observers (e.g. AmsState's print-state observer) MUST
+     * pass this token to `observe_int_sync(...)` — otherwise an ObserverGuard
+     * outliving a `deinit_subjects()` cycle in tests will UAF in
+     * `lv_observer_remove()`.
+     */
+    [[nodiscard]] SubjectLifetime get_static_print_subjects_lifetime() const {
+        return print_domain_.get_static_subjects_lifetime();
+    }
+
+    /**
      * @brief Get print active subject for UI binding
      *
      * Integer subject: 1 when PRINTING or PAUSED, 0 otherwise.

@@ -45,6 +45,11 @@ void PrinterPrintState::init_subjects(bool register_xml) {
 
     spdlog::trace("[PrinterPrintState] Initializing subjects (register_xml={})", register_xml);
 
+    // Fresh lifetime for the static subjects below. Cross-singleton observers
+    // (e.g. AmsState's print-state observer) subscribe to this so they can
+    // detect subject death across deinit/init cycles in tests.
+    static_subjects_lifetime_ = std::make_shared<bool>(true);
+
     // Print progress subjects
     INIT_SUBJECT_INT(print_progress, 0, subjects_, register_xml);
     INIT_SUBJECT_STRING(print_filename, "", subjects_, register_xml);
@@ -107,6 +112,15 @@ void PrinterPrintState::deinit_subjects() {
     }
 
     spdlog::trace("[PrinterPrintState] Deinitializing subjects");
+
+    // Signal death of the "static" subjects (print_state_enum, etc.) BEFORE
+    // calling deinit_all() — observers in other singletons (AmsState) check
+    // this token in their guard's reset() path and skip lv_observer_remove()
+    // on observer nodes that are about to be freed by lv_subject_deinit().
+    if (static_subjects_lifetime_) {
+        *static_subjects_lifetime_ = false;
+    }
+    static_subjects_lifetime_.reset();
 
     // Per-extruder filament_used subjects are dynamic: for each entry, signal
     // subject death BEFORE deinit so all ObserverGuards (including those still
