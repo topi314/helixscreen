@@ -10,7 +10,9 @@
 #include "async_lifetime_guard.h"
 #include "panel_widget.h"
 #include "print_history_manager.h"
+#include "subject_managed_panel.h"
 
+#include <memory>
 #include <string>
 #include <unordered_set>
 
@@ -151,6 +153,49 @@ class PrintStatusWidget : public PanelWidget {
 
     // Job queue
     helix::JobQueueModal job_queue_modal_;
+
+    // First-instance formatter singleton — owns observers + formatted subjects for Detailed layout.
+    // Created on the first widget attach, destroyed on the last detach.
+    class DetailedFormatter {
+      public:
+        DetailedFormatter();
+        ~DetailedFormatter();
+        DetailedFormatter(const DetailedFormatter&) = delete;
+        DetailedFormatter& operator=(const DetailedFormatter&) = delete;
+
+      private:
+        SubjectManager subjects_;
+
+        // Buffers backing string subjects
+        char progress_pct_buf_[8];        // "100%"
+        char layer_text_buf_[32];         // "Layer 9999 / 9999"
+        char time_text_buf_[40];          // "12h 34m / 99h 99m"
+        char filament_text_buf_[32];      // "1234.5m / 9999.9m"
+        char nozzle_text_buf_[32];        // "265 / 270°C"
+        char bed_text_buf_[32];
+        char chamber_text_buf_[32];
+        char nozzle_tool_label_buf_[8];   // "T0", "T9"
+        char idle_filename_buf_[160];
+        char idle_when_buf_[64];          // "Completed 2 hours ago"
+        char idle_meta_buf_[64];          // "12.4m filament • 4h 12m"
+
+        // String + int subjects (XML-registered)
+        lv_subject_t progress_pct_subject_;
+        lv_subject_t layer_text_subject_;
+        lv_subject_t time_text_subject_;
+        lv_subject_t filament_text_subject_;
+        lv_subject_t nozzle_text_subject_;
+        lv_subject_t bed_text_subject_;
+        lv_subject_t chamber_text_subject_;
+        lv_subject_t nozzle_tool_label_subject_;
+        lv_subject_t idle_filename_subject_;
+        lv_subject_t idle_when_subject_;
+        lv_subject_t idle_meta_subject_;
+        lv_subject_t idle_has_last_subject_;
+    };
+
+    static inline std::unique_ptr<DetailedFormatter> s_formatter_;
+    static inline int s_formatter_refcount_ = 0;
 
     // Print card update methods
     [[nodiscard]] std::string get_last_print_thumbnail_path() const;

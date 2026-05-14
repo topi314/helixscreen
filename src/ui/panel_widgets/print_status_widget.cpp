@@ -21,6 +21,7 @@
 #include "printer_state.h"
 #include "runtime_config.h"
 #include "static_subject_registry.h"
+#include "subject_managed_panel.h"
 #include "theme_manager.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_load_context.h"
@@ -136,6 +137,10 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
     live_instances().insert(this);
+
+    if (s_formatter_refcount_++ == 0) {
+        s_formatter_ = std::make_unique<DetailedFormatter>();
+    }
 
     // Store this pointer for event callback recovery
     lv_obj_set_user_data(widget_obj_, this);
@@ -311,6 +316,10 @@ void PrintStatusWidget::detach() {
     parent_screen_ = nullptr;
 
     spdlog::debug("[PrintStatusWidget] Detached");
+
+    if (--s_formatter_refcount_ == 0) {
+        s_formatter_.reset();
+    }
 }
 
 // ============================================================================
@@ -1174,4 +1183,41 @@ void PrintStatusWidget::library_queue_cb(lv_event_t* e) {
     }
 
     LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
+// DetailedFormatter — first-instance singleton lifecycle
+// ============================================================================
+
+PrintStatusWidget::DetailedFormatter::DetailedFormatter() {
+    UI_MANAGED_SUBJECT_STRING(progress_pct_subject_, progress_pct_buf_, "0%",
+                              "print_status_progress_pct", subjects_);
+    UI_MANAGED_SUBJECT_STRING(layer_text_subject_, layer_text_buf_, "",
+                              "print_status_layer_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(time_text_subject_, time_text_buf_, "0h 00m / 0h 00m",
+                              "print_status_time_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(filament_text_subject_, filament_text_buf_, "",
+                              "print_status_filament_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(nozzle_text_subject_, nozzle_text_buf_, "0 / 0°C",
+                              "print_status_nozzle_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(bed_text_subject_, bed_text_buf_, "0 / 0°C",
+                              "print_status_bed_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(chamber_text_subject_, chamber_text_buf_, "0°C",
+                              "print_status_chamber_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(nozzle_tool_label_subject_, nozzle_tool_label_buf_, "",
+                              "print_status_nozzle_tool_label", subjects_);
+    UI_MANAGED_SUBJECT_STRING(idle_filename_subject_, idle_filename_buf_, "",
+                              "print_status_idle_filename", subjects_);
+    UI_MANAGED_SUBJECT_STRING(idle_when_subject_, idle_when_buf_, "Never printed",
+                              "print_status_idle_when", subjects_);
+    UI_MANAGED_SUBJECT_STRING(idle_meta_subject_, idle_meta_buf_, "",
+                              "print_status_idle_meta", subjects_);
+    UI_MANAGED_SUBJECT_INT(idle_has_last_subject_, 0,
+                           "print_status_idle_has_last", subjects_);
+    spdlog::debug("[DetailedFormatter] subjects initialized");
+}
+
+PrintStatusWidget::DetailedFormatter::~DetailedFormatter() {
+    spdlog::debug("[DetailedFormatter] tearing down");
+    subjects_.deinit_all();
 }
