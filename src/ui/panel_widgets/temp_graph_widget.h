@@ -88,6 +88,11 @@ class TempGraphWidget : public PanelWidget {
         const char* get_name() const override { return "Temperature Graph Config"; }
         const char* component_name() const override { return "temp_graph_config_modal"; }
 
+        /// Map a Klipper object key to its user-facing label.
+        /// Public so the outer widget can label graph series with the same
+        /// names the modal shows.
+        static std::string sensor_display_name(const std::string& klipper_name);
+
       protected:
         void on_show() override;
         void on_ok() override;
@@ -105,7 +110,6 @@ class TempGraphWidget : public PanelWidget {
 
         void populate_follow_toggle();
         void populate_sensor_list();
-        static std::string sensor_display_name(const std::string& klipper_name);
         static void color_swatch_clicked(lv_event_t* e);
 
         nlohmann::json config_;

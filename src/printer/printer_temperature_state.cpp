@@ -10,6 +10,7 @@
 
 #include "printer_temperature_state.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "state/subject_macros.h"
 #include "unit_conversions.h"
 
@@ -158,10 +159,12 @@ void PrinterTemperatureState::init_extruders(const std::vector<std::string>& hea
         info.name = name;
 
         // Single extruder: "Nozzle". Multiple: "Nozzle 1", "Nozzle 2", ...
+        // Translated at init time; mid-session language changes won't refresh
+        // cached names until the next extruder rediscover (e.g., reconnect).
         if (multi) {
-            info.display_name = "Nozzle " + std::to_string(i + 1);
+            info.display_name = std::string(lv_tr("Nozzle")) + " " + std::to_string(i + 1);
         } else {
-            info.display_name = "Nozzle";
+            info.display_name = lv_tr("Nozzle");
         }
 
         // Create heap-allocated subjects (stable across rehash)

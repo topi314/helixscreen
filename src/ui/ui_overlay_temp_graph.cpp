@@ -156,7 +156,7 @@ void TempGraphOverlay::on_activate() {
     std::vector<helix::TempGraphSeriesSpec> specs;
     specs.reserve(series_.size());
     for (const auto& s : series_) {
-        specs.push_back({s.klipper_name, s.color, s.has_target});
+        specs.push_back({s.klipper_name, s.color, s.has_target, s.display_name});
     }
 
     // Create controller (handles graph creation, observers, history, auto-range)
@@ -272,7 +272,7 @@ void TempGraphOverlay::discover_series() {
     if (extruders.empty()) {
         // Fallback: always add at least one nozzle
         SeriesInfo s;
-        s.display_name = "Nozzle";
+        s.display_name = lv_tr("Nozzle");
         s.heater_name = "extruder";
         s.klipper_name = "extruder";
         s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
@@ -303,7 +303,7 @@ void TempGraphOverlay::discover_series() {
     // 2. Bed
     {
         SeriesInfo s;
-        s.display_name = "Bed";
+        s.display_name = lv_tr("Bed");
         s.heater_name = "heater_bed";
         s.klipper_name = "heater_bed";
         s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
@@ -323,7 +323,7 @@ void TempGraphOverlay::discover_series() {
             const std::string& klipper = !heater.empty() ? heater : sensor;
             if (!klipper.empty()) {
                 SeriesInfo s;
-                s.display_name = "Chamber";
+                s.display_name = lv_tr("Chamber");
                 s.heater_name = "chamber";
                 s.klipper_name = klipper;
                 s.color =
@@ -752,7 +752,15 @@ void TempGraphOverlay::rebuild_extruder_selector() {
             is_active ? theme_manager_get_color("primary") : theme_manager_get_color("card_bg"), 0);
 
         lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, ext->display_name.c_str());
+        // Compact pill label: show only the trailing number from "Nozzle N".
+        // Saves horizontal space so 4+ pills fit without clipping; the full
+        // "Nozzle N" wording still appears in status messages and the heater
+        // icon caption.
+        auto space_pos = ext->display_name.find_last_of(' ');
+        std::string pill_text = (space_pos != std::string::npos)
+                                    ? ext->display_name.substr(space_pos + 1)
+                                    : ext->display_name;
+        lv_label_set_text(label, pill_text.c_str());
         lv_obj_set_style_text_font(label, theme_manager_get_font("font_small"), 0);
         lv_obj_set_style_text_color(
             label,

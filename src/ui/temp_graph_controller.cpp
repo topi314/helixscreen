@@ -207,7 +207,9 @@ void TempGraphController::setup_series() {
     auto& ps = get_printer_state();
 
     for (const auto& spec : config_.series) {
-        int series_id = ui_temp_graph_add_series(graph_, spec.klipper_name.c_str(), spec.color);
+        const char* label =
+            spec.display_name.empty() ? spec.klipper_name.c_str() : spec.display_name.c_str();
+        int series_id = ui_temp_graph_add_series(graph_, label, spec.color);
         if (series_id < 0) {
             spdlog::warn("[TempGraphController] Failed to add series '{}'", spec.klipper_name);
             continue;

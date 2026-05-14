@@ -1297,10 +1297,18 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
         }
     }
     config.initial_features = features;
-    config.series = {
-        {active_extruder_name_, heaters_[idx(HeaterType::Nozzle)].config.color, true},
-        {"heater_bed", heaters_[idx(HeaterType::Bed)].config.color, true},
-    };
+    {
+        helix::TempGraphSeriesSpec nozzle_spec;
+        nozzle_spec.klipper_name = active_extruder_name_;
+        nozzle_spec.color = heaters_[idx(HeaterType::Nozzle)].config.color;
+        nozzle_spec.show_target = true;
+        helix::TempGraphSeriesSpec bed_spec;
+        bed_spec.klipper_name = "heater_bed";
+        bed_spec.display_name = lv_tr("Bed");
+        bed_spec.color = heaters_[idx(HeaterType::Bed)].config.color;
+        bed_spec.show_target = true;
+        config.series = {std::move(nozzle_spec), std::move(bed_spec)};
+    }
 
     // Add chamber series if printer has a chamber heater or sensor
     {
@@ -1309,11 +1317,20 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
         bool has_heater = heater_subj && lv_subject_get_int(heater_subj) != 0;
 
         if (has_heater && !chamber.klipper_name.empty()) {
-            config.series.push_back({chamber.klipper_name, chamber.config.color, true});
+            helix::TempGraphSeriesSpec spec;
+            spec.klipper_name = chamber.klipper_name;
+            spec.display_name = lv_tr("Chamber");
+            spec.color = chamber.config.color;
+            spec.show_target = true;
+            config.series.push_back(std::move(spec));
         } else if (printer_state_.get_discovery().has_chamber_sensor()) {
             // Sensor-only: show temp without target line
-            config.series.push_back({printer_state_.get_discovery().chamber_sensor_name(),
-                                     chamber.config.color, false});
+            helix::TempGraphSeriesSpec spec;
+            spec.klipper_name = printer_state_.get_discovery().chamber_sensor_name();
+            spec.display_name = lv_tr("Chamber");
+            spec.color = chamber.config.color;
+            spec.show_target = false;
+            config.series.push_back(std::move(spec));
         }
     }
 

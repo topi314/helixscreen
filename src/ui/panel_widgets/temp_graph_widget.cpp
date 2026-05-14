@@ -16,6 +16,8 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <set>
+#include <vector>
 
 namespace helix {
 
@@ -214,6 +216,7 @@ std::vector<TempGraphSeriesSpec> TempGraphWidget::build_series_from_config() con
 
         TempGraphSeriesSpec spec;
         spec.klipper_name = klipper_name;
+        spec.display_name = TempGraphConfigModal::sensor_display_name(klipper_name);
         if (entry.contains("color")) {
             spec.color = lv_color_hex(entry["color"].get<uint32_t>());
         } else {
@@ -258,8 +261,29 @@ std::string TempGraphWidget::current_visibility_signature() const {
 void TempGraphWidget::build_default_config() {
     nlohmann::json sensors = nlohmann::json::array();
 
-    // Always include extruder and bed
-    sensors.push_back({{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}});
+    // Enumerate discovered extruders so multi-tool printers (Snapmaker U1,
+    // toolchangers) get all nozzles enabled by default rather than just the
+    // legacy single "extruder" entry.
+    const auto& exts = get_printer_state().temperature_state().extruders();
+    if (exts.empty()) {
+        // Pre-discovery / single-extruder fallback
+        sensors.push_back({{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}});
+    } else {
+        std::vector<std::string> extruder_names;
+        extruder_names.reserve(exts.size());
+        for (const auto& [name, _] : exts)
+            extruder_names.push_back(name);
+        std::sort(extruder_names.begin(), extruder_names.end());
+        int ext_color_idx = 0;
+        for (const auto& name : extruder_names) {
+            lv_color_t c = TEMP_GRAPH_SERIES_COLORS[ext_color_idx % TEMP_GRAPH_PALETTE_SIZE];
+            uint32_t color_hex = (static_cast<uint32_t>(c.red) << 16) |
+                                 (static_cast<uint32_t>(c.green) << 8) |
+                                 static_cast<uint32_t>(c.blue);
+            sensors.push_back({{"name", name}, {"enabled", true}, {"color", color_hex}});
+            ++ext_color_idx;
+        }
+    }
     sensors.push_back({{"name", "heater_bed"}, {"enabled", true}, {"color", 0x88C0D0}});
 
     // Check for chamber
@@ -269,7 +293,7 @@ void TempGraphWidget::build_default_config() {
     }
 
     // Add discovered auxiliary sensors (disabled by default)
-    int color_idx = 3; // Start after nozzle/bed/chamber colors
+    int color_idx = static_cast<int>(sensors.size()); // Start after nozzles/bed/chamber colors
     auto& sensor_mgr = sensors::TemperatureSensorManager::instance();
     auto discovered = sensor_mgr.get_sensors_sorted();
     for (const auto& sensor : discovered) {
@@ -347,12 +371,29 @@ void TempGraphWidget::TempGraphConfigModal::on_ok() {
 
 std::string
 TempGraphWidget::TempGraphConfigModal::sensor_display_name(const std::string& klipper_name) {
-    if (klipper_name == "extruder")
-        return "Nozzle";
+    // Extruders: defer to PrinterTemperatureState which already produces
+    // "Nozzle" (single) / "Nozzle 1", "Nozzle 2", ... (multi). Keeps the
+    // chip row, graph legend, and config modal aligned on one source of truth.
+    if (klipper_name == "extruder" ||
+        (klipper_name.size() > 8 && klipper_name.rfind("extruder", 0) == 0 &&
+         std::isdigit(static_cast<unsigned char>(klipper_name[8])))) {
+        const auto& exts = get_printer_state().temperature_state().extruders();
+        auto it = exts.find(klipper_name);
+        if (it != exts.end() && !it->second.display_name.empty()) {
+            return it->second.display_name;
+        }
+        // Fallback when extruders haven't been discovered yet: derive a
+        // best-effort number from the klipper suffix. "extruder" -> "Nozzle 1",
+        // "extruderN" -> "Nozzle N+1".
+        if (klipper_name == "extruder")
+            return lv_tr("Nozzle");
+        return std::string(lv_tr("Nozzle")) + " " +
+               std::to_string(std::atoi(klipper_name.c_str() + 8) + 1);
+    }
     if (klipper_name == "heater_bed")
-        return "Bed";
+        return lv_tr("Bed");
     if (klipper_name == "chamber")
-        return "Chamber";
+        return lv_tr("Chamber");
 
     // Strip common prefixes for auxiliary sensors
     std::string display = klipper_name;
@@ -427,8 +468,60 @@ void TempGraphWidget::TempGraphConfigModal::populate_sensor_list() {
 
     rows_.clear();
 
-    if (!config_.contains("sensors"))
-        return;
+    if (!config_.contains("sensors") || !config_["sensors"].is_array())
+        config_["sensors"] = nlohmann::json::array();
+
+    // Auto-discover extruders that aren't yet in the saved sensor list so
+    // multi-tool printers (Snapmaker U1, toolchangers) get all heaters exposed
+    // as toggleable rows instead of just the legacy "extruder" entry. New rows
+    // are added disabled so existing users' visible set doesn't change.
+    // Also normalize ordering: all extruders come first (sorted by klipper
+    // name), then everything else in its original order — keeps Nozzle 1..N
+    // grouped together even if a previous build appended them at the tail.
+    {
+        auto& arr = config_["sensors"];
+        auto is_extruder_name = [](const std::string& n) {
+            return n == "extruder" || (n.size() > 8 && n.rfind("extruder", 0) == 0 &&
+                                       std::isdigit(static_cast<unsigned char>(n[8])));
+        };
+
+        std::set<std::string> existing;
+        for (const auto& entry : arr) {
+            if (entry.contains("name") && entry["name"].is_string())
+                existing.insert(entry["name"].get<std::string>());
+        }
+
+        const auto& exts = get_printer_state().temperature_state().extruders();
+        for (const auto& [name, _] : exts) {
+            if (existing.count(name))
+                continue;
+            nlohmann::json row;
+            row["name"] = name;
+            row["enabled"] = false;
+            arr.push_back(std::move(row));
+        }
+
+        // Partition: extruders (sorted by name) first, then the rest in order.
+        nlohmann::json extruder_entries = nlohmann::json::array();
+        nlohmann::json other_entries = nlohmann::json::array();
+        for (auto& entry : arr) {
+            if (entry.contains("name") && entry["name"].is_string() &&
+                is_extruder_name(entry["name"].get<std::string>())) {
+                extruder_entries.push_back(std::move(entry));
+            } else {
+                other_entries.push_back(std::move(entry));
+            }
+        }
+        std::sort(extruder_entries.begin(), extruder_entries.end(),
+                  [](const nlohmann::json& a, const nlohmann::json& b) {
+                      return a["name"].get<std::string>() < b["name"].get<std::string>();
+                  });
+        arr = nlohmann::json::array();
+        for (auto& e : extruder_entries)
+            arr.push_back(std::move(e));
+        for (auto& e : other_entries)
+            arr.push_back(std::move(e));
+    }
 
     const auto& sensors = config_["sensors"];
     for (size_t i = 0; i < sensors.size(); ++i) {
