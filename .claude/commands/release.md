@@ -245,6 +245,11 @@ git push origin "v{NEW_VERSION}"
 ```
 Then show: "Pushed! Watch the build: https://github.com/prestonbrown/helixscreen/actions"
 
+For stable releases (tag without `-`), the `notify-website` job will fire a
+`repository_dispatch` to helixscreen-website once the release job finishes,
+auto-rebuilding helixscreen.org from the new tag's `docs/user/`. No manual
+website deploy needed. Prereleases skip this.
+
 ### If "Keep local":
 Show: "Release commit and tag created locally. Push when ready:\n`git push origin main && git push origin v{NEW_VERSION}`"
 
