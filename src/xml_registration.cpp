@@ -398,6 +398,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_clock.xml");
     register_xml("components/panel_widget_tips.xml");
     register_xml("components/panel_widget_print_status.xml");
+    register_xml("components/print_status_detailed.xml");
     register_xml("components/panel_widget_shutdown.xml");
     register_xml("components/panel_widget_lock.xml");
     register_xml("components/nozzle_temp_row.xml");

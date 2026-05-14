@@ -48,6 +48,8 @@ void register_print_status_widget() {
                              PrintStatusWidget::print_status_picker_backdrop_cb);
     lv_xml_register_event_cb(nullptr, "print_status_nozzle_picker_backdrop_cb",
                              PrintStatusWidget::print_status_nozzle_picker_backdrop_cb);
+    lv_xml_register_event_cb(nullptr, "print_status_nozzle_chevron_cb",
+                             PrintStatusWidget::print_status_nozzle_chevron_cb);
 }
 } // namespace helix
 
@@ -168,6 +170,13 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     print_card_thumb_compact_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_compact");
     library_row_last_ = lv_obj_find_by_name(widget_obj_, "library_row_last");
     compact_row_last_ = lv_obj_find_by_name(widget_obj_, "compact_row_last");
+
+    // Hand the detailed-layout arc widget to the formatter (may be nullptr if not in DOM yet)
+    if (s_formatter_) {
+        lv_obj_t* arc = lv_obj_find_by_name(widget_obj_, "detailed_progress_arc");
+        if (arc)
+            s_formatter_->attach_arc(arc);
+    }
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -1571,10 +1580,51 @@ PrintStatusWidget::DetailedFormatter::DetailedFormatter() {
     update_multi_tool();
     update_tool_label();
 
+    // Arc value observer — keeps lv_arc value in sync with print progress
+    arc_value_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_print_progress_subject(), this, [](DetailedFormatter* self, int pct) {
+            if (self->arc_widget_ && lv_obj_is_valid(self->arc_widget_)) {
+                lv_arc_set_value(self->arc_widget_, pct);
+            }
+        });
+
     spdlog::debug("[DetailedFormatter] subjects initialized");
 }
 
 PrintStatusWidget::DetailedFormatter::~DetailedFormatter() {
     spdlog::debug("[DetailedFormatter] tearing down");
     subjects_.deinit_all();
+}
+
+void PrintStatusWidget::DetailedFormatter::attach_arc(lv_obj_t* arc) {
+    arc_widget_ = arc;
+    if (arc) {
+        lv_arc_set_range(arc, 0, 100);
+        lv_arc_set_bg_angles(arc, 135, 45);
+        int pct = lv_subject_get_int(get_printer_state().get_print_progress_subject());
+        lv_arc_set_value(arc, pct);
+    }
+}
+
+// ============================================================================
+// Nozzle Chevron Callback
+// ============================================================================
+
+void PrintStatusWidget::print_status_nozzle_chevron_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("print_status_nozzle_chevron_cb");
+    auto* anchor = lv_event_get_current_target_obj(e);
+    if (!anchor)
+        return;
+    // Walk up to find the owning widget instance
+    PrintStatusWidget* owner = nullptr;
+    for (lv_obj_t* o = anchor; o; o = lv_obj_get_parent(o)) {
+        auto* candidate = static_cast<PrintStatusWidget*>(lv_obj_get_user_data(o));
+        if (candidate && live_instances().count(candidate)) {
+            owner = candidate;
+            break;
+        }
+    }
+    if (owner)
+        owner->show_nozzle_tool_picker(anchor);
+    LVGL_SAFE_EVENT_CB_END();
 }

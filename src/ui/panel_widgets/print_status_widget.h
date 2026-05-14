@@ -58,6 +58,9 @@ class PrintStatusWidget : public PanelWidget {
     /// XML event callback — backdrop dismiss for nozzle picker
     static void print_status_nozzle_picker_backdrop_cb(lv_event_t* e);
 
+    /// XML event callback — chevron tap on nozzle temp opens tool picker
+    static void print_status_nozzle_chevron_cb(lv_event_t* e);
+
     /// Registry of live (attached) widget instances for use-after-free prevention
     static std::unordered_set<PrintStatusWidget*>& live_instances();
 
@@ -189,7 +192,12 @@ class PrintStatusWidget : public PanelWidget {
         /// Silently falls back to auto if the named subject doesn't resolve.
         void set_nozzle_tool_override(const std::string& override_name);
 
+        /// Called by widget attach() to hand the arc widget to the formatter
+        void attach_arc(lv_obj_t* arc);
+
       private:
+        ObserverGuard arc_value_observer_;
+        lv_obj_t* arc_widget_ = nullptr;
         std::string current_nozzle_override_ = "auto";
 
         SubjectManager subjects_;
