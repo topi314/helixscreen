@@ -46,12 +46,15 @@ void register_print_status_widget() {
     lv_xml_register_event_cb(nullptr, "library_queue_cb", PrintStatusWidget::library_queue_cb);
     lv_xml_register_event_cb(nullptr, "print_status_picker_backdrop_cb",
                              PrintStatusWidget::print_status_picker_backdrop_cb);
+    lv_xml_register_event_cb(nullptr, "print_status_nozzle_picker_backdrop_cb",
+                             PrintStatusWidget::print_status_nozzle_picker_backdrop_cb);
 }
 } // namespace helix
 
 using namespace helix;
 
 PrintStatusWidget* PrintStatusWidget::s_active_picker_ = nullptr;
+PrintStatusWidget* PrintStatusWidget::s_active_nozzle_picker_ = nullptr;
 
 std::unordered_set<PrintStatusWidget*>& PrintStatusWidget::live_instances() {
     static std::unordered_set<PrintStatusWidget*> instances;
@@ -280,8 +283,9 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 }
 
 void PrintStatusWidget::detach() {
-    // Dismiss any open configure picker
+    // Dismiss any open pickers
     dismiss_configure_picker();
+    dismiss_nozzle_tool_picker();
 
     // Invalidate lifetime guard FIRST to abort in-flight async fetches
     lifetime_.invalidate();
@@ -1104,6 +1108,120 @@ void PrintStatusWidget::print_status_picker_backdrop_cb(lv_event_t* e) {
         s_active_picker_->apply_picker_state();
         s_active_picker_->dismiss_configure_picker();
     }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
+// Nozzle Tool Picker
+// ============================================================================
+
+void PrintStatusWidget::show_nozzle_tool_picker(lv_obj_t* anchor) {
+    if (nozzle_picker_backdrop_ || !parent_screen_)
+        return;
+
+    nozzle_picker_backdrop_ = static_cast<lv_obj_t*>(
+        lv_xml_create(parent_screen_, "print_status_nozzle_tool_picker", nullptr));
+    if (!nozzle_picker_backdrop_) {
+        spdlog::error("[PrintStatusWidget] Failed to create nozzle tool picker");
+        return;
+    }
+
+    lv_obj_t* option_list = lv_obj_find_by_name(nozzle_picker_backdrop_, "option_list");
+    if (!option_list) {
+        spdlog::error("[PrintStatusWidget] option_list not found in nozzle picker XML");
+        helix::ui::safe_delete_deferred(nozzle_picker_backdrop_);
+        nozzle_picker_backdrop_ = nullptr;
+        return;
+    }
+
+    auto add_row = [option_list](const char* label, const std::string& tool_key) {
+        const char* attrs[] = {"width",   "100%",            "height", "#button_height_sm",
+                               "variant", "ghost",            "text",   label,
+                               nullptr};
+        lv_obj_t* row = static_cast<lv_obj_t*>(lv_xml_create(option_list, "ui_button", attrs));
+        if (!row)
+            return;
+        auto* key_holder = new std::string(tool_key);
+        lv_obj_set_user_data(row, key_holder);
+        lv_obj_add_event_cb(
+            row,
+            [](lv_event_t* e) {
+                LVGL_SAFE_EVENT_CB_BEGIN("nozzle_picker_row_cb");
+                auto* btn = lv_event_get_current_target_obj(e);
+                auto* holder = static_cast<std::string*>(lv_obj_get_user_data(btn));
+                if (!s_active_nozzle_picker_ || !holder)
+                    return;
+                auto* self = s_active_nozzle_picker_;
+                self->nozzle_tool_override_ = *holder;
+                self->config_["nozzle_tool_override"] = *holder;
+                if (s_formatter_)
+                    s_formatter_->set_nozzle_tool_override(*holder);
+                self->dismiss_nozzle_tool_picker();
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(
+            row,
+            [](lv_event_t* e) {
+                LVGL_SAFE_EVENT_CB_BEGIN("nozzle_picker_row_delete_cb");
+                auto* btn = lv_event_get_current_target_obj(e);
+                auto* holder = static_cast<std::string*>(lv_obj_get_user_data(btn));
+                delete holder;
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_DELETE, nullptr);
+    };
+
+    add_row("Follow active tool", "auto");
+    int count = ToolState::instance().tool_count();
+    for (int i = 0; i < count; ++i) {
+        std::string name = (i == 0) ? "extruder" : ("extruder" + std::to_string(i));
+        char label[16];
+        snprintf(label, sizeof(label), "T%d", i);
+        add_row(label, name);
+    }
+
+    s_active_nozzle_picker_ = this;
+
+    lv_obj_add_event_cb(
+        nozzle_picker_backdrop_,
+        [](lv_event_t* e) {
+            LVGL_SAFE_EVENT_CB_BEGIN("nozzle_picker_backdrop_delete_cb");
+            if (s_active_nozzle_picker_ &&
+                s_active_nozzle_picker_->nozzle_picker_backdrop_ ==
+                    lv_event_get_current_target_obj(e)) {
+                s_active_nozzle_picker_->nozzle_picker_backdrop_ = nullptr;
+                s_active_nozzle_picker_ = nullptr;
+            }
+            LVGL_SAFE_EVENT_CB_END();
+        },
+        LV_EVENT_DELETE, nullptr);
+
+    // Position context menu near the anchor (best-effort)
+    lv_obj_t* card = lv_obj_find_by_name(nozzle_picker_backdrop_, "context_menu");
+    if (card && anchor) {
+        lv_obj_update_layout(anchor);
+        lv_area_t a;
+        lv_obj_get_coords(anchor, &a);
+        lv_obj_set_pos(card, a.x1, a.y2 + 4);
+    }
+
+    spdlog::debug("[PrintStatusWidget] Nozzle tool picker shown");
+}
+
+void PrintStatusWidget::dismiss_nozzle_tool_picker() {
+    if (!nozzle_picker_backdrop_)
+        return;
+    s_active_nozzle_picker_ = nullptr;
+    helix::ui::safe_delete_deferred(nozzle_picker_backdrop_);
+    nozzle_picker_backdrop_ = nullptr;
+    spdlog::debug("[PrintStatusWidget] Nozzle tool picker dismissed");
+}
+
+void PrintStatusWidget::print_status_nozzle_picker_backdrop_cb(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] print_status_nozzle_picker_backdrop_cb");
+    if (s_active_nozzle_picker_)
+        s_active_nozzle_picker_->dismiss_nozzle_tool_picker();
     LVGL_SAFE_EVENT_CB_END();
 }
 

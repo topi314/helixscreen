@@ -422,6 +422,7 @@ void register_xml_components() {
     register_xml("thermistor_sensor_picker.xml");
     register_xml("thermistor_configure_picker.xml");
     register_xml("print_status_configure_picker.xml");
+    register_xml("print_status_nozzle_tool_picker.xml");
     register_xml("favorite_macro_picker.xml");
     helix::ui::PrinterSwitchMenu::register_callbacks();
     register_xml("printer_switch_menu.xml");

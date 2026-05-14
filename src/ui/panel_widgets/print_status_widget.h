@@ -55,6 +55,9 @@ class PrintStatusWidget : public PanelWidget {
     /// Configure picker callback
     static void print_status_picker_backdrop_cb(lv_event_t* e);
 
+    /// XML event callback — backdrop dismiss for nozzle picker
+    static void print_status_nozzle_picker_backdrop_cb(lv_event_t* e);
+
     /// Registry of live (attached) widget instances for use-after-free prevention
     static std::unordered_set<PrintStatusWidget*>& live_instances();
 
@@ -296,6 +299,12 @@ class PrintStatusWidget : public PanelWidget {
     void apply_picker_state();
 
     static PrintStatusWidget* s_active_picker_;
+
+    // Nozzle tool picker
+    lv_obj_t* nozzle_picker_backdrop_ = nullptr;
+    void show_nozzle_tool_picker(lv_obj_t* anchor);
+    void dismiss_nozzle_tool_picker();
+    static PrintStatusWidget* s_active_nozzle_picker_;
 };
 
 } // namespace helix
