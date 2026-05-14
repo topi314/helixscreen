@@ -215,10 +215,25 @@ class PrintStatusWidget : public PanelWidget {
         ObserverGuard time_left_observer_;
         ObserverGuard filament_used_observer_;
 
+        // Nozzle temp observers — paired SubjectLifetimes per [L084] for Task 8 pinning.
+        // In auto mode (default) the static active_extruder subjects are observed, lifetimes unused.
+        ObserverGuard nozzle_temp_observer_;
+        ObserverGuard nozzle_target_observer_;
+        SubjectLifetime nozzle_temp_lifetime_;
+        SubjectLifetime nozzle_target_lifetime_;
+
+        ObserverGuard bed_temp_observer_;
+        ObserverGuard bed_target_observer_;
+        ObserverGuard chamber_temp_observer_;
+        ObserverGuard chamber_target_observer_;
+
         void update_progress_pct();
         void update_layer_text();
         void update_time_text();
         void update_filament_text();
+        void update_nozzle_text();
+        void update_bed_text();
+        void update_chamber_text();
     };
 
     static inline std::unique_ptr<DetailedFormatter> s_formatter_;

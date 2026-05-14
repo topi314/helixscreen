@@ -1189,6 +1189,14 @@ void PrintStatusWidget::library_queue_cb(lv_event_t* e) {
 // DetailedFormatter — first-instance singleton lifecycle
 // ============================================================================
 
+namespace {
+// Centidegrees → rounded °C (positive values; negatives round toward zero, fine for temps)
+int cd_to_c(int cd) {
+    if (cd >= 0) return (cd + 50) / 100;
+    return (cd - 50) / 100;
+}
+} // namespace
+
 void PrintStatusWidget::DetailedFormatter::update_progress_pct() {
     int pct = lv_subject_get_int(get_printer_state().get_print_progress_subject());
     snprintf(progress_pct_buf_, sizeof(progress_pct_buf_), "%d%%", pct);
@@ -1225,6 +1233,34 @@ void PrintStatusWidget::DetailedFormatter::update_filament_text() {
         snprintf(filament_text_buf_, sizeof(filament_text_buf_), "%.1fm", used_mm / 1000.0);
     }
     lv_subject_copy_string(&filament_text_subject_, filament_text_buf_);
+}
+
+void PrintStatusWidget::DetailedFormatter::update_nozzle_text() {
+    auto& ps = get_printer_state();
+    int t = cd_to_c(lv_subject_get_int(ps.get_active_extruder_temp_subject()));
+    int tg = cd_to_c(lv_subject_get_int(ps.get_active_extruder_target_subject()));
+    snprintf(nozzle_text_buf_, sizeof(nozzle_text_buf_), "%d / %d°C", t, tg);
+    lv_subject_copy_string(&nozzle_text_subject_, nozzle_text_buf_);
+}
+
+void PrintStatusWidget::DetailedFormatter::update_bed_text() {
+    auto& ps = get_printer_state();
+    int t = cd_to_c(lv_subject_get_int(ps.get_bed_temp_subject()));
+    int tg = cd_to_c(lv_subject_get_int(ps.get_bed_target_subject()));
+    snprintf(bed_text_buf_, sizeof(bed_text_buf_), "%d / %d°C", t, tg);
+    lv_subject_copy_string(&bed_text_subject_, bed_text_buf_);
+}
+
+void PrintStatusWidget::DetailedFormatter::update_chamber_text() {
+    auto& ps = get_printer_state();
+    int t = cd_to_c(lv_subject_get_int(ps.get_chamber_temp_subject()));
+    int tg = cd_to_c(lv_subject_get_int(ps.get_chamber_target_subject()));
+    if (tg <= 0) {
+        snprintf(chamber_text_buf_, sizeof(chamber_text_buf_), "%d°C", t);
+    } else {
+        snprintf(chamber_text_buf_, sizeof(chamber_text_buf_), "%d / %d°C", t, tg);
+    }
+    lv_subject_copy_string(&chamber_text_subject_, chamber_text_buf_);
 }
 
 PrintStatusWidget::DetailedFormatter::DetailedFormatter() {
@@ -1274,11 +1310,34 @@ PrintStatusWidget::DetailedFormatter::DetailedFormatter() {
         ps.get_print_filament_used_subject(), this,
         [](DetailedFormatter* self, int) { self->update_filament_text(); });
 
+    // Auto-tool nozzle: observe static active_extruder subjects (no lifetime needed)
+    nozzle_temp_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_active_extruder_temp_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_nozzle_text(); });
+    nozzle_target_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_active_extruder_target_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_nozzle_text(); });
+    bed_temp_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_bed_temp_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_bed_text(); });
+    bed_target_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_bed_target_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_bed_text(); });
+    chamber_temp_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_chamber_temp_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_chamber_text(); });
+    chamber_target_observer_ = observe_int_sync<DetailedFormatter>(
+        ps.get_chamber_target_subject(), this,
+        [](DetailedFormatter* self, int) { self->update_chamber_text(); });
+
     // Seed initial values from current subject state
     update_progress_pct();
     update_layer_text();
     update_time_text();
     update_filament_text();
+    update_nozzle_text();
+    update_bed_text();
+    update_chamber_text();
 
     spdlog::debug("[DetailedFormatter] subjects initialized");
 }

@@ -101,3 +101,36 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter filament text formatted in
 
     REQUIRE(std::string(lv_subject_get_string(lv_xml_get_subject(nullptr, "print_status_filament_text"))) == "2.5m");
 }
+
+TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter writes temps (centidegrees rounding)",
+                 "[print_status][formatter][temps]") {
+    PrinterState& ps = get_printer_state();
+    PrinterStateTestAccess::reset(ps);
+    ps.init_subjects(false);
+
+    FormatterScope fs;
+    lv_subject_set_int(ps.get_active_extruder_temp_subject(), 21570);    // 215.70 → 216
+    lv_subject_set_int(ps.get_active_extruder_target_subject(), 22000);  // 220
+    lv_subject_set_int(ps.get_bed_temp_subject(), 6005);                  // 60.05 → 60
+    lv_subject_set_int(ps.get_bed_target_subject(), 6000);                // 60
+    lv_subject_set_int(ps.get_chamber_temp_subject(), 3800);              // 38, no target
+    lv_subject_set_int(ps.get_chamber_target_subject(), 0);
+    UpdateQueueTestAccess::drain_all(UpdateQueue::instance());
+
+    REQUIRE(std::string(lv_subject_get_string(lv_xml_get_subject(nullptr, "print_status_nozzle_text"))) == "216 / 220°C");
+    REQUIRE(std::string(lv_subject_get_string(lv_xml_get_subject(nullptr, "print_status_bed_text"))) == "60 / 60°C");
+    REQUIRE(std::string(lv_subject_get_string(lv_xml_get_subject(nullptr, "print_status_chamber_text"))) == "38°C");
+}
+
+TEST_CASE_METHOD(HelixTestFixture, "Chamber with target shows pair",
+                 "[print_status][formatter][temps]") {
+    PrinterState& ps = get_printer_state();
+    PrinterStateTestAccess::reset(ps);
+    ps.init_subjects(false);
+
+    FormatterScope fs;
+    lv_subject_set_int(ps.get_chamber_temp_subject(), 3500);     // 35
+    lv_subject_set_int(ps.get_chamber_target_subject(), 4500);   // 45
+    UpdateQueueTestAccess::drain_all(UpdateQueue::instance());
+    REQUIRE(std::string(lv_subject_get_string(lv_xml_get_subject(nullptr, "print_status_chamber_text"))) == "35 / 45°C");
+}
