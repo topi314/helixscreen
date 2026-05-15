@@ -55,6 +55,7 @@ LVGL_PATCHED_FILES := \
 	src/core/lv_obj.c \
 	src/core/lv_obj_style.c \
 	src/draw/sw/lv_draw_sw.c \
+	src/layouts/flex/lv_flex.c \
 	lv_conf_template.h
 
 # Files modified by libhv patches
@@ -565,6 +566,17 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 		echo "$(GREEN)✓ Style NULL guards patch applied$(RESET)"; \
 	else \
 		echo "$(GREEN)✓ LVGL style NULL guards patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) diff --quiet src/layouts/flex/lv_flex.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL flex hidden+grow gap fix (upstream #9897 backport)...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_flex_hidden_grow_gap.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl_flex_hidden_grow_gap.patch && \
+			echo "$(GREEN)✓ Flex hidden+grow gap fix applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL flex hidden+grow gap fix already applied$(RESET)"; \
 	fi
 	$(ECHO) "$(CYAN)Checking libhv patches...$(RESET)"
 	$(Q)if git -C $(LIBHV_DIR) diff --quiet Makefile.in 2>/dev/null; then \
