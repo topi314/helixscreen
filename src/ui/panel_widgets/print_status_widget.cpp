@@ -1520,6 +1520,13 @@ void PrintStatusWidget::DetailedFormatter::set_nozzle_tool_override(
     using helix::ui::observe_int_sync;
     auto& ps = get_printer_state();
 
+    // Skip rebind when the override hasn't changed — avoids needless
+    // observer churn on every layout/state event that funnels through here.
+    std::string normalized = (override_name.empty() ? std::string("auto") : override_name);
+    if (normalized == current_nozzle_override_ && static_cast<bool>(nozzle_temp_observer_)) {
+        return;
+    }
+
     // [L084] Clear lifetimes BEFORE observers to expire weak_ptr first.
     nozzle_temp_lifetime_.reset();
     nozzle_target_lifetime_.reset();
