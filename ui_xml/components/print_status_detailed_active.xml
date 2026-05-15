@@ -80,8 +80,11 @@
       <!-- Entire nozzle group is the click target for the tool picker; chevron
            is a visual affordance only (its hidden flag still gates on
            multi_tool, but its click is now subsumed by the parent). The
-           handler itself early-returns for single-tool printers. -->
-      <lv_obj width="content" height="content" style_pad_all="0" flex_flow="row"
+           handler itself early-returns for single-tool printers. The named
+           obj is also matched by print_card_clicked_cb so the print-card
+           click handler skips when the click originated here. -->
+      <lv_obj name="detailed_nozzle_click_target"
+              width="content" height="content" style_pad_all="0" flex_flow="row"
               style_pad_gap="#space_xs" style_flex_cross_place="center"
               scrollable="false" clickable="true" event_bubble="false">
         <event_cb trigger="clicked" callback="print_status_nozzle_chevron_cb"/>

@@ -31,6 +31,7 @@
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <string_view>
 #include <unordered_set>
 
 namespace helix {
@@ -1407,13 +1408,30 @@ static PrintStatusWidget* recover_widget_from_event(lv_event_t* e) {
 void PrintStatusWidget::print_card_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] print_card_clicked_cb");
 
-    auto* self = recover_widget_from_event(e);
-    if (self) {
-        self->record_interaction();
-        self->handle_print_card_clicked();
-    } else {
-        spdlog::warn(
-            "[PrintStatusWidget] print_card_clicked_cb: could not recover widget instance");
+    // Defense in depth — even if a child swallows the event with bubble=off,
+    // a stray bubble path still routes through here. Skip when the click
+    // originated inside the named nozzle click target; the chevron cb
+    // handles it.
+    bool from_nozzle_group = false;
+    if (auto* target = lv_event_get_target_obj(e)) {
+        for (lv_obj_t* o = target; o; o = lv_obj_get_parent(o)) {
+            const char* name = lv_obj_get_name(o);
+            if (name && std::string_view(name) == "detailed_nozzle_click_target") {
+                from_nozzle_group = true;
+                break;
+            }
+        }
+    }
+
+    if (!from_nozzle_group) {
+        auto* self = recover_widget_from_event(e);
+        if (self) {
+            self->record_interaction();
+            self->handle_print_card_clicked();
+        } else {
+            spdlog::warn(
+                "[PrintStatusWidget] print_card_clicked_cb: could not recover widget instance");
+        }
     }
 
     LVGL_SAFE_EVENT_CB_END();
