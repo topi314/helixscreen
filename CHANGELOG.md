@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.65] - 2026-05-15
+
+Same-day cherry-pick on top of v0.99.64 to repair the release-pipeline build. Debian Bullseye's multi-arch apt resolver couldn't reconcile the pre-installed `linux-libc-dev:amd64` against a newer `linux-libc-dev:arm64` from the mirror, blocking `libc6-dev:arm64` install in both the Pi and Pi32 Docker toolchain images. No code changes — same payload as v0.99.64.
+
+### Fixed
+
+- **Pi and Pi32 release builds were blocked by a Debian Bullseye multi-arch apt skew** — `libc6-dev:arm64` (and the armhf equivalent) couldn't be installed because the `linux-libc-dev` version baked into the amd64 base image diverged from the arm64/armhf version on Debian's mirror, so apt refused with "Depends: linux-libc-dev:arm64 but it is not going to be installed". `docker/Dockerfile.pi` and `docker/Dockerfile.pi32` now list `linux-libc-dev:amd64` and `linux-libc-dev:<target-arch>` together in the apt install line, forcing apt to pick a matching version pair. Caught when v0.99.64's release pipeline failed Pi/Pi32 jobs; the other eight platforms built fine.
+
 ## [0.99.64] - 2026-05-15
 
 A **unified exclude-objects side panel** with 3D selection brackets replaces the old fullscreen overlay, plus fixes for **CJK font rendering** of new translation keys, an **LVGL flex gap regression** when the first child is hidden, **STRING-subject image binding** (the print-status thumbnail was stuck on the benchy placeholder), and **missing-glyph arrows** in two user-facing dialogs.
@@ -3731,6 +3739,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.65]: https://github.com/prestonbrown/helixscreen/compare/v0.99.64...v0.99.65
 [0.99.64]: https://github.com/prestonbrown/helixscreen/compare/v0.99.63...v0.99.64
 [0.99.63]: https://github.com/prestonbrown/helixscreen/compare/v0.99.62...v0.99.63
 [0.99.62]: https://github.com/prestonbrown/helixscreen/compare/v0.99.61...v0.99.62

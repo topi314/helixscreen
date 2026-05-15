@@ -58,7 +58,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #     mismatches across Debian versions: Bullseye=libfmt.so.7, Bookworm=libfmt.so.9)
 #
 # Note: libssl-dev provides static archives (.a) used for static linking of OpenSSL.
+#
+# linux-libc-dev is listed for BOTH amd64 (host) and armhf (target) so apt picks a
+# matching version pair. Without this, when Debian's mirror briefly carries a newer
+# linux-libc-dev for armhf than the version pre-installed for amd64, libc6-dev:armhf
+# fails with "Depends: linux-libc-dev:armhf but it is not going to be installed".
 RUN dpkg --add-architecture armhf && apt-get update && apt-get install -y --no-install-recommends \
+    linux-libc-dev:amd64 linux-libc-dev:armhf \
     libc6-dev:armhf \
     libstdc++-10-dev:armhf \
     libdrm-dev:armhf \

@@ -58,7 +58,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #     mismatches across Debian versions: Bullseye=libfmt.so.7, Bookworm=libfmt.so.9)
 #
 # Note: libssl-dev provides static archives (.a) used for static linking of OpenSSL.
+#
+# linux-libc-dev is listed for BOTH amd64 (host) and arm64 (target) so apt picks a
+# matching version pair. Without this, when Debian's mirror briefly carries a newer
+# linux-libc-dev for arm64 than the version pre-installed for amd64, libc6-dev:arm64
+# fails with "Depends: linux-libc-dev:arm64 but it is not going to be installed".
 RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-install-recommends \
+    linux-libc-dev:amd64 linux-libc-dev:arm64 \
     libc6-dev:arm64 \
     libstdc++-10-dev:arm64 \
     libdrm-dev:arm64 \
