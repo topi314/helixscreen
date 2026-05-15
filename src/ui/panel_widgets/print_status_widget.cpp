@@ -1285,13 +1285,31 @@ void PrintStatusWidget::show_nozzle_tool_picker(lv_obj_t* anchor) {
         lv_obj_set_width(card, card_w);
     }
 
-    auto add_row = [option_list](const char* label, const std::string& tool_key) {
-        const char* attrs[] = {"width",   "100%",            "height", "#button_height_sm",
-                               "variant", "ghost",            "text",   label,
-                               nullptr};
-        lv_obj_t* row = static_cast<lv_obj_t*>(lv_xml_create(option_list, "ui_button", attrs));
-        if (!row)
-            return;
+    // Resolve a couple of space tokens for padding.
+    auto resolve_space = [](const char* name, int fallback) -> int {
+        const char* s = lv_xml_get_const(nullptr, name);
+        return s ? std::atoi(s) : fallback;
+    };
+    int space_sm = resolve_space("space_sm", 6);
+
+    auto add_row = [option_list, space_sm](const char* label, const std::string& tool_key) {
+        // Plain lv_obj row with a centered label — same shape the configure
+        // picker uses for its checkbox rows. Going through lv_xml_create on
+        // ui_button didn't render reliably here.
+        lv_obj_t* row = lv_obj_create(option_list);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_all(row, space_sm, 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(row, 0, 0);
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t* lbl = lv_label_create(row);
+        lv_label_set_text(lbl, label);
+        lv_obj_set_style_text_color(lbl, theme_manager_get_color("text"), 0);
+        lv_obj_remove_flag(lbl, LV_OBJ_FLAG_CLICKABLE);
+
         auto* key_holder = new std::string(tool_key);
         lv_obj_set_user_data(row, key_holder);
         lv_obj_add_event_cb(
