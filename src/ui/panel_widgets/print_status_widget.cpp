@@ -1275,6 +1275,16 @@ void PrintStatusWidget::show_nozzle_tool_picker(lv_obj_t* anchor) {
         return;
     }
 
+    // Give the context_menu an explicit width before adding rows. The XML has
+    // width=content; option_list inside has width=100%, which would otherwise
+    // resolve against a still-zero content area (L082) and collapse rows to
+    // zero width. Same trick the configure picker uses.
+    if (lv_obj_t* card = lv_obj_find_by_name(nozzle_picker_backdrop_, "context_menu")) {
+        int screen_w = lv_obj_get_width(parent_screen_);
+        int card_w = std::clamp(screen_w * 3 / 10, 160, 240);
+        lv_obj_set_width(card, card_w);
+    }
+
     auto add_row = [option_list](const char* label, const std::string& tool_key) {
         const char* attrs[] = {"width",   "100%",            "height", "#button_height_sm",
                                "variant", "ghost",            "text",   label,
