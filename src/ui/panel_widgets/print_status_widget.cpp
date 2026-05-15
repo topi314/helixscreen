@@ -1534,8 +1534,22 @@ void PrintStatusWidget::DetailedFormatter::update_nozzle_text() {
         temp_sub = ps.get_extruder_temp_subject(current_nozzle_override_);
         tgt_sub  = ps.get_extruder_target_subject(current_nozzle_override_);
     }
-    int t  = cd_to_c(temp_sub ? lv_subject_get_int(temp_sub) : 0);
-    int tg = cd_to_c(tgt_sub  ? lv_subject_get_int(tgt_sub)  : 0);
+    int temp_dd = temp_sub ? lv_subject_get_int(temp_sub) : 0;
+    int tgt_dd  = tgt_sub  ? lv_subject_get_int(tgt_sub)  : 0;
+    // Mirror into proxy subjects (decidegrees) — temp_display in the detailed
+    // XML binds to these and gets heating-color rendering for free, including
+    // when pinned to a specific tool.
+    if (lv_subject_get_int(&nozzle_current_subject_) != temp_dd) {
+        lv_subject_set_int(&nozzle_current_subject_, temp_dd);
+    }
+    if (lv_subject_get_int(&nozzle_target_subject_) != tgt_dd) {
+        lv_subject_set_int(&nozzle_target_subject_, tgt_dd);
+    }
+    // String form kept for the (unused-by-XML but test-asserted) nozzle_text
+    // subject, so test_print_status_widget_tool_override.cpp still verifies
+    // the pinning + auto-mode dispatch.
+    int t  = cd_to_c(temp_dd);
+    int tg = cd_to_c(tgt_dd);
     snprintf(nozzle_text_buf_, sizeof(nozzle_text_buf_), "%d / %d°C", t, tg);
     lv_subject_copy_string(&nozzle_text_subject_, nozzle_text_buf_);
 }
@@ -1693,6 +1707,10 @@ PrintStatusWidget::DetailedFormatter::DetailedFormatter() {
                               "print_status_chamber_text", subjects_);
     UI_MANAGED_SUBJECT_STRING(nozzle_tool_label_subject_, nozzle_tool_label_buf_, "",
                               "print_status_nozzle_tool_label", subjects_);
+    UI_MANAGED_SUBJECT_INT(nozzle_current_subject_, 0,
+                           "print_status_nozzle_current", subjects_);
+    UI_MANAGED_SUBJECT_INT(nozzle_target_subject_, 0,
+                           "print_status_nozzle_target", subjects_);
     UI_MANAGED_SUBJECT_STRING(idle_filename_subject_, idle_filename_buf_, "",
                               "print_status_idle_filename", subjects_);
     UI_MANAGED_SUBJECT_STRING(idle_when_subject_, idle_when_buf_, "Never printed",

@@ -251,6 +251,12 @@ class PrintStatusWidget : public PanelWidget {
         lv_subject_t bed_text_subject_;
         lv_subject_t chamber_text_subject_;
         lv_subject_t nozzle_tool_label_subject_;
+        // Proxy temp subjects (decidegrees, int) so the temp_display widget in the
+        // detailed XML follows the pinned tool when nozzle_tool_override is set.
+        // The formatter's nozzle_temp/target observers re-bind on pin change and
+        // copy the source value into these proxies; XML binds temp_display to them.
+        lv_subject_t nozzle_current_subject_;
+        lv_subject_t nozzle_target_subject_;
         lv_subject_t idle_filename_subject_;
         lv_subject_t idle_when_subject_;
         lv_subject_t idle_meta_subject_;

@@ -267,9 +267,36 @@ void MoonrakerManager::create_client(const RuntimeConfig& runtime_config) {
 #ifdef HELIX_ENABLE_MOCKS
     if (runtime_config.should_mock_moonraker()) {
         double speedup = runtime_config.sim_speedup;
-        spdlog::debug("[MoonrakerManager] Creating MOCK client (Voron 2.4, {}x speed)", speedup);
-        auto mock = std::make_unique<MoonrakerClientMock>(
-            MoonrakerClientMock::PrinterType::VORON_24, speedup);
+        // HELIX_MOCK_PRINTER=multi_extruder|voron_24|voron_trident|k1|k2|ad5m|
+        // generic_corexy|generic_bedslinger|cc1 — defaults to Voron 2.4.
+        const char* type_env = std::getenv("HELIX_MOCK_PRINTER");
+        auto type = MoonrakerClientMock::PrinterType::VORON_24;
+        const char* type_name = "Voron 2.4";
+        if (type_env) {
+            std::string t(type_env);
+            if (t == "multi_extruder") {
+                type = MoonrakerClientMock::PrinterType::MULTI_EXTRUDER;
+                type_name = "Multi-Extruder";
+            } else if (t == "voron_trident") {
+                type = MoonrakerClientMock::PrinterType::VORON_TRIDENT;
+                type_name = "Voron Trident";
+            } else if (t == "k1") {
+                type = MoonrakerClientMock::PrinterType::CREALITY_K1;
+                type_name = "Creality K1";
+            } else if (t == "ad5m") {
+                type = MoonrakerClientMock::PrinterType::FLASHFORGE_AD5M;
+                type_name = "Flashforge AD5M";
+            } else if (t == "generic_corexy") {
+                type = MoonrakerClientMock::PrinterType::GENERIC_COREXY;
+                type_name = "Generic CoreXY";
+            } else if (t == "generic_bedslinger") {
+                type = MoonrakerClientMock::PrinterType::GENERIC_BEDSLINGER;
+                type_name = "Generic Bedslinger";
+            }
+        }
+        spdlog::info("[MoonrakerManager] Creating MOCK client ({}, {}x speed)",
+                     type_name, speedup);
+        auto mock = std::make_unique<MoonrakerClientMock>(type, speedup);
         // Disable MMU if AMS is explicitly disabled via CLI or env var
         const char* mock_ams_env = std::getenv("HELIX_MOCK_AMS");
         bool ams_disabled = runtime_config.disable_mock_ams ||

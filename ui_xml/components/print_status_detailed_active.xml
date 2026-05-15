@@ -84,8 +84,12 @@
           <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
         </text_small>
         <nozzle_icon size="sm" badge_subject="" clickable="false" event_bubble="true"/>
+        <!-- Bound to formatter-driven proxy subjects so pinning to a specific tool
+             (via the chevron picker) actually changes the displayed temperature.
+             The formatter rebinds its underlying observer on pin change. -->
         <temp_display size="xs" show_target="true"
-                      bind_current="extruder_temp" bind_target="extruder_target"
+                      bind_current="print_status_nozzle_current"
+                      bind_target="print_status_nozzle_target"
                       clickable="false" event_bubble="true"/>
         <icon src="chevron_down" size="sm">
           <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
