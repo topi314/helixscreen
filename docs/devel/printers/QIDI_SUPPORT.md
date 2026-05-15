@@ -2,9 +2,21 @@
 
 # QIDI Printer Support
 
-HelixScreen can run on QIDI printers that have a Linux framebuffer display. However, most older QIDI models use TJC HMI displays (a Chinese Nextion clone) connected over serial UART -- these are standalone MCU-driven screens that cannot be replaced by HelixScreen without a physical screen swap.
+HelixScreen supports the entire QIDI 3-series and 4-series in two distinct modes. Which mode you use depends on whether you want HelixScreen running on the printer's built-in screen, or on a separate touchscreen device (Raspberry Pi, repurposed tablet, etc.) controlling the printer over the network.
 
-If your QIDI is running standard Moonraker -- whether through stock firmware, FreeDi, OpenQ1, or another community project -- and has a Linux framebuffer display, HelixScreen can replace the built-in display interface.
+## Two Operating Modes
+
+**Remote control (network client) -- works on every supported QIDI**
+
+If your QIDI is running Klipper + Moonraker -- whether that's stock firmware, [FreeDi](https://github.com/Phil1988/FreeDi), [OpenQIDI](https://openqidi.com/), or another community stack -- HelixScreen can control it remotely from a separate touchscreen device. The printer's local display (TJC HMI or otherwise) is irrelevant in this mode; HelixScreen talks to Moonraker over WebSocket on port 7125 the same way Mainsail or Fluidd does.
+
+All six QIDI models in the printer database (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro, Plus 4, Q2) are auto-detected as remote targets. Just point HelixScreen at the printer's hostname or IP and the correct profile loads automatically.
+
+**On-device install (replace the built-in UI)**
+
+This mode requires a Linux framebuffer display. Most older QIDI models use TJC HMI displays (a Chinese Nextion clone) connected over serial UART -- standalone MCU-driven screens that HelixScreen cannot drive without a physical screen swap. FreeDi targets that serial display from the mainboard side with its own firmware; HelixScreen can't.
+
+The newer 4-series models (Q2, Plus 4, Max 4) ship with framebuffer displays and can run HelixScreen directly on the printer.
 
 ## Display Compatibility
 
@@ -20,24 +32,35 @@ QIDI uses two generations of mainboard:
 - **Older models (X-Max 3, X-Plus 3, Q1 Pro, X-Smart 3):** MKSPI boards with Rockchip RK3328, ARM Cortex-A53 (aarch64), 1 GB RAM. These all use TJC HMI serial displays.
 - **Newer models (Q2, Plus 4, Max 4):** New-generation boards with quad-core ARM Cortex-A35 (aarch64), ~498 MB RAM. These use Linux framebuffer displays driven by the SoC.
 
-| Model | Display Type | Resolution | HelixScreen Compatible? | Notes |
-|-------|-------------|------------|------------------------|-------|
+"On-device" below means whether HelixScreen can replace the printer's built-in display. **All six models work as remote targets regardless of this column.**
+
+| Model | Display Type | Resolution | On-Device Install? | Notes |
+|-------|-------------|------------|--------------------|-------|
 | Q2 | Linux framebuffer (4.3" IPS capacitive) | 480x272 | **Yes** (confirmed) | Goodix touch controller. User-confirmed working install. WiFi requires wpa_supplicant backend (see below). |
 | Plus 4 | Linux framebuffer (5" capacitive) | 800x480 | **Likely yes** (untested) | Same new-gen board architecture as Q2. Uses TJC HMI on stock firmware but has Linux framebuffer capability with FreeDi/OpenQIDI. |
 | Max 4 | Linux framebuffer (5" capacitive) | 800x480 | **Likely yes** (untested) | Same display and board architecture as Plus 4. |
-| X-Max 3 | TJC HMI (serial) | 800x480 | **No** | Requires screen replacement (HDMI/DSI touchscreen). |
-| X-Plus 3 | TJC HMI (serial) | 800x480 | **No** | Requires screen replacement. Same display firmware as X-Max 3. |
-| Q1 Pro | TJC HMI (serial) | 480x272 | **No** | Requires screen replacement. TJC model TJC4827X243_011. |
-| X-Smart 3 | TJC HMI (serial) | 480x272 | **No** | Requires screen replacement. |
+| X-Max 3 | TJC HMI (serial) | 800x480 | **No** | Requires screen replacement (HDMI/DSI touchscreen). Auto-detected as remote target. |
+| X-Plus 3 | TJC HMI (serial) | 800x480 | **No** | Requires screen replacement. Same display firmware as X-Max 3. Auto-detected as remote target. |
+| Q1 Pro | TJC HMI (serial) | 480x272 | **No** | Requires screen replacement. TJC model TJC4827X243_011. Auto-detected as remote target. |
+| X-Smart 3 | TJC HMI (serial) | 480x272 | **No** | Requires screen replacement. Smallest of the 3-series (175x180x170, passive enclosure, no active chamber heater). Auto-detected as remote target. |
 
-## Installation
+## Remote Control (Network Client)
+
+No QIDI-side install is needed. Run HelixScreen on a Raspberry Pi, repurposed Android tablet, or any other supported device, and add the QIDI printer by hostname or IP. Auto-detection identifies the model from Klipper objects, macros, hostname, and build volume. The right print start profile and capabilities load automatically.
+
+This works on **stock firmware** (Q2, Plus 4, Max 4 all run standard Moonraker) and on **community stacks** like [FreeDi](https://github.com/Phil1988/FreeDi), [OpenQIDI](https://openqidi.com/), or [53Aries/Q2-Firmware](https://github.com/53Aries/Q2-Firmware) -- anything that exposes Moonraker on port 7125.
+
+For the older 3-series (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro), FreeDi is the easy path to a clean Klipper + Moonraker + Mainsail stack. FreeDi's own `FreeDiLCD` keeps the printer's local TJC display alive; HelixScreen runs separately on your touchscreen device and controls the printer over the network.
+
+## On-Device Installation
+
+This section is for replacing the printer's built-in display with HelixScreen running directly on the printer. Only supported on Linux-framebuffer models (see table above).
 
 ### Prerequisites
 
-- A QIDI printer with a compatible display (see table above)
+- A QIDI printer with a Linux framebuffer display (Q2, Plus 4, Max 4)
 - SSH access to the printer
-- For older models (X-Max 3, X-Plus 3): **[FreeDi](https://github.com/Phil1988/FreeDi) installed first** -- FreeDi replaces QIDI's stock OS with Armbian and mainline Klipper/Moonraker.
-- For newer models (Q2, Plus 4, Max 4): Stock firmware runs standard Moonraker and can work directly. Community firmware like [53Aries/Q2-Firmware](https://github.com/53Aries/Q2-Firmware) or [OpenQIDI](https://openqidi.com/) may also be used.
+- Stock firmware works directly. Community firmware like [53Aries/Q2-Firmware](https://github.com/53Aries/Q2-Firmware) or [OpenQIDI](https://openqidi.com/) may also be used.
 
 ### Using the Pi/aarch64 Binary
 
@@ -77,11 +100,11 @@ Ensure the user running HelixScreen has read permissions on the event device. Ru
 
 ## Auto-Detection
 
-HelixScreen auto-detects QIDI printers using several heuristics:
+HelixScreen auto-detects all six supported QIDI models (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro, Plus 4, Q2) using several heuristics:
 
-- Hostname patterns
-- Chamber heater presence
-- MCU identification patterns
+- Hostname patterns (`qidi`, `x-max`, `x-plus`, `x-smart`, `xsmart`, `q1`, `plus4`)
+- Active chamber heater presence (X-Max 3, X-Plus 3, Q1 Pro, Plus 4 -- X-Smart 3 has a passive enclosure with no heater)
+- MCU identification patterns (RP2040 toolhead -- QIDI dual-MCU signature)
 - Build volume dimensions
 - QIDI-specific G-code macros (`M141`, `M191`, `CLEAR_NOZZLE`)
 
@@ -141,7 +164,7 @@ Real integration is blocked on test-hardware access.
 
 ## Known Limitations
 
-- **Most older QIDI models have TJC HMI serial displays** -- The X-Max 3, X-Plus 3, Q1 Pro, and X-Smart 3 all use TJC (Nextion-compatible) displays connected via serial UART. HelixScreen cannot drive these. A physical screen replacement (HDMI or DSI touchscreen) is required.
+- **Most older QIDI models have TJC HMI serial displays** -- The X-Max 3, X-Plus 3, Q1 Pro, and X-Smart 3 all use TJC (Nextion-compatible) displays connected via serial UART. HelixScreen cannot drive these. For on-device install, a physical screen replacement (HDMI or DSI touchscreen) is required. Remote-control mode is unaffected.
 - **Q2 resolution is very small** -- The Q2's 480x272 display uses the MICRO layout. Some UI elements may be cramped but the layout is functional.
 - **Q2 has limited RAM** -- ~498 MB total. HelixScreen must be memory-conscious on this device.
 - **Plus 4 and Max 4 untested** -- Detection heuristics and display rendering for these models are based on specs. Community testers welcome.

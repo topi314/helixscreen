@@ -1,6 +1,6 @@
 {
   "name": "QIDI",
-  "description": "QIDI enclosed CoreXY printers (X-Max 3, X-Plus 3, Q1 Pro, Plus 4, Q2)",
+  "description": "QIDI enclosed CoreXY printers (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro, Plus 4, Q2)",
   "progress_mode": "weighted",
   "signal_formats": [],
   "response_patterns": [

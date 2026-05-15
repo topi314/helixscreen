@@ -2610,6 +2610,68 @@
       ]
     },
     {
+      "id": "qidi_x_smart_3",
+      "name": "Qidi X-Smart 3",
+      "manufacturer": "Qidi",
+      "image": "qidi-x-smart-3.png",
+      "print_start_profile": "qidi",
+      "notes": "Smallest of the Qidi 3-series (175x180x170 build volume, passive enclosure, no active chamber heater). Stock display is a TJC HMI on serial bus at 480x272 -- on-device install requires screen replacement. Works without modification as a remote target when HelixScreen runs on a separate touchscreen.",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 160,
+          "max_x": 185,
+          "min_y": 160,
+          "max_y": 185,
+          "confidence": 60,
+          "reason": "Build volume ~175mm (X-Smart 3 size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "qidi",
+          "confidence": 80,
+          "reason": "Hostname contains 'qidi'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "x-smart",
+          "confidence": 90,
+          "reason": "Hostname contains 'x-smart'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "xsmart",
+          "confidence": 90,
+          "reason": "Hostname contains 'xsmart'"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "CLEAR_NOZZLE",
+          "confidence": 60,
+          "reason": "CLEAR_NOZZLE macro (common on QIDI printers)"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "rp2040",
+          "confidence": 45,
+          "reason": "RP2040 toolhead MCU (QIDI dual-MCU design)"
+        }
+      ]
+    },
+    {
       "id": "qidi_q2",
       "name": "Qidi Q2",
       "manufacturer": "Qidi",
