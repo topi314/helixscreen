@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.64] - 2026-05-15
+
+A **unified exclude-objects side panel** with 3D selection brackets replaces the old fullscreen overlay, plus fixes for **CJK font rendering** of new translation keys, an **LVGL flex gap regression** when the first child is hidden, **STRING-subject image binding** (the print-status thumbnail was stuck on the benchy placeholder), and **missing-glyph arrows** in two user-facing dialogs.
+
+### Added
+
+- **Unified exclude-objects side panel** — the fullscreen exclude-objects list is replaced by a slide-in side panel pinned over the print-status controls column. Map view stays in the thumbnail card, the gcode viewer keeps full width (2D / 3D), and the list lands on the right at ~44% in every mode. Row taps and viewer taps fire the same confirm modal; row taps also pulse the matching object's highlight in the viewer for cross-pane feedback. The 3D viewer gains GLES corner-bracket rendering for highlighted objects (line shader + per-frame VBO inside the FBO, sharing the geometry-pass MVP); 2D and 3D both share `AABB::for_each_bracket_arm()` so the bracket geometry stays in lockstep. Bbox-projection fallback in `pick_object` fixes wrong-object picks after the geometry pass clears segments.
+
+### Fixed
+
+- **Print-status thumbnails were stuck on the benchy placeholder** — `bind_src` in helix-xml only handled `LV_SUBJECT_TYPE_POINTER`; STRING subjects (e.g. `print_thumbnail_path`, `print_status_idle_thumb_path`) silently fell back to the static XML `src=`. STRING subjects now route through a local observer that calls `lv_image_set_src` on the resolved path.
+- **Flex layout left an unwanted gap before the first laid-out child** when that child was hidden and the next visible sibling had `flex_grow>0` — backport of upstream lvgl/lvgl#9897; the patch is wired into `mk/patches.mk` so submodule resets don't lose it.
+- **Missing-glyph arrow boxes in two user-facing dialogs** — the bundled NotoSans Regular/Bold/Light TTFs don't include U+2190–U+2193, so the multi-tool material-mismatch row and the internal-error toast rendered a tofu box where an arrow was supposed to be. Replaced with `->` and `Settings > About` respectively.
+
+### Changed
+
+- **CJK fonts regenerated for new translation keys** — 1127 new CJK characters from the latest translation sync are now included in `noto_sans_cjk_*.bin`, so Chinese/Japanese locales render the new strings (Library, Objects, Show temp for, Follow active tool, Keep Navigation Bar, etc.) instead of falling back to a missing-glyph box.
+- **Translation keys synced across all locales** — 7 new keys added with non-English locales populated as untranslated placeholders; compiled artifacts regenerated.
+- **Docs: QIDI Q2 stock-firmware 1-line installer + WiFi confirmed working.**
+
 ## [0.99.63] - 2026-05-15
 
 This release lands the **Detailed print-status layout** — a multi-tool-aware redesign with per-nozzle temperature pinning, a Library/Detailed picker, and an idle hero pulling thumbnails from print history — plus **3D gcode-viewer performance wins** (vertex packing 36→20 bytes for ~44% buffer reduction, in-place tool-color patching), a **real input-shaper wizard abort** when you back out mid-calibration, and a fix for **settings loss on flash power-loss** by `fsync`'ing `settings.json` and its parent directory.
@@ -3711,6 +3731,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.64]: https://github.com/prestonbrown/helixscreen/compare/v0.99.63...v0.99.64
 [0.99.63]: https://github.com/prestonbrown/helixscreen/compare/v0.99.62...v0.99.63
 [0.99.62]: https://github.com/prestonbrown/helixscreen/compare/v0.99.61...v0.99.62
 [0.99.61]: https://github.com/prestonbrown/helixscreen/compare/v0.99.60...v0.99.61
