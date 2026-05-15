@@ -1016,8 +1016,9 @@ TEST_CASE("prepare_interleaved_buffers produces correct buffer count and vertex 
     for (size_t i = 0; i < geom.layer_strip_ranges.size(); ++i) {
         size_t strip_count = geom.layer_strip_ranges[i].second;
         REQUIRE(geom.prepared_buffers[i].vertex_count == strip_count * 6);
-        // Data vector should hold 9 floats per vertex
-        REQUIRE(geom.prepared_buffers[i].data.size() == geom.prepared_buffers[i].vertex_count * 9);
+        // Data is raw bytes — one PackedVertex (20B) per vertex.
+        REQUIRE(geom.prepared_buffers[i].data.size() ==
+                geom.prepared_buffers[i].vertex_count * PackedVertex::stride());
     }
 }
 
@@ -1051,10 +1052,12 @@ TEST_CASE("prepare_interleaved_buffers data matches manual expansion",
     REQUIRE(geom.prepared_buffers.size() >= 1);
     auto& buf = geom.prepared_buffers[0];
     REQUIRE(buf.vertex_count > 0);
+    REQUIRE(buf.data.size() == buf.vertex_count * PackedVertex::stride());
 
-    // Manually expand the first strip and compare
+    // Manually expand the first strip and compare against the packed layout.
     const auto& strip = geom.strips[0];
     static constexpr int kTriIndices[6] = {0, 1, 2, 1, 3, 2};
+    const auto* packed = reinterpret_cast<const PackedVertex*>(buf.data.data());
 
     for (int ti = 0; ti < 6; ++ti) {
         const auto& vert = geom.vertices[strip[static_cast<size_t>(kTriIndices[ti])]];
@@ -1065,20 +1068,21 @@ TEST_CASE("prepare_interleaved_buffers data matches manual expansion",
         if (vert.color_index < geom.color_palette.size()) {
             rgb = geom.color_palette[vert.color_index];
         }
-        float r = ((rgb >> 16) & 0xFF) / 255.0f;
-        float g = ((rgb >> 8) & 0xFF) / 255.0f;
-        float b = (rgb & 0xFF) / 255.0f;
+        uint8_t expected_color[4];
+        PackedVertex::encode_color(rgb, expected_color);
+        int8_t expected_normal[2];
+        PackedVertex::encode_normal(normal, expected_normal);
 
-        size_t base = static_cast<size_t>(ti) * 9;
-        REQUIRE(buf.data[base + 0] == Approx(pos.x).margin(0.01f));
-        REQUIRE(buf.data[base + 1] == Approx(pos.y).margin(0.01f));
-        REQUIRE(buf.data[base + 2] == Approx(pos.z).margin(0.01f));
-        REQUIRE(buf.data[base + 3] == Approx(normal.x).margin(0.001f));
-        REQUIRE(buf.data[base + 4] == Approx(normal.y).margin(0.001f));
-        REQUIRE(buf.data[base + 5] == Approx(normal.z).margin(0.001f));
-        REQUIRE(buf.data[base + 6] == Approx(r).margin(0.01f));
-        REQUIRE(buf.data[base + 7] == Approx(g).margin(0.01f));
-        REQUIRE(buf.data[base + 8] == Approx(b).margin(0.01f));
+        const auto& pv = packed[ti];
+        REQUIRE(pv.position[0] == Approx(pos.x).margin(0.01f));
+        REQUIRE(pv.position[1] == Approx(pos.y).margin(0.01f));
+        REQUIRE(pv.position[2] == Approx(pos.z).margin(0.01f));
+        REQUIRE(pv.color[0] == expected_color[0]);
+        REQUIRE(pv.color[1] == expected_color[1]);
+        REQUIRE(pv.color[2] == expected_color[2]);
+        REQUIRE(pv.color[3] == expected_color[3]);
+        REQUIRE(pv.normal[0] == expected_normal[0]);
+        REQUIRE(pv.normal[1] == expected_normal[1]);
     }
 }
 

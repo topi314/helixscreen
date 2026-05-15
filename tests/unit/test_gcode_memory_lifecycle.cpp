@@ -67,16 +67,16 @@ TEST_CASE("prepared_buffers consume significant memory relative to compact data"
     REQUIRE(!geom->vertices.empty());
     REQUIRE(!geom->strips.empty());
 
-    // prepared_buffers hold 9 floats (36 bytes) per vertex, expanded from
-    // compact RibbonVertex (9 bytes). They should be substantially larger.
+    // prepared_buffers hold one packed 20-byte vertex per expanded triangle vertex,
+    // versus a compact 9-byte RibbonVertex in the indexed mesh. With strip expansion
+    // (6 verts per strip vs 4 indexed) the prepared buffers should be substantially
+    // larger than the compact vertex pool.
     size_t prepared_bytes = 0;
     for (const auto& pb : geom->prepared_buffers) {
-        prepared_bytes += pb.data.size() * sizeof(float);
+        prepared_bytes += pb.data.size();
     }
     size_t compact_bytes = geom->vertices.size() * sizeof(RibbonVertex);
 
-    // Interleaved data should be at least 3x larger than compact vertices
-    // (36 bytes vs 9 bytes per vertex, plus 6 verts per strip vs 4 indexed)
     REQUIRE(prepared_bytes > compact_bytes * 2);
 }
 
@@ -164,10 +164,11 @@ TEST_CASE("Geometry data supports CPU re-expansion after prepared_buffers cleare
     // Verify prepared_buffers match the manual expansion path
     REQUIRE(!geom->prepared_buffers.empty());
 
-    // Save a reference vertex from prepared_buffers for comparison
+    // Snapshot the first prepared layer for byte-exact comparison after rebuild.
     auto& first_buf = geom->prepared_buffers[0];
     REQUIRE(first_buf.vertex_count > 0);
-    std::vector<float> reference_data(first_buf.data.begin(), first_buf.data.end());
+    REQUIRE(first_buf.data.size() == first_buf.vertex_count * PackedVertex::stride());
+    std::vector<uint8_t> reference_data(first_buf.data.begin(), first_buf.data.end());
 
     // Clear prepared_buffers (simulating post-VBO-upload cleanup)
     geom->prepared_buffers.clear();
@@ -179,15 +180,16 @@ TEST_CASE("Geometry data supports CPU re-expansion after prepared_buffers cleare
     REQUIRE(!geom->normal_palette.empty());
     REQUIRE(!geom->layer_strip_ranges.empty());
 
-    // Manually re-expand first layer (mirrors upload_geometry_chunk CPU fallback)
+    // Manually re-expand first layer (mirrors upload_geometry_chunk CPU fallback,
+    // packed 20-byte PackedVertex layout).
     auto [first_strip, strip_count] = geom->layer_strip_ranges[0];
     REQUIRE(strip_count > 0);
 
     size_t total_verts = strip_count * 6;
-    std::vector<float> re_expanded(total_verts * 9);
+    std::vector<uint8_t> re_expanded(total_verts * PackedVertex::stride());
     static constexpr int kTriIndices[6] = {0, 1, 2, 1, 3, 2};
 
-    size_t out_idx = 0;
+    auto* out = reinterpret_cast<PackedVertex*>(re_expanded.data());
     for (size_t s = 0; s < strip_count; ++s) {
         const auto& strip = geom->strips[first_strip + s];
         for (int ti = 0; ti < 6; ++ti) {
@@ -195,28 +197,23 @@ TEST_CASE("Geometry data supports CPU re-expansion after prepared_buffers cleare
             glm::vec3 pos = geom->quantization.dequantize_vec3(vert.position);
             const glm::vec3& normal = geom->normal_palette[vert.normal_index];
 
-            re_expanded[out_idx++] = pos.x;
-            re_expanded[out_idx++] = pos.y;
-            re_expanded[out_idx++] = pos.z;
-            re_expanded[out_idx++] = normal.x;
-            re_expanded[out_idx++] = normal.y;
-            re_expanded[out_idx++] = normal.z;
+            out->position[0] = pos.x;
+            out->position[1] = pos.y;
+            out->position[2] = pos.z;
 
             uint32_t rgb = 0x26A69A;
             if (vert.color_index < geom->color_palette.size()) {
                 rgb = geom->color_palette[vert.color_index];
             }
-            re_expanded[out_idx++] = ((rgb >> 16) & 0xFF) / 255.0f;
-            re_expanded[out_idx++] = ((rgb >> 8) & 0xFF) / 255.0f;
-            re_expanded[out_idx++] = (rgb & 0xFF) / 255.0f;
+            PackedVertex::encode_color(rgb, out->color);
+            PackedVertex::encode_normal(normal, out->normal);
+            ++out;
         }
     }
 
-    // Re-expanded data should match what prepared_buffers had
+    // Re-expanded bytes should match what prepared_buffers held.
     REQUIRE(re_expanded.size() == reference_data.size());
-    for (size_t i = 0; i < re_expanded.size(); ++i) {
-        REQUIRE(re_expanded[i] == Catch::Approx(reference_data[i]).margin(0.001f));
-    }
+    REQUIRE(re_expanded == reference_data);
 }
 
 // ============================================================================
