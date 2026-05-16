@@ -27,31 +27,46 @@ Solutions to common problems with HelixScreen.
 
 ## Quick Debugging Guide
 
-**Before troubleshooting anything, increase log verbosity:**
+**Before troubleshooting anything, increase log verbosity. Three taps, no SSH:**
+
+1. **Settings → System → Log Level → Debug** (or Trace for the deepest detail)
+2. Reproduce the problem
+3. **Settings → Help & About → Upload Debug Bundle** — collects the verbose log + system info and gives you a short share code to paste into a bug report
+4. Set Log Level back to **Warn** when done — Debug and Trace add CPU and log volume
+
+That's the path for almost everyone. Use the alternatives below only if you can't reach Settings.
+
+**If the UI is broken or you need persistent verbose logging across reboots** — set the level in `helixscreen.env` (the launcher reads this on every start):
+
+```
+HELIX_LOG_LEVEL=debug    # trace, debug, info, warn, error, critical, off
+```
+
+The file lives at `<install dir>/config/helixscreen.env` (or `/etc/helixscreen/helixscreen.env`). Restart the service after editing:
 
 ```bash
-# MainsailOS - edit service temporarily
-sudo systemctl edit --force helixscreen
-# Add these lines (use your actual install path):
-[Service]
-ExecStart=
-ExecStart=~/helixscreen/bin/helix-launcher.sh -vv
+sudo systemctl restart helixscreen        # Raspberry Pi
+/etc/init.d/S99helixscreen restart        # K1 / K2 / Snapmaker U1
+/etc/init.d/S80helixscreen restart        # AD5M
+/etc/init.d/helixscreen restart           # CC1
+```
 
-# Then restart
-sudo systemctl daemon-reload
-sudo systemctl restart helixscreen
+Then tail the log:
 
-# Watch logs
-sudo journalctl -u helixscreen -f
+```bash
+sudo journalctl -u helixscreen -f         # Raspberry Pi (systemd)
+tail -f /var/log/messages | grep helix    # AD5M / non-systemd
 ```
 
 **Verbosity levels:**
-- No flag: WARN only (production default)
-- `-v`: INFO - connection events, panel changes
-- `-vv`: DEBUG - detailed state changes, API calls
-- `-vvv`: TRACE - everything including LVGL internals
+- `warn` — production default (errors and warnings only)
+- `info` — connection events, panel changes
+- `debug` — detailed state changes, API calls
+- `trace` — everything including LVGL internals
 
-**Remember to remove `-vv` after debugging** - verbose logging impacts performance.
+> **Remember to set it back to `warn`** when done — verbose logging impacts performance and log volume.
+
+**Last-resort CLI:** if the service won't start at all, run the binary directly to see startup output: `~/helixscreen/bin/helix-screen -vv` (stop the service first so it doesn't fight for the framebuffer).
 
 ---
 
@@ -731,6 +746,10 @@ Three separate settings control the feel of taps vs. scrolls. Match the symptom 
 
 All four live under `input` in `settings.json` (path varies by platform — see [Config File Locations](guide/touch-calibration.md#config-file-locations)). See [CONFIGURATION.md § Input Configuration](CONFIGURATION.md#input) for the full reference.
 
+> **Stop the service before editing `settings.json`** — the daemon rewrites the file periodically and your edits can be clobbered. Stop, edit, start.
+>
+> **Want to test a value before committing it?** Each setting has a matching `HELIX_*` env var (see each subsection below). For a one-shot test from SSH, prepend it to a manual launch (e.g. `HELIX_TOUCH_JITTER=25 helix-screen`). To make it persistent across reboots without editing `settings.json`, add it to `helixscreen.env` and restart the service — env vars override `settings.json`.
+
 FlashForge AD5M and AD5X presets ship with `scroll_guard: true` out of the box. Other platforms default to `false`.
 
 ---
@@ -823,11 +842,18 @@ Or test temporarily with `HELIX_SCROLL_GUARD_COOLDOWN_MS=150 helix-screen`. Try 
 
 If taps are landing in the wrong place on screen:
 
-1. **Visualize touch points:** To see exactly where the system registers your taps, enable debug touch visualization:
+1. **Visualize touch points:** Enable touch debug to draw a ripple at every touch point — easiest way to see if taps are landing where you think they are.
+
+   **Persistent (recommended):** Add this line to `helixscreen.env` (path under [Config File Locations](guide/touch-calibration.md#config-file-locations)) and restart the service:
+   ```
+   HELIX_DEBUG_TOUCH=1
+   ```
+   Remove the line and restart when you're done.
+
+   **One-shot from SSH** (stop the service first so it doesn't fight for the touch device):
    ```bash
    helix-screen --debug-touches
    ```
-   This draws a ripple effect at each touch point, making it easy to see if touches are offset.
 2. **Recalibrate from the UI:** Go to **Settings > System > Touch Calibration**.
 3. **If the option isn't visible:** Your screen may not normally need calibration. SSH in, **stop the service**, then run:
    ```bash

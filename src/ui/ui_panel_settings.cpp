@@ -26,6 +26,7 @@
 #include "ui_settings_printing.h"
 #include "ui_settings_safety.h"
 #include "ui_settings_system.h"
+#include "ui_settings_touch.h"
 #if HELIX_HAS_LABEL_PRINTER
 #include "ui_settings_label_printer.h"
 #endif
@@ -239,6 +240,46 @@ static void on_log_level_changed(lv_event_t* e) {
     SystemSettingsManager::instance().set_log_level_by_index(index);
 }
 
+// Touch & input setting callbacks (Settings → System → Touch & Input).
+// The slider rows nest as: row > slider_container > slider, so the row is
+// the slider's grandparent. Used by both drag-time syncs (here) and the
+// activation-time refresh in TouchSettingsOverlay::init_input_sliders.
+static void sync_slider_value_label(lv_obj_t* slider, int value) {
+    lv_obj_t* row = lv_obj_get_parent(lv_obj_get_parent(slider));
+    if (!row)
+        return;
+    if (lv_obj_t* value_label = lv_obj_find_by_name(row, "value_label")) {
+        lv_label_set_text_fmt(value_label, "%d", value);
+    }
+}
+
+static void on_debug_touches_changed(lv_event_t* e) {
+    lv_obj_t* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    InputSettingsManager::instance().set_debug_touches(lv_obj_has_state(toggle, LV_STATE_CHECKED));
+}
+
+static void on_jitter_threshold_changed(lv_event_t* e) {
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int value = static_cast<int>(lv_slider_get_value(slider));
+    sync_slider_value_label(slider, value);
+    InputSettingsManager::instance().set_jitter_threshold(value);
+    get_global_settings_panel().show_restart_prompt();
+}
+
+static void on_scroll_limit_changed(lv_event_t* e) {
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int value = static_cast<int>(lv_slider_get_value(slider));
+    sync_slider_value_label(slider, value);
+    InputSettingsManager::instance().set_scroll_limit(value);
+    get_global_settings_panel().show_restart_prompt();
+}
+
+static void on_scroll_guard_changed(lv_event_t* e) {
+    lv_obj_t* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    InputSettingsManager::instance().set_scroll_guard(lv_obj_has_state(toggle, LV_STATE_CHECKED));
+    get_global_settings_panel().show_restart_prompt();
+}
+
 // Note: Sensors overlay callbacks are now in SensorSettingsOverlay class
 // See ui_settings_sensors.cpp
 // Note: Macro Buttons overlay callbacks are now in MacroButtonsOverlay class
@@ -337,6 +378,10 @@ void SettingsPanel::init_subjects() {
         {"on_time_format_changed", on_time_format_changed},
         {"on_language_changed", on_language_changed},
         {"on_log_level_changed", on_log_level_changed},
+        {"on_debug_touches_changed", on_debug_touches_changed},
+        {"on_jitter_threshold_changed", on_jitter_threshold_changed},
+        {"on_scroll_limit_changed", on_scroll_limit_changed},
+        {"on_scroll_guard_changed", on_scroll_guard_changed},
 
         // Toggle switches
         {"on_dark_mode_changed", on_dark_mode_changed},
@@ -369,6 +414,7 @@ void SettingsPanel::init_subjects() {
         {"on_safety_clicked", on_safety_clicked},
         {"on_system_clicked", on_system_clicked},
         {"on_help_clicked", on_help_clicked},
+        {"on_touch_input_clicked", on_touch_input_clicked},
     });
 
     // Register sub-panel overlay callbacks (must happen before XML parsing)
@@ -378,6 +424,7 @@ void SettingsPanel::init_subjects() {
     helix::settings::get_safety_settings_overlay().register_callbacks();
     helix::settings::get_system_settings_overlay().register_callbacks();
     helix::settings::get_help_settings_overlay().register_callbacks();
+    helix::settings::get_touch_settings_overlay().register_callbacks();
 
     // Note: Sensors overlay callbacks are now handled by SensorSettingsOverlay
     // See ui_settings_sensors.h
@@ -1210,6 +1257,13 @@ void SettingsPanel::on_help_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void SettingsPanel::on_touch_input_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_touch_input_clicked");
+    auto& overlay = helix::settings::get_touch_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 // ============================================================================
 // STATIC TRAMPOLINES (XML event_cb pattern - use global singleton)
 // ============================================================================
@@ -1509,6 +1563,10 @@ void register_settings_panel_callbacks() {
         {"on_telemetry_changed", SettingsPanel::on_telemetry_changed},
         {"on_telemetry_view_data", SettingsPanel::on_telemetry_view_data},
         {"on_log_level_changed", on_log_level_changed},
+        {"on_debug_touches_changed", on_debug_touches_changed},
+        {"on_jitter_threshold_changed", on_jitter_threshold_changed},
+        {"on_scroll_limit_changed", on_scroll_limit_changed},
+        {"on_scroll_guard_changed", on_scroll_guard_changed},
         // Action row callbacks used in settings_panel.xml
         {"on_printers_clicked", SettingsPanel::on_printers_clicked},
         {"on_display_settings_clicked", SettingsPanel::on_display_settings_clicked},
@@ -1536,5 +1594,6 @@ void register_settings_panel_callbacks() {
         {"on_safety_clicked", SettingsPanel::on_safety_clicked},
         {"on_system_clicked", SettingsPanel::on_system_clicked},
         {"on_help_clicked", SettingsPanel::on_help_clicked},
+        {"on_touch_input_clicked", SettingsPanel::on_touch_input_clicked},
     });
 }

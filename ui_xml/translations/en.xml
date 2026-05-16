@@ -259,6 +259,7 @@
   <translation tag="Calibrate Y" en="Calibrate Y"/>
   <translation tag="Calibrate input shaping to reduce ringing artifacts in prints" en="Calibrate input shaping to reduce ringing artifacts in prints"/>
   <translation tag="Calibrate your touchscreen for accurate input" en="Calibrate your touchscreen for accurate input"/>
+  <translation tag="Calibrate, tune jitter and scroll feel" en="Calibrate, tune jitter and scroll feel"/>
   <translation tag="Calibrated" en="Calibrated"/>
   <translation tag="Calibrating..." en="Calibrating..."/>
   <translation tag="Calibration &amp; Tools" en="Calibration &amp; Tools"/>
@@ -469,6 +470,7 @@
   <translation tag="Date (newest)" en="Date (newest)"/>
   <translation tag="Date (oldest)" en="Date (oldest)"/>
   <translation tag="Day" en="Day"/>
+  <translation tag="Dead zone in pixels (raise if taps register as swipes; 0 disables)" en="Dead zone in pixels (raise if taps register as swipes; 0 disables)"/>
   <translation tag="Debug" en="Debug"/>
   <translation tag="Default border thickness" en="Default border thickness"/>
   <translation tag="Define macros in your printer.cfg" en="Define macros in your printer.cfg"/>
@@ -510,6 +512,7 @@
   <translation tag="Download update?" en="Download update?"/>
   <translation tag="Download v{}?" en="Download v{}?"/>
   <translation tag="Downloading..." en="Downloading..."/>
+  <translation tag="Draw a ripple at each touch — helps diagnose offsets" en="Draw a ripple at each touch — helps diagnose offsets"/>
   <translation tag="Drive Cal" en="Drive Cal"/>
   <translation tag="Drop shadow strength (0 = disabled)" en="Drop shadow strength (0 = disabled)"/>
   <translation tag="Dryer Controls" en="Dryer Controls"/>
@@ -827,6 +830,7 @@
   <translation tag="Idle" en="Idle"/>
   <translation tag="If Moonraker is local or your screen is attached to the printer directly, we&apos;ll connect automatically" en="If Moonraker is local or your screen is attached to the printer directly, we&apos;ll connect automatically"/>
   <translation tag="Ignore" en="Ignore"/>
+  <translation tag="Ignore the click that fires when you lift after scrolling" en="Ignore the click that fires when you lift after scrolling"/>
   <translation tag="Import failed: {}" en="Import failed: {}"/>
   <translation tag="Imported {}" en="Imported {}"/>
   <translation tag="In Progress" en="In Progress"/>
@@ -1213,6 +1217,7 @@
   <translation tag="Pick" en="Pick"/>
   <translation tag="Pick Color" en="Pick Color"/>
   <translation tag="Pill" en="Pill"/>
+  <translation tag="Pixels before a press becomes a scroll (lower = scrolls engage sooner)" en="Pixels before a press becomes a scroll (lower = scrolls engage sooner)"/>
   <translation tag="Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels." en="Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels."/>
   <translation tag="Place plugins in the plugins directory to extend HelixScreen" en="Place plugins in the plugins directory to extend HelixScreen"/>
   <translation tag="Placed" en="Placed"/>
@@ -1510,6 +1515,8 @@
   <translation tag="Screensaver" en="Screensaver"/>
   <translation tag="Screensaver disabled" en="Screensaver disabled"/>
   <translation tag="Screws Tilt" en="Screws Tilt"/>
+  <translation tag="Scroll Engage Distance" en="Scroll Engage Distance"/>
+  <translation tag="Scroll Guard" en="Scroll Guard"/>
   <translation tag="Search filename..." en="Search filename..."/>
   <translation tag="Search spools..." en="Search spools..."/>
   <translation tag="Search vendors..." en="Search vendors..."/>
@@ -1571,6 +1578,7 @@
   <translation tag="Shininess:" en="Shininess:"/>
   <translation tag="Show Printer Switcher" en="Show Printer Switcher"/>
   <translation tag="Show Sections" en="Show Sections"/>
+  <translation tag="Show Touch Points" en="Show Touch Points"/>
   <translation tag="Show a confirmation dialog when tapping a macro" en="Show a confirmation dialog when tapping a macro"/>
   <translation tag="Show detailed print preparation status" en="Show detailed print preparation status"/>
   <translation tag="Show instead of dimming" en="Show instead of dimming"/>
@@ -1775,8 +1783,10 @@
   <translation tag="Toolhead, G-code, limits, and materials" en="Toolhead, G-code, limits, and materials"/>
   <translation tag="Top" en="Top"/>
   <translation tag="Total Prints" en="Total Prints"/>
+  <translation tag="Touch &amp; Input" en="Touch &amp; Input"/>
   <translation tag="Touch Cal" en="Touch Cal"/>
   <translation tag="Touch Calibration" en="Touch Calibration"/>
+  <translation tag="Touch Jitter Filter" en="Touch Jitter Filter"/>
   <translation tag="Touch anywhere to test calibration" en="Touch anywhere to test calibration"/>
   <translation tag="Touch anywhere to verify accuracy" en="Touch anywhere to verify accuracy"/>
   <translation tag="Touch screen to wake from sleep" en="Touch screen to wake from sleep"/>

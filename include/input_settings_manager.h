@@ -12,10 +12,11 @@ namespace helix {
  * @brief Domain-specific manager for input/scroll settings
  *
  * Owns all input-related LVGL subjects and persistence:
- * - scroll_throw (momentum decay rate, 5-50)
- * - scroll_limit (pixels before scrolling starts, 1-20)
- *
- * Both settings require a restart to take effect.
+ * - scroll_throw (momentum decay rate, 5-50)        — restart required
+ * - scroll_limit (pixels before scrolling starts, 1-20) — restart required
+ * - jitter_threshold (touch jitter dead zone px, 0-30) — restart required
+ * - scroll_guard (suppress phantom click after scroll)  — restart required
+ * - debug_touches (draw ripple at each touch point)     — live-applied
  *
  * Thread safety: Single-threaded, main LVGL thread only.
  */
@@ -67,6 +68,39 @@ class InputSettingsManager {
      */
     void set_scroll_limit(int value);
 
+    /** @brief Get jitter threshold in pixels (0-30; 0 disables) */
+    int get_jitter_threshold() const;
+
+    /**
+     * @brief Set jitter threshold (touch coordinate dead zone)
+     *
+     * Persists to config. Requires restart to take effect.
+     *
+     * @param value Dead zone in pixels (0-30; 0 disables)
+     */
+    void set_jitter_threshold(int value);
+
+    /** @brief Get scroll guard enable state */
+    bool get_scroll_guard() const;
+
+    /**
+     * @brief Set scroll guard (suppress phantom clicks after scrolling)
+     *
+     * Persists to config. Requires restart to take effect.
+     */
+    void set_scroll_guard(bool enabled);
+
+    /** @brief Get touch debug visualization state */
+    bool get_debug_touches() const;
+
+    /**
+     * @brief Set touch debug visualization (ripple at each touch)
+     *
+     * Applied live via RuntimeConfig::set_debug_touches() — no restart needed.
+     * Also persists to settings.json so the value survives reboots.
+     */
+    void set_debug_touches(bool enabled);
+
     /**
      * @brief Check if restart is pending due to settings changes
      * @return true if settings changed that require restart
@@ -96,6 +130,21 @@ class InputSettingsManager {
         return &scroll_limit_subject_;
     }
 
+    /** @brief Jitter threshold subject (integer: 0-30) */
+    lv_subject_t* subject_jitter_threshold() {
+        return &jitter_threshold_subject_;
+    }
+
+    /** @brief Scroll guard subject (integer: 0 or 1) */
+    lv_subject_t* subject_scroll_guard() {
+        return &scroll_guard_subject_;
+    }
+
+    /** @brief Touch debug subject (integer: 0 or 1) */
+    lv_subject_t* subject_debug_touches() {
+        return &debug_touches_subject_;
+    }
+
   private:
     InputSettingsManager();
     ~InputSettingsManager() = default;
@@ -104,6 +153,9 @@ class InputSettingsManager {
 
     lv_subject_t scroll_throw_subject_;
     lv_subject_t scroll_limit_subject_;
+    lv_subject_t jitter_threshold_subject_;
+    lv_subject_t scroll_guard_subject_;
+    lv_subject_t debug_touches_subject_;
 
     bool subjects_initialized_ = false;
     bool restart_pending_ = false;

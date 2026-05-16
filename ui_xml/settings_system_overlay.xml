@@ -35,14 +35,13 @@
                           bind_description="printer_host_value"
                           callback="on_change_host_clicked"/>
       <!-- ================================================================== -->
-      <!-- TOUCH CALIBRATION (hidden on non-touch displays unless test mode) -->
+      <!-- TOUCH & INPUT — opens sub-overlay with calibration + tuning knobs   -->
       <!-- ================================================================== -->
-      <lv_obj name="container_touch_calibration" width="100%" style_pad_all="0" scrollable="false">
-        <bind_flag_if_eq subject="show_touch_calibration" flag="hidden" ref_value="0"/>
-        <setting_action_row name="row_touch_calibration"
-                            label="Touch Calibration" label_tag="Touch Calibration" icon="cursor_move" description=""
-                            callback="on_touch_calibration_clicked"/>
-      </lv_obj>
+      <setting_action_row name="row_touch_input"
+                          label="Touch &amp; Input" label_tag="Touch &amp; Input" icon="cursor_move"
+                          description="Calibrate, tune jitter and scroll feel"
+                          description_tag="Calibrate, tune jitter and scroll feel"
+                          callback="on_touch_input_clicked"/>
       <!-- ================================================================== -->
       <!-- PLUGINS (gated by beta_features config flag) -->
       <!-- ================================================================== -->

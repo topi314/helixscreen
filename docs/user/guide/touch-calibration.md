@@ -227,13 +227,30 @@ Forces calibration on the next startup. Automatically cleared after successful c
 
 ## Diagnosing Touch Problems
 
-If touch is inaccurate or buttons aren't responding, enable touch point visualization to see exactly where touches are being registered:
+If touch is inaccurate or buttons aren't responding, enable touch point visualization to see exactly where touches are being registered. A ripple appears at each touch — making it easy to see if touches are offset, if a button's hit area is too small, or if another UI element is absorbing taps.
+
+**Persistent (recommended for most users — survives reboots):** add this line to `helixscreen.env` (path under [Config File Locations](#config-file-locations)) and restart the service:
+
+```
+HELIX_DEBUG_TOUCH=1
+```
+
+Restart commands:
+
+```bash
+sudo systemctl restart helixscreen        # Raspberry Pi
+/etc/init.d/S99helixscreen restart        # K1 / K2 / Snapmaker U1
+/etc/init.d/S80helixscreen restart        # AD5M
+/etc/init.d/helixscreen restart           # CC1
+```
+
+Remove the line and restart the service when you're done diagnosing — ripples slow rendering slightly and clutter the screen.
+
+**One-shot from SSH** (stop the service first so it doesn't fight for the framebuffer and touch device):
 
 ```bash
 helix-screen --debug-touches
 ```
-
-This draws a ripple effect at each touch point on the screen, making it easy to see if touches are offset, if a button's hit area is too small, or if another UI element is absorbing taps. You can also enable this persistently with the environment variable `HELIX_DEBUG_TOUCH=1`.
 
 ---
 

@@ -51,20 +51,9 @@ After changing the host, HelixScreen disconnects from the current printer and re
 
 ---
 
-## Touch Calibration
+## Touch & Input
 
-> Only shown on touchscreen displays that need calibration.
-
-Recalibrate if taps register in the wrong location:
-
-1. Tap **Touch Calibration** in Settings
-2. Tap each crosshair target as it appears on screen (3 points)
-3. Test that taps land correctly in the verify area
-4. Calibration saves automatically
-
-The row description shows "Calibrated" or "Not calibrated" status.
-
-If this option doesn't appear in your Settings, your screen type doesn't normally need calibration. If you still need to force it, see the [Touch Calibration Guide](../touch-calibration.md) for alternative methods including CLI flags and config file options.
+Opens a sub-page that groups all touch-related settings: calibration, debug visualization, jitter filtering, and scroll feel. See [Touch & Input](touch-input.md) for the full reference.
 
 ---
 

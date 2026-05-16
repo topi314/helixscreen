@@ -457,11 +457,15 @@ bool DisplayManager::init(const Config& config) {
         spdlog::info("[DisplayManager] Backlight will stay on during sleep (config override)");
     }
 
-    // Debug touch visualization: draw ripple at each touch point
-    if (RuntimeConfig::debug_touches() && m_pointer) {
-        spdlog::info("[DisplayManager] Debug touch visualization enabled");
+    // Debug touch visualization: draw ripple at each touch point.
+    // Timer runs unconditionally; flag is checked inside so the Settings
+    // toggle takes effect without a restart.
+    if (m_pointer) {
         lv_timer_create(
             [](lv_timer_t* t) {
+                if (!RuntimeConfig::debug_touches())
+                    return;
+
                 auto* indev = static_cast<lv_indev_t*>(lv_timer_get_user_data(t));
                 if (!indev)
                     return;
@@ -473,7 +477,6 @@ bool DisplayManager::init(const Config& config) {
                 lv_point_t point;
                 lv_indev_get_point(indev, &point);
 
-                // Throttle: only create ripple when position changes
                 static lv_coord_t last_x = -100, last_y = -100;
                 lv_coord_t dx = point.x - last_x;
                 lv_coord_t dy = point.y - last_y;

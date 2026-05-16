@@ -2001,3 +2001,13 @@ translations:
   '{} may cause unintended changes. Are you sure?': '{} may cause unintended changes. Are you sure?'
   '{} more taps to {} beta features': '{} more taps to {} beta features'
   '{} target set to {}°C': '{} target set to {}°C'
+  Touch & Input: Touch & Input
+  'Calibrate, tune jitter and scroll feel': 'Calibrate, tune jitter and scroll feel'
+  Show Touch Points: Show Touch Points
+  'Draw a ripple at each touch — helps diagnose offsets': 'Draw a ripple at each touch — helps diagnose offsets'
+  Touch Jitter Filter: Touch Jitter Filter
+  'Dead zone in pixels (raise if taps register as swipes; 0 disables)': 'Dead zone in pixels (raise if taps register as swipes; 0 disables)'
+  Scroll Engage Distance: Scroll Engage Distance
+  'Pixels before a press becomes a scroll (lower = scrolls engage sooner)': 'Pixels before a press becomes a scroll (lower = scrolls engage sooner)'
+  Scroll Guard: Scroll Guard
+  Ignore the click that fires when you lift after scrolling: Ignore the click that fires when you lift after scrolling

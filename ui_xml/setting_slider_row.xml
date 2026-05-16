@@ -15,6 +15,11 @@
     <prop name="value" type="string" default="50"/>
     <prop name="callback" type="string" default=""/>
     <prop name="user_data" type="string" default=""/>
+    <!-- Event trigger: "value_changed" fires per-tick during drag (default,
+         back-compat for sliders whose callback is cheap or wants live readout);
+         "released" fires once when the user lifts. Use "released" when the
+         callback persists settings or pops a modal. -->
+    <prop name="trigger" type="string" default="value_changed"/>
     <prop name="min_icon" type="string" default=""/>
     <prop name="max_icon" type="string" default=""/>
     <prop name="disabled" type="string" default=""/>
@@ -76,7 +81,7 @@
       <icon name="min_icon" src="$min_icon" size="xs" variant="secondary"/>
       <lv_slider name="slider" flex_grow="1" min_value="$min" max_value="$max" value="$value">
         <bind_state_if_eq subject="$disabled" state="disabled" ref_value="1"/>
-        <event_cb trigger="value_changed" callback="$callback" user_data="$user_data"/>
+        <event_cb trigger="$trigger" callback="$callback" user_data="$user_data"/>
       </lv_slider>
       <icon name="max_icon" src="$max_icon" size="xs" variant="secondary"/>
     </lv_obj>

@@ -153,9 +153,11 @@ class SettingsPanel : public PanelBase {
     void setup_dropdown();
     void setup_action_handlers();
     void populate_info_rows();
-    void show_restart_prompt();
 
   public:
+    /// Shown after any "requires restart" setting changes.
+    void show_restart_prompt();
+
     /**
      * @brief Populate LED chips from discovered hardware
      *
@@ -269,6 +271,7 @@ class SettingsPanel : public PanelBase {
     static void on_safety_clicked(lv_event_t* e);
     static void on_system_clicked(lv_event_t* e);
     static void on_help_clicked(lv_event_t* e);
+    static void on_touch_input_clicked(lv_event_t* e);
 
   private:
     //

@@ -125,7 +125,9 @@ bool init_lvgl(int width, int height, LvglContext& ctx) {
         if (env_jitter) {
             jitter_threshold = std::atoi(env_jitter);
         }
-        jitter_threshold = std::clamp(jitter_threshold, 0, 200);
+        // 30 px matches the Settings → Touch & Input slider max and InputSettingsManager;
+        // beyond that the filter starts swallowing intentional short-travel gestures.
+        jitter_threshold = std::clamp(jitter_threshold, 0, 30);
         // Post-scroll click guard — suppresses ghost taps from capacitive touch
         // controllers that briefly report release→repress when lifting after a scroll.
         bool scroll_guard = cfg->get<bool>("/input/scroll_guard", false);
