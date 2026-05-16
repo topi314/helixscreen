@@ -65,8 +65,24 @@ class PrintStatusWidget : public PanelWidget {
     /// XML event callback — chevron tap on nozzle temp opens tool picker
     static void print_status_nozzle_chevron_cb(lv_event_t* e);
 
+    /// XML event callbacks — temp slot taps in the detailed-active footer
+    /// open the global temp graph overlay with the matching heater mode.
+    static void on_print_status_nozzle_temp_clicked(lv_event_t* e);
+    static void on_print_status_bed_temp_clicked(lv_event_t* e);
+    static void on_print_status_chamber_temp_clicked(lv_event_t* e);
+
     /// Registry of live (attached) widget instances for use-after-free prevention
     static std::unordered_set<PrintStatusWidget*>& live_instances();
+
+    /// Parent screen used as overlay/modal anchor (e.g., temp graph overlay).
+    lv_obj_t* get_parent_screen() const {
+        return parent_screen_;
+    }
+
+    /// Arc thickness tier (0..4 → 4/6/8/10/12 px). Driven by C++ when the arc
+    /// resizes; consumed by XML bind_style entries in print_status_detailed_active.
+    /// Public so the static helper in the .cpp can publish to it without a friend.
+    static inline lv_subject_t arc_thickness_tier_subject_{};
 
     // Test accessors (always compiled — used by unit tests)
     const std::string& layout_style_for_test() const {

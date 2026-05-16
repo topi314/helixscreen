@@ -5,6 +5,7 @@
 
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
+#include "ui_overlay_temp_graph.h"
 #include "ui_panel_print_select.h"
 #include "ui_panel_print_status.h"
 #include "ui_update_queue.h"
@@ -56,6 +57,12 @@ void register_print_status_widget() {
                              PrintStatusWidget::print_status_layout_library_cb);
     lv_xml_register_event_cb(nullptr, "print_status_layout_detailed_cb",
                              PrintStatusWidget::print_status_layout_detailed_cb);
+    lv_xml_register_event_cb(nullptr, "on_print_status_nozzle_temp_clicked",
+                             PrintStatusWidget::on_print_status_nozzle_temp_clicked);
+    lv_xml_register_event_cb(nullptr, "on_print_status_bed_temp_clicked",
+                             PrintStatusWidget::on_print_status_bed_temp_clicked);
+    lv_xml_register_event_cb(nullptr, "on_print_status_chamber_temp_clicked",
+                             PrintStatusWidget::on_print_status_chamber_temp_clicked);
 }
 } // namespace helix
 
@@ -117,6 +124,11 @@ void PrintStatusWidget::init_static_subjects() {
                            idle_thumb_path_buf_);
     lv_xml_register_subject(nullptr, "print_status_idle_thumb_path",
                             &idle_thumb_path_subject_);
+    // Default to tier 2 (8px) — matches the previous hardcoded medium thickness
+    // until the arc lays out and C++ publishes the diameter-derived tier.
+    lv_subject_init_int(&arc_thickness_tier_subject_, 2);
+    lv_xml_register_subject(nullptr, "print_status_arc_thickness_tier",
+                            &arc_thickness_tier_subject_);
     detailed_subjects_initialized_ = true;
 
     StaticSubjectRegistry::instance().register_deinit("PrintStatusWidgetSubjects", []() {
@@ -127,6 +139,7 @@ void PrintStatusWidget::init_static_subjects() {
             lv_subject_deinit(&multi_tool_subject_);
             lv_subject_deinit(&view_subject_);
             lv_subject_deinit(&idle_thumb_path_subject_);
+            lv_subject_deinit(&arc_thickness_tier_subject_);
             detailed_subjects_initialized_ = false;
         }
         if (visibility_subjects_initialized_ && lv_is_initialized()) {
@@ -1942,6 +1955,17 @@ PrintStatusWidget::DetailedFormatter::~DetailedFormatter() {
 // % label child stranded if the bounds are tall-narrow. Setting both
 // dimensions to the parent's height gives a true square that flex-centers
 // in the column on both axes.
+// Maps an arc diameter to a thickness tier index (0..4 → 4/6/8/10/12 px).
+// Tier value is published on print_status_arc_thickness_tier_subject_;
+// XML bind_styles select the matching arc_width style per tier.
+static int arc_thickness_tier_for(int dim) {
+    if (dim < 80)  return 0; // 4px  — Tiny/Micro print_status widget
+    if (dim < 120) return 1; // 6px
+    if (dim < 180) return 2; // 8px  — Medium default
+    if (dim < 240) return 3; // 10px
+    return 4;                // 12px — XXLarge / user-resized big
+}
+
 static void resize_arc_to_square(lv_obj_t* arc) {
     if (!arc) return;
     lv_obj_t* parent = lv_obj_get_parent(arc);
@@ -1952,6 +1976,10 @@ static void resize_arc_to_square(lv_obj_t* arc) {
     int dim = ph < pw ? ph : pw;
     if (dim <= 0) return;
     lv_obj_set_size(arc, dim, dim);
+    // Publish thickness tier to the subject; styling stays in XML (bind_style).
+    // lv_subject_set_int is a no-op for unchanged values, so no manual guard.
+    lv_subject_set_int(&PrintStatusWidget::arc_thickness_tier_subject_,
+                       arc_thickness_tier_for(dim));
 }
 
 void PrintStatusWidget::DetailedFormatter::attach_arc(lv_obj_t* arc) {
@@ -2011,5 +2039,38 @@ void PrintStatusWidget::print_status_nozzle_chevron_cb(lv_event_t* e) {
     }
     if (owner)
         owner->show_nozzle_tool_picker(anchor);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+namespace {
+void open_temp_graph_for(lv_event_t* e, TempGraphOverlay::Mode mode) {
+    // Stop bubbling so the click doesn't also trigger print_card_clicked_cb
+    // on the surrounding card and navigate away.
+    lv_event_stop_bubbling(e);
+    auto* owner = recover_widget_from_event(e);
+    if (!owner)
+        return;
+    lv_obj_t* parent_screen = owner->get_parent_screen();
+    if (!parent_screen)
+        parent_screen = lv_screen_active();
+    get_global_temp_graph_overlay().open(mode, parent_screen);
+}
+} // namespace
+
+void PrintStatusWidget::on_print_status_nozzle_temp_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("on_print_status_nozzle_temp_clicked");
+    open_temp_graph_for(e, TempGraphOverlay::Mode::Nozzle);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::on_print_status_bed_temp_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("on_print_status_bed_temp_clicked");
+    open_temp_graph_for(e, TempGraphOverlay::Mode::Bed);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::on_print_status_chamber_temp_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("on_print_status_chamber_temp_clicked");
+    open_temp_graph_for(e, TempGraphOverlay::Mode::Chamber);
     LVGL_SAFE_EVENT_CB_END();
 }

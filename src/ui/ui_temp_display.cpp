@@ -13,6 +13,7 @@
 #include "helix-xml/src/xml/parsers/lv_xml_obj_parser.h"
 #include "lvgl/lvgl.h"
 #include "theme_manager.h"
+#include "ui_breakpoint.h"
 
 #include <spdlog/spdlog.h>
 
@@ -47,6 +48,8 @@ struct TempDisplayData {
     bool show_target = false;                 // Default: hide target (opt-in via prop)
     bool has_target_binding = false;          // True if bind_target was set (heater mode)
     bool target_subjects_initialized = false; // True if target subject was created
+    // Responsive hide of separator+target labels below this breakpoint (-1 = never).
+    int hide_target_below_bp = -1;
 
     // Child label pointers for efficient updates
     lv_obj_t* current_label = nullptr;
@@ -91,6 +94,36 @@ static const lv_font_t* get_font_for_size(const char* size) {
 
 /** Tolerance for "at temperature" state (±degrees) */
 static constexpr int AT_TEMP_TOLERANCE = 2;
+
+/** Apply current breakpoint to separator+target visibility. Safe to call when
+    those labels don't exist (no-op for show_target="false" widgets). */
+static void apply_target_visibility(TempDisplayData* data, int current_bp) {
+    if (!data || data->hide_target_below_bp < 0)
+        return;
+    bool hide = current_bp < data->hide_target_below_bp;
+    if (data->separator_label) {
+        if (hide)
+            lv_obj_add_flag(data->separator_label, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_remove_flag(data->separator_label, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (data->target_label) {
+        if (hide)
+            lv_obj_add_flag(data->target_label, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_remove_flag(data->target_label, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/** Observer callback on the ui_breakpoint subject — toggles target+separator
+    visibility per the widget's hide_target_below_bp threshold. */
+static void bp_observer_cb(lv_observer_t* observer, lv_subject_t* subject) {
+    lv_obj_t* container = static_cast<lv_obj_t*>(lv_observer_get_target(observer));
+    auto* data = get_data(container);
+    if (!data)
+        return;
+    apply_target_visibility(data, lv_subject_get_int(subject));
+}
 
 /**
  * @brief Update current temp label color based on 4-state thermal logic
@@ -193,6 +226,8 @@ static void on_delete(lv_event_t* e) {
             lv_obj_remove_from_subject(data->current_label, nullptr);
         if (data->target_label)
             lv_obj_remove_from_subject(data->target_label, nullptr);
+        // Container itself may hold the bp_observer; drop it now too.
+        lv_obj_remove_from_subject(obj, nullptr);
 
         // Now safe to deinit owned subjects — all observers already removed
         lv_subject_deinit(&data->current_text_subject);
@@ -314,6 +349,11 @@ static void* ui_temp_display_create_cb(lv_xml_parser_state_t* state, const char*
         data_ptr->show_target = true;
     }
 
+    // Parse hide_target_below_bp — drop separator+target on small screens.
+    // Value is a breakpoint name (micro|tiny|small|medium|large|xlarge|xxlarge).
+    const char* hide_below_str = lv_xml_get_value_of(attrs, "hide_target_below_bp");
+    data_ptr->hide_target_below_bp = breakpoint_from_name(hide_below_str);
+
     // Create current temp label
     data_ptr->current_label = lv_label_create(container);
     lv_obj_set_style_text_font(data_ptr->current_label, font, LV_PART_MAIN);
@@ -359,8 +399,19 @@ static void* ui_temp_display_create_cb(lv_xml_parser_state_t* state, const char*
     s_registry[container] = data_ptr.release();
     lv_obj_add_event_cb(container, on_delete, LV_EVENT_DELETE, nullptr);
 
+    // Hook reactive target visibility once data is registered. Observer target
+    // is the container so on_delete's lv_obj_remove_from_subject(container, ...)
+    // removes it before TempDisplayData is freed.
+    auto* registered = s_registry[container];
+    if (registered->hide_target_below_bp >= 0) {
+        if (lv_subject_t* bp_subj = theme_manager_get_breakpoint_subject()) {
+            lv_subject_add_observer_obj(bp_subj, bp_observer_cb, container, nullptr);
+            apply_target_visibility(registered, lv_subject_get_int(bp_subj));
+        }
+    }
+
     spdlog::trace("[temp_display] Created widget (size={}, show_target={})", size ? size : "md",
-                  s_registry[container]->show_target);
+                  registered->show_target);
 
     return container;
 }

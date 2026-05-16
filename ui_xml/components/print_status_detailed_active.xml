@@ -2,17 +2,17 @@
 <!-- Copyright (C) 2025-2026 356C LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <component>
-  <consts>
-    <!-- Stroke thickness — responsive per breakpoint. Overall arc diameter
-         is computed dynamically in C++ from the arc_holder dimensions; the
-         XML width/height are placeholders that C++ overrides. -->
-    <px name="progress_arc_thickness_tiny"    value="6"/>
-    <px name="progress_arc_thickness_small"   value="7"/>
-    <px name="progress_arc_thickness_medium"  value="8"/>
-    <px name="progress_arc_thickness_large"   value="9"/>
-    <px name="progress_arc_thickness_xlarge"  value="10"/>
-    <px name="progress_arc_thickness_xxlarge" value="12"/>
-  </consts>
+  <styles>
+    <!-- Arc stroke thickness tiers. The print_status_arc_thickness_tier
+         subject is set by C++ (resize_arc_to_square) from the arc's actual
+         diameter; bind_style applies the matching width here, keeping all
+         styling declarative per CLAUDE.md rule #4. -->
+    <style name="arc_w_4" arc_width="4"/>
+    <style name="arc_w_6" arc_width="6"/>
+    <style name="arc_w_8" arc_width="8"/>
+    <style name="arc_w_10" arc_width="10"/>
+    <style name="arc_w_12" arc_width="12"/>
+  </styles>
   <view name="print_status_detailed_active" extends="lv_obj"
         width="100%" height="100%" style_pad_all="0" style_pad_gap="#space_xs"
         flex_flow="column" scrollable="false" clickable="false" event_bubble="true">
@@ -42,13 +42,20 @@
                   start_angle="135" end_angle="135"
                   rotation="0" mode="normal"
                   style_arc_color="#border" style_arc_color-indicator="#primary"
-                  style_arc_width="#progress_arc_thickness_medium"
-                  style_arc_width-indicator="#progress_arc_thickness_medium"
                   style_arc_rounded="true" style_arc_rounded-indicator="true"
                   style_bg_opa="0" style_border_width="0"
                   style_bg_opa-knob="0" style_shadow_width-knob="0"
                   style_outline_width-knob="0" style_pad_all-knob="0"
-                  clickable="false" event_bubble="true"/>
+                  clickable="false" event_bubble="true">
+            <!-- Arc stroke per tier. `parts="main,indicator"` applies the
+                 same width to both the background track and the progress
+                 indicator in one line (helix-xml extension over upstream). -->
+            <bind_style name="arc_w_4"  parts="main,indicator" subject="print_status_arc_thickness_tier" ref_value="0"/>
+            <bind_style name="arc_w_6"  parts="main,indicator" subject="print_status_arc_thickness_tier" ref_value="1"/>
+            <bind_style name="arc_w_8"  parts="main,indicator" subject="print_status_arc_thickness_tier" ref_value="2"/>
+            <bind_style name="arc_w_10" parts="main,indicator" subject="print_status_arc_thickness_tier" ref_value="3"/>
+            <bind_style name="arc_w_12" parts="main,indicator" subject="print_status_arc_thickness_tier" ref_value="4"/>
+          </lv_arc>
           <text_body name="detailed_progress_pct" align="center"
                      bind_text="print_status_progress_pct" clickable="false" event_bubble="true"/>
         </lv_obj>
@@ -63,7 +70,8 @@
                    clickable="false" event_bubble="true"/>
         <text_small bind_text="print_status_layer_text" clickable="false" event_bubble="true"/>
         <text_small bind_text="print_status_time_text" clickable="false" event_bubble="true"/>
-        <text_small bind_text="print_status_filament_text" clickable="false" event_bubble="true">
+        <text_small width="100%" bind_text="print_status_filament_text"
+                    long_mode="scroll_circular" clickable="false" event_bubble="true">
           <bind_flag_if_eq subject="print_status_show_filament_active" flag="hidden" ref_value="0"/>
         </text_small>
       </lv_obj>
@@ -77,56 +85,68 @@
             style_pad_gap="#space_sm" style_flex_main_place="space_evenly"
             style_flex_cross_place="center"
             scrollable="false" clickable="false" event_bubble="true">
-      <!-- Entire nozzle group is the click target for the tool picker; chevron
-           is a visual affordance only (its hidden flag still gates on
-           multi_tool, but its click is now subsumed by the parent). The
-           handler itself early-returns for single-tool printers. The named
-           obj is also matched by print_card_clicked_cb so the print-card
-           click handler skips when the click originated here. -->
-      <lv_obj name="detailed_nozzle_click_target"
-              width="content" height="content" style_pad_all="0" flex_flow="row"
+      <!-- Nozzle group: split into two click targets.
+           Left = picker (T0 + nozzle_icon + chevron) → tool picker.
+           Right = temp_display → temp graph overlay (Mode::Nozzle).
+           The named picker obj is matched by print_card_clicked_cb so the
+           print-card click handler skips when the click originated there. -->
+      <lv_obj width="content" height="content" style_pad_all="0" flex_flow="row"
               style_pad_gap="#space_xs" style_flex_cross_place="center"
-              scrollable="false" clickable="true" event_bubble="false">
-        <event_cb trigger="clicked" callback="print_status_nozzle_chevron_cb"/>
-        <text_tiny bind_text="print_status_nozzle_tool_label" clickable="false" event_bubble="true">
-          <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
-        </text_tiny>
-        <nozzle_icon size="sm" badge_subject="" clickable="false" event_bubble="true"/>
+              scrollable="false" clickable="false" event_bubble="true">
+        <lv_obj name="detailed_nozzle_click_target"
+                width="content" height="content" style_pad_all="0" flex_flow="row"
+                style_pad_gap="#space_xs" style_flex_cross_place="center"
+                scrollable="false" clickable="true" event_bubble="false">
+          <event_cb trigger="clicked" callback="print_status_nozzle_chevron_cb"/>
+          <text_tiny bind_text="print_status_nozzle_tool_label" clickable="false" event_bubble="true">
+            <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
+          </text_tiny>
+          <nozzle_icon size="sm" badge_subject="" clickable="false" event_bubble="true">
+            <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+          </nozzle_icon>
+          <icon src="chevron_down" size="sm" clickable="false" event_bubble="true">
+            <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
+          </icon>
+        </lv_obj>
         <!-- Bound to formatter-driven proxy subjects so pinning to a specific tool
              (via the chevron picker) actually changes the displayed temperature.
              The formatter rebinds its underlying observer on pin change. -->
         <temp_display size="xs" show_target="true"
                       bind_current="print_status_nozzle_current"
                       bind_target="print_status_nozzle_target"
-                      clickable="false" event_bubble="true"/>
-        <icon src="chevron_down" size="sm" clickable="false" event_bubble="true">
-          <bind_flag_if_eq subject="print_status_multi_tool" flag="hidden" ref_value="0"/>
-        </icon>
+                      hide_target_below_bp="small"
+                      event_cb="on_print_status_nozzle_temp_clicked"/>
       </lv_obj>
       <lv_obj width="content" height="content" style_pad_all="0" flex_flow="row"
               style_pad_gap="#space_xs" style_flex_cross_place="center"
               scrollable="false" clickable="false" event_bubble="true">
-        <icon src="radiator" size="sm" variant="secondary" clickable="false" event_bubble="true"/>
+        <icon src="radiator" size="sm" variant="secondary" clickable="false" event_bubble="true">
+          <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+        </icon>
         <temp_display size="xs" show_target="true"
                       bind_current="bed_temp" bind_target="bed_target"
-                      clickable="false" event_bubble="true"/>
+                      hide_target_below_bp="small"
+                      event_cb="on_print_status_bed_temp_clicked"/>
       </lv_obj>
       <lv_obj width="content" height="content" style_pad_all="0" flex_flow="row"
               style_pad_gap="#space_xs" style_flex_cross_place="center"
               scrollable="false" clickable="false" event_bubble="true">
         <bind_flag_if_eq subject="printer_has_chamber" flag="hidden" ref_value="0"/>
-        <icon src="fridge_industrial" size="sm" variant="secondary" clickable="false" event_bubble="true"/>
+        <icon src="fridge_industrial" size="sm" variant="secondary" clickable="false" event_bubble="true">
+          <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+        </icon>
         <!-- Two variants: with target when a chamber heater exists, current-only
              for sensor-only chambers (passive enclosure). Mutually exclusive on
              printer_has_chamber_heater. -->
         <temp_display size="xs" show_target="true"
                       bind_current="chamber_temp" bind_target="chamber_target"
-                      clickable="false" event_bubble="true">
+                      hide_target_below_bp="small"
+                      event_cb="on_print_status_chamber_temp_clicked">
           <bind_flag_if_eq subject="printer_has_chamber_heater" flag="hidden" ref_value="0"/>
         </temp_display>
         <temp_display size="xs" show_target="false"
                       bind_current="chamber_temp"
-                      clickable="false" event_bubble="true">
+                      event_cb="on_print_status_chamber_temp_clicked">
           <bind_flag_if_eq subject="printer_has_chamber_heater" flag="hidden" ref_value="1"/>
         </temp_display>
       </lv_obj>
