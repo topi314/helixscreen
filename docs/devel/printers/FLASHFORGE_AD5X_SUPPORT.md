@@ -148,7 +148,20 @@ If touch input requires calibration (resistive panel with non-linear mapping), t
 
 The AD5X's 4-channel IFS is its distinguishing feature. HelixScreen has a dedicated AMS backend (`AmsBackendAd5xIfs`) that fully integrates with the IFS.
 
-> **Minimum firmware**: ZMOD open-source firmware **v3.0** or later is required. Older versions have compatibility issues with HelixScreen's IFS integration.
+> **Required firmware**: [ZMOD open-source firmware](https://github.com/ghzserg/zmod) **v1.7.0 or newer**. v1.7.0 (Mar 2026) is the first release with explicit HelixScreen integration (`DISPLAY_OFF HELIX=1`). Hard minimum: v1.6.2 (Oct 2025), when the `less_waste_*` `save_variables` first appeared via the bambufy plugin.
+>
+> ZMOD has its own versioning, distinct from FlashForge stock firmware. AD5X stock firmware uses a tri-versioned scheme like `AD5X-1.1.6-1.1.0-3.0.6-20250729` (main / sub / screen / date) — the `3.0.6` is screen-firmware version, not a major printer-firmware bump. ZMOD supports stock AD5X main versions from v1.0.2 (Jan 2025) onward; no specific stock version is required.
+>
+> ##### ZMOD IFS feature timeline
+>
+> | ZMOD release | Date | What landed |
+> |---|---|---|
+> | v1.4.1 | Mar 2025 | Alpha AD5X support |
+> | v1.5.1 | Apr 2025 | MCU IFS update path |
+> | v1.5.4 | Jun 2025 | AD5X filament-presence sensor working |
+> | v1.6.1 | Sep 2025 | Headless IFS — works without native screen |
+> | v1.6.2 | Oct 2025 | Plugin framework + bambufy + nopoop (`less_waste_*` plumbing) |
+> | v1.7.0 | Mar 2026 | First-class HelixScreen integration (`DISPLAY_OFF HELIX=1`, NoPoop 2) |
 
 ### Supported Features
 
