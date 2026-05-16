@@ -28,6 +28,11 @@ struct FormatterScope {
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter writes progress, layer, time",
                  "[print_status][formatter]") {
+    // Tear down any inherited formatter BEFORE resetting PrinterState — otherwise
+    // its observers point to subjects that are about to be deinit'd/reinit'd, and
+    // FormatterScope's later destroy walks a recycled lv_subject_t (macOS SIGSEGV).
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -50,6 +55,8 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter writes progress, layer, ti
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter seeds initial values on construction",
                  "[print_status][formatter]") {
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -68,6 +75,8 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter seeds initial values on co
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter layer text omits total when zero",
                  "[print_status][formatter]") {
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -84,6 +93,8 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter layer text omits total whe
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter filament text empty when zero",
                  "[print_status][formatter]") {
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -98,6 +109,8 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter filament text empty when z
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter filament text formatted in meters",
                  "[print_status][formatter]") {
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -112,6 +125,8 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter filament text formatted in
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter nozzle text (decidegree rounding)",
                  "[print_status][formatter][temps]") {
+    PrintStatusWidget::destroy_formatter_for_test();
+
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
@@ -130,6 +145,10 @@ TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter nozzle text (decidegree ro
 
 TEST_CASE_METHOD(HelixTestFixture, "DetailedFormatter multi-tool label and gate",
                  "[print_status][formatter][multi_tool]") {
+    // Same hazard as the other tests, but for ToolState's tool_count subject:
+    // tear down any inherited formatter before re-initing the subject it observes.
+    PrintStatusWidget::destroy_formatter_for_test();
+
     ToolState::instance().init_subjects(false);
 
     FormatterScope fs;
