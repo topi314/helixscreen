@@ -328,6 +328,22 @@ class PrintStatusPanel : public OverlayBase {
     // on new-print transitions so the next outcome's overlay appears normally.
     lv_subject_t end_overlay_dismissed_subject_;
 
+    // Fan row adaptive-fit subject (1=row fits in the column, 0=hidden).
+    // Set by recompute_fans_fit() after every breakpoint/layout change.
+    lv_subject_t fans_fit_subject_{};
+    // Aux fan present subject (1=aux cluster visible, 0=hidden).
+    // Set by bind_fan_speeds() when an aux fan is discovered.
+    lv_subject_t aux_fan_present_subject_{};
+
+    // Cached natural height of the fan row (measured at attach while
+    // forced-visible). Used by recompute_fans_fit() as the `needed` value.
+    int fan_row_natural_height_ = 0;
+
+    // Resolved fan object names (refreshed when fans_version ticks).
+    std::string part_fan_name_;
+    std::string hotend_fan_name_;
+    std::string aux_fan_name_;
+
     // Derived visibility for the three end-of-print overlays. Each is 1 iff
     // print_outcome matches AND end_overlay_dismissed == 0. Stacking two
     // independent XML bind_flag observers on the same hidden flag raced at
@@ -517,6 +533,8 @@ class PrintStatusPanel : public OverlayBase {
     static void on_reprint_clicked(lv_event_t* e);
     static void on_objects_clicked(lv_event_t* e);
     static void on_view_toggle_clicked(lv_event_t* e);
+    static void on_fans_clicked(lv_event_t* e);
+    void handle_fans_click();
 
     // Static resize callback (registered with ui_resize_handler)
     static void on_resize_static();
@@ -572,6 +590,26 @@ class PrintStatusPanel : public OverlayBase {
     ObserverGuard print_outcome_observer_;     ///< Drives show_{complete,cancelled,error}_overlay
     ObserverGuard end_overlay_dismissed_observer_; ///< Ditto; second input to the same recompute
     ObserverGuard print_message_observer_;     ///< Drives pause reason text from print_stats.message
+
+    // Per-fan speed observers — each watches a DYNAMIC subject, so a paired
+    // SubjectLifetime is mandatory (see [L084]: lifetime must outlive observer).
+    ObserverGuard part_speed_observer_;
+    SubjectLifetime part_speed_lifetime_;
+    ObserverGuard hotend_speed_observer_;
+    SubjectLifetime hotend_speed_lifetime_;
+    ObserverGuard aux_speed_observer_;
+    SubjectLifetime aux_speed_lifetime_;
+
+    // Static-subject observers (singleton lifetime — no SubjectLifetime token needed).
+    ObserverGuard fans_version_observer_;
+    ObserverGuard animations_enabled_observer_;
+    ObserverGuard breakpoint_observer_;
+    ObserverGuard filament_sensor_count_observer_;
+    ObserverGuard ams_slot_count_observer_;
+    ObserverGuard toolchange_visible_observer_;
+
+    // Lazy fan control overlay (created on first click; Task 9 wires the push).
+    lv_obj_t* fan_control_panel_ = nullptr;
 
     //
     // === Exclude Object Manager ===

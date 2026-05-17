@@ -407,6 +407,13 @@ void PrintStatusPanel::init_subjects() {
     UI_MANAGED_SUBJECT_INT(gcode_viewer_mode_subject_, 0, "gcode_viewer_mode", subjects_);
     UI_MANAGED_SUBJECT_INT(exclude_map_active_subject_, 0, "exclude_map_active", subjects_);
     UI_MANAGED_SUBJECT_INT(end_overlay_dismissed_subject_, 0, "end_overlay_dismissed", subjects_);
+
+    // Fan row adaptive-fit + aux presence subjects (set by recompute_fans_fit
+    // and bind_fan_speeds respectively; default to 0 so the row stays hidden
+    // until the first recompute fires after attach).
+    UI_MANAGED_SUBJECT_INT(fans_fit_subject_, 0, "print_status_fans_fit", subjects_);
+    UI_MANAGED_SUBJECT_INT(aux_fan_present_subject_, 0, "print_status_aux_fan_present", subjects_);
+
     end_overlay_dismissed_observer_ = observe_int_sync<PrintStatusPanel>(
         &end_overlay_dismissed_subject_, this,
         [](PrintStatusPanel* self, int) { self->recompute_end_overlay_visibility(); });
@@ -458,6 +465,7 @@ void PrintStatusPanel::init_subjects() {
         {"on_print_status_objects", on_objects_clicked},
         {"on_view_toggle", on_view_toggle_clicked},
         {"on_print_status_dismiss_overlay", on_dismiss_overlay_clicked},
+        {"on_print_status_fans_clicked", on_fans_clicked},
     });
 
     subjects_initialized_ = true;
@@ -1583,6 +1591,17 @@ void PrintStatusPanel::on_cancel_clicked(lv_event_t* e) {
     (void)e;
     get_global_print_status_panel().handle_cancel_button();
     LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusPanel::on_fans_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusPanel] on_fans_clicked");
+    get_global_print_status_panel().handle_fans_click();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusPanel::handle_fans_click() {
+    // Stub — full overlay-push wired in Task 9
+    spdlog::debug("[PrintStatusPanel] fans clicked (stub)");
 }
 
 void PrintStatusPanel::on_reprint_clicked(lv_event_t* e) {
