@@ -798,6 +798,14 @@ class PrinterState {
     // ========================================================================
 
     /**
+     * @brief Get the fan state component (for classify_primary_fans and other operations)
+     * @return Const reference to PrinterFanState
+     */
+    const helix::PrinterFanState& get_fan_state() const {
+        return fan_state_;
+    }
+
+    /**
      * @brief Get all tracked fans
      * @return Const reference to fan info vector
      */

@@ -354,34 +354,23 @@ void FanStackWidget::bind_fans() {
         return;
     }
 
-    // Classify fans into our three rows
+    auto primary = printer_state_.get_fan_state().classify_primary_fans();
+    part_fan_name_ = primary.part;
+    hotend_fan_name_ = primary.hotend;
+    aux_fan_name_ = primary.aux;
+
+    // Resolve display names from the discovered fan list (helper picks by
+    // object_name, but the widget still wants the human-readable label).
     part_display_name_.clear();
     hotend_display_name_.clear();
     aux_display_name_.clear();
     for (const auto& fan : fans) {
-        switch (fan.type) {
-        case FanType::PART_COOLING:
-            if (part_fan_name_.empty()) {
-                part_fan_name_ = fan.object_name;
-                part_display_name_ = fan.display_name;
-            }
-            break;
-        case FanType::HEATER_FAN:
-            if (hotend_fan_name_.empty()) {
-                hotend_fan_name_ = fan.object_name;
-                hotend_display_name_ = fan.display_name;
-            }
-            break;
-        case FanType::CONTROLLER_FAN:
-        case FanType::TEMPERATURE_FAN:
-        case FanType::GENERIC_FAN:
-        case FanType::OUTPUT_PIN_FAN:
-            if (aux_fan_name_.empty()) {
-                aux_fan_name_ = fan.object_name;
-                aux_display_name_ = fan.display_name;
-            }
-            break;
-        }
+        if (fan.object_name == part_fan_name_)
+            part_display_name_ = fan.display_name;
+        else if (fan.object_name == hotend_fan_name_)
+            hotend_display_name_ = fan.display_name;
+        else if (fan.object_name == aux_fan_name_)
+            aux_display_name_ = fan.display_name;
     }
 
     // Bind part fan
