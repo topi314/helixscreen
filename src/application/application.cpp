@@ -210,6 +210,9 @@ namespace {
 // Android lifecycle: background/foreground state set from SDL event handler
 std::atomic<bool> s_app_backgrounded{false};
 
+// SIGUSR1: remote screenshot trigger. Handler is signal-safe; main loop polls.
+std::atomic<bool> s_screenshot_requested{false};
+
 // Crash loop detection marker file. Routed through the writable config
 // dir so it survives RO-rootfs platforms (Yocto squashfs etc.).
 const std::string& crash_marker_path() {
@@ -418,6 +421,12 @@ int Application::run(int argc, char** argv) {
     // When running standalone (e.g., --test), these allow clean shutdown.
     std::signal(SIGINT, graceful_quit_signal_handler);
     std::signal(SIGTERM, graceful_quit_signal_handler);
+
+    // SIGUSR1: trigger save_screenshot from the main loop. Useful for remote
+    // debugging on touch-only devices (Snapmaker U1, K1, K2) where the 'S'
+    // keyboard shortcut isn't reachable. The signal handler only flips an
+    // atomic — actual capture happens on the main thread next tick.
+    std::signal(SIGUSR1, [](int) { s_screenshot_requested.store(true); });
 
     // Phase 2: Initialize config system
     if (!init_config()) {
@@ -3245,6 +3254,13 @@ int Application::main_loop() {
     static constexpr int RUNAWAY_THRESHOLD = 5;
     static constexpr uint32_t RUNAWAY_WINDOW_MS = 30000;
 
+    // Re-install SIGUSR1 handler right before the main loop. SDL_Init or other
+    // mid-startup library init (libdrm-ish, evdev) can reset signal handlers
+    // to SIG_DFL — verified on Snapmaker U1 where the install at line ~429
+    // didn't survive (SigCgt mask had USR1 bit clear post-init). Installing
+    // here guarantees the handler is live for the entire run-loop lifetime.
+    std::signal(SIGUSR1, [](int) { s_screenshot_requested.store(true); });
+
     // Main event loop
     while (lv_display_get_next(nullptr) && !app_quit_requested()) {
         try {
@@ -3284,6 +3300,13 @@ int Application::main_loop() {
         if (m_loop_handler.should_take_screenshot()) {
             helix::save_screenshot();
             m_loop_handler.mark_screenshot_taken();
+        }
+
+        // SIGUSR1-triggered screenshot (remote debugging on touch-only devices).
+        if (s_screenshot_requested.exchange(false)) {
+            auto path = helix::save_screenshot();
+            spdlog::info("[Application] SIGUSR1 screenshot saved: {}",
+                         path.empty() ? "<failed>" : path.c_str());
         }
 
         // Auto-quit timeout
