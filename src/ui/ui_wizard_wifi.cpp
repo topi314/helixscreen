@@ -214,6 +214,7 @@ void WizardWifiStep::update_ethernet_status() {
     // Async probe — callback returns on worker thread; marshal to UI via tok.defer().
     crash_handler::breadcrumb::note("wifi", "eth_probe_fire");
     auto tok = lifetime_.token();
+    crash_handler::breadcrumb::note("wifi", "eth_probe_tok_ok");
     ethernet_manager_->get_info_async([this, tok](const EthernetInfo& info) {
         if (tok.expired()) return;
         EthernetInfo info_copy = info;
@@ -252,6 +253,7 @@ void WizardWifiStep::update_ethernet_status() {
             }
         });
     });
+    crash_handler::breadcrumb::note("wifi", "eth_probe_submitted");
 }
 
 void WizardWifiStep::populate_network_list(const std::vector<WiFiNetwork>& networks) {
@@ -853,18 +855,23 @@ void WizardWifiStep::init_wifi_manager() {
     crash_handler::breadcrumb::note("wifi", "init_mgr_enter");
 
     wifi_manager_ = get_wifi_manager();
+    crash_handler::breadcrumb::note("wifi", "wifi_mgr_obtained");
 
     ethernet_manager_ = std::make_unique<EthernetManager>();
+    crash_handler::breadcrumb::note("wifi", "eth_mgr_made");
 
     update_ethernet_status();
+    crash_handler::breadcrumb::note("wifi", "eth_status_done");
 
     // Check WiFi hardware availability and update subject
     bool hw_available = wifi_manager_ && wifi_manager_->has_hardware();
+    crash_handler::breadcrumb::note("wifi", "hw_avail", hw_available ? 1 : 0);
     lv_subject_set_int(&wifi_hardware_available_, hw_available ? 1 : 0);
 
     if (!hw_available) {
         spdlog::info("[{}] WiFi hardware not available - controls disabled", get_name());
         update_wifi_status(lv_tr("WiFi control unavailable"));
+        crash_handler::breadcrumb::note("wifi", "init_mgr_no_hw");
         return;
     }
 
@@ -872,7 +879,9 @@ void WizardWifiStep::init_wifi_manager() {
     // Try to connect to existing wpa_supplicant and query state
     if (wifi_manager_->has_hardware()) {
         // Start the backend to connect to existing wpa_supplicant
+        crash_handler::breadcrumb::note("wifi", "set_enabled_pre");
         bool started = wifi_manager_->set_enabled(true);
+        crash_handler::breadcrumb::note("wifi", "set_enabled_post", started ? 1 : 0);
         if (started && wifi_manager_->is_enabled()) {
             spdlog::info("[{}] WiFi backend connected to system wpa_supplicant", get_name());
 
