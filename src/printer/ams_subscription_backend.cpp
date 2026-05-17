@@ -227,6 +227,11 @@ AmsError AmsSubscriptionBackend::execute_gcode(const std::string& gcode) {
         [tag, gcode](const MoonrakerError& err) {
             if (err.type == MoonrakerErrorType::TIMEOUT) {
                 spdlog::warn("{} G-code response timed out (may still be running): {}", tag, gcode);
+            } else if (err.type == MoonrakerErrorType::NOT_READY) {
+                // MoonrakerAPI already logs a [warning] when refusing g-code on a halted
+                // Klipper. AD5X-IFS retries _IFS_VARS on every Adventurer5M.json poll, so
+                // duplicating at [error] floods the log post-halt.
+                spdlog::debug("{} G-code skipped (Klipper halted): {}", tag, gcode);
             } else {
                 spdlog::error("{} G-code failed: {} - {}", tag, gcode, err.message);
             }
