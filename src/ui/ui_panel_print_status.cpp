@@ -1864,8 +1864,7 @@ void PrintStatusPanel::refresh_fan_animations() {
     auto refresh_one = [this](const std::string& name, const char* icon_widget) {
         if (name.empty())
             return;
-        SubjectLifetime tmp;
-        lv_subject_t* s = printer_state_.get_fan_speed_subject(name, tmp);
+        lv_subject_t* s = printer_state_.get_fan_speed_subject(name);
         if (!s)
             return;
         lv_obj_t* icon = lv_obj_find_by_name(overlay_root_, icon_widget);
