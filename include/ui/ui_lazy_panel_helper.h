@@ -88,9 +88,6 @@ bool lazy_create_and_push_overlay(Getter getter, lv_obj_t*& cached_panel, lv_obj
             return false;
         }
 
-        // Register with NavigationManager for lifecycle callbacks
-        NavigationManager::instance().register_overlay_instance(cached_panel, &panel);
-
         // Register close callback to destroy widget tree when overlay closes.
         // Frees 400-800KB per overlay. Subjects survive; next open re-creates widgets.
         if (destroy_on_close) {
@@ -105,8 +102,14 @@ bool lazy_create_and_push_overlay(Getter getter, lv_obj_t*& cached_panel, lv_obj
                      destroy_on_close ? " (destroy-on-close)" : "");
     }
 
-    // Push panel onto navigation history and show it
+    // Re-register with NavigationManager on every push. switch_to_panel_impl()
+    // clears overlay_instances_ on navbar switches (preserving only the
+    // persistent map), so a cached panel re-opened after a navbar tap was
+    // losing its registration → push_overlay warned "no
+    // register_overlay_instance call" (UMAX4U2G). register is idempotent
+    // (map keyed by widget pointer).
     if (cached_panel) {
+        NavigationManager::instance().register_overlay_instance(cached_panel, &getter());
         NavigationManager::instance().push_overlay(cached_panel);
         return true;
     }
