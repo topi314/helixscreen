@@ -323,3 +323,76 @@ TEST_CASE("QIDI Box RFID side-table resizes with box_count",
     REQUIRE(QidiBoxTestAccess::filament_id(backend, 7) == 99);
     REQUIRE(QidiBoxTestAccess::filament_id(backend, 0) == 0);
 }
+
+// =====================================================================
+// handle_status_update: heater_box drying state + aht20_f humidity
+// =====================================================================
+// The QIDI Box has per-box drying: heater_generic heater_box<N> provides
+// temperature + target, aht20_f heater_box<N> provides humidity. We
+// surface the maximum across all boxes onto AmsUnit::environment so the
+// UI can show "drying" when any box is active.
+
+TEST_CASE("QIDI Box heater_generic heater_box1 populates unit environment",
+          "[ams][qidi_box]") {
+    AmsBackendQidi backend(nullptr, nullptr);
+    REQUIRE_FALSE(backend.get_system_info().units[0].environment.has_value());
+
+    QidiBoxTestAccess::handle_status(
+        backend, json{{"heater_generic heater_box1",
+                       json{{"temperature", 45.5}, {"target", 50.0}}}});
+
+    auto info = backend.get_system_info();
+    REQUIRE(info.units[0].environment.has_value());
+    REQUIRE(info.units[0].environment->temperature_c == Catch::Approx(45.5).epsilon(0.01));
+}
+
+TEST_CASE("QIDI Box aht20_f heater_box1 populates humidity",
+          "[ams][qidi_box]") {
+    AmsBackendQidi backend(nullptr, nullptr);
+
+    QidiBoxTestAccess::handle_status(
+        backend, json{{"aht20_f heater_box1",
+                       json{{"temperature", 23.0}, {"humidity", 38.7}}}});
+
+    auto info = backend.get_system_info();
+    REQUIRE(info.units[0].environment.has_value());
+    REQUIRE(info.units[0].environment->has_humidity);
+    REQUIRE(info.units[0].environment->humidity_pct == Catch::Approx(38.7).epsilon(0.01));
+}
+
+TEST_CASE("QIDI Box multiple heater_box readings expose the maximum",
+          "[ams][qidi_box]") {
+    AmsBackendQidi backend(nullptr, nullptr);
+    // Need at least 2 boxes worth of slots for this to make sense.
+    QidiBoxTestAccess::parse_vars(backend, json{{"box_count", 2}});
+
+    // Box 1: hot drying. Box 2: idle. Max wins.
+    QidiBoxTestAccess::handle_status(
+        backend, json{
+                     {"heater_generic heater_box1", json{{"temperature", 50.0}}},
+                     {"heater_generic heater_box2", json{{"temperature", 22.5}}},
+                 });
+
+    auto info = backend.get_system_info();
+    REQUIRE(info.units[0].environment.has_value());
+    REQUIRE(info.units[0].environment->temperature_c == Catch::Approx(50.0).epsilon(0.01));
+}
+
+TEST_CASE("QIDI Box notifications without heater data leave environment alone",
+          "[ams][qidi_box]") {
+    AmsBackendQidi backend(nullptr, nullptr);
+
+    // Seed an environment reading.
+    QidiBoxTestAccess::handle_status(
+        backend, json{{"heater_generic heater_box1",
+                       json{{"temperature", 40.0}}}});
+    REQUIRE(backend.get_system_info().units[0].environment.has_value());
+
+    // Unrelated notification should not clobber.
+    QidiBoxTestAccess::handle_status(
+        backend, json{{"toolhead", {{"position", json::array({0, 0, 0, 0})}}}});
+
+    auto info = backend.get_system_info();
+    REQUIRE(info.units[0].environment.has_value());
+    REQUIRE(info.units[0].environment->temperature_c == Catch::Approx(40.0).epsilon(0.01));
+}

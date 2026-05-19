@@ -96,6 +96,11 @@ class AmsBackendQidi : public AmsSubscriptionBackend {
     /// `save_variables.variables` envelope).
     void parse_save_variables(const nlohmann::json& variables);
 
+    /// Scan notification for `heater_generic heater_box<N>` and
+    /// `aht20_f heater_box<N>` entries; update unit environment with the
+    /// max temperature and max humidity observed across all boxes.
+    void apply_heater_status(const nlohmann::json& notification);
+
     /// Raw RFID indices read from save_variables. Per-slot side-table so we
     /// don't pollute SlotInfo with backend-specific fields. Resolution to
     /// material/color/brand happens via the officiall_filas_list.cfg lookup

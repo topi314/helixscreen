@@ -96,15 +96,77 @@ void AmsBackendQidi::handle_status_update(const nlohmann::json& notification) {
     }
     // Moonraker delivers save_variables changes as
     // `{"save_variables": {"variables": {...}}}`. Unwrap and feed the inner
-    // variables payload to parse_save_variables. Other fields (heater
-    // temps, box_stepper status objects, aht20_f humidity) are not yet
-    // consumed — they'll be added as separate state-mirror cycles land.
+    // variables payload to parse_save_variables.
     auto sv_it = notification.find("save_variables");
     if (sv_it != notification.end() && sv_it->is_object()) {
         auto vars_it = sv_it->find("variables");
         if (vars_it != sv_it->end() && vars_it->is_object()) {
             parse_save_variables(*vars_it);
         }
+    }
+
+    // Per-box drying state arrives as separate top-level objects:
+    //   "heater_generic heater_box<N>" → {temperature, target, power}
+    //   "aht20_f heater_box<N>"        → {temperature, humidity}
+    // We surface the maximum temperature and maximum humidity across all
+    // boxes onto AmsUnit::environment so the UI can show "drying" when
+    // ANY box is active.
+    apply_heater_status(notification);
+}
+
+void AmsBackendQidi::apply_heater_status(const nlohmann::json& notification) {
+    constexpr std::string_view kHeaterPrefix = "heater_generic heater_box";
+    constexpr std::string_view kAht20Prefix = "aht20_f heater_box";
+
+    std::optional<float> max_temp;
+    std::optional<float> max_humidity;
+
+    for (auto it = notification.begin(); it != notification.end(); ++it) {
+        if (!it->is_object()) {
+            continue;
+        }
+        const std::string& key = it.key();
+        const bool is_heater = key.rfind(kHeaterPrefix, 0) == 0;
+        const bool is_aht = key.rfind(kAht20Prefix, 0) == 0;
+        if (!is_heater && !is_aht) {
+            continue;
+        }
+        if (auto t_it = it->find("temperature");
+            t_it != it->end() && t_it->is_number()) {
+            const float v = t_it->get<float>();
+            if (!max_temp || v > *max_temp) {
+                max_temp = v;
+            }
+        }
+        if (is_aht) {
+            if (auto h_it = it->find("humidity");
+                h_it != it->end() && h_it->is_number()) {
+                const float v = h_it->get<float>();
+                if (!max_humidity || v > *max_humidity) {
+                    max_humidity = v;
+                }
+            }
+        }
+    }
+
+    if (!max_temp && !max_humidity) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (system_info_.units.empty()) {
+        return;
+    }
+    auto& env = system_info_.units[0].environment;
+    if (!env) {
+        env = EnvironmentData{};
+    }
+    if (max_temp) {
+        env->temperature_c = *max_temp;
+    }
+    if (max_humidity) {
+        env->humidity_pct = *max_humidity;
+        env->has_humidity = true;
     }
 }
 
