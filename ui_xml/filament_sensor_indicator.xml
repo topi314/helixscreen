@@ -2,17 +2,21 @@
 <!-- Copyright (C) 2025-2026 356C LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Filament sensor indicator - nozzle icon showing sensor state -->
-<!-- Green nozzle=detected(1), Red nozzle-alert=empty(0), Hidden=no sensor(-1) or disabled -->
+<!-- States (filament_runout_detected):
+       -1 = no sensor configured        → hidden (no opinion)
+        0 = sensor enabled, runout      → red (filament_alert)
+        1 = sensor enabled, loaded      → green (filament)
+        2 = configured but disabled     → muted (filament, disabled variant)
+     The "disabled" state is shown deliberately so the user can see runout
+     protection is OFF instead of mistaking a hidden indicator for "ok". -->
 <component>
   <api>
     <prop name="size" type="string" default="sm"/>
   </api>
   <view name="filament_sensor_indicator"
         extends="lv_obj" width="content" height="content" style_pad_all="0" scrollable="false">
-    <!-- Hidden when no sensor (value=-1) -->
+    <!-- Hidden only when no sensor configured (value=-1) -->
     <bind_flag_if_eq subject="filament_runout_detected" flag="hidden" ref_value="-1"/>
-    <!-- Hidden when master disabled -->
-    <bind_flag_if_eq subject="filament_master_enabled" flag="hidden" ref_value="0"/>
     <!-- Loaded: green nozzle -->
     <icon src="filament" size="$size" variant="success">
       <bind_flag_if_not_eq subject="filament_runout_detected" flag="hidden" ref_value="1"/>
@@ -20,6 +24,10 @@
     <!-- Empty: red nozzle-alert -->
     <icon src="filament_alert" size="$size" variant="danger">
       <bind_flag_if_not_eq subject="filament_runout_detected" flag="hidden" ref_value="0"/>
+    </icon>
+    <!-- Sensor disabled: muted nozzle (runout protection is off) -->
+    <icon src="filament" size="$size" variant="disabled">
+      <bind_flag_if_not_eq subject="filament_runout_detected" flag="hidden" ref_value="2"/>
     </icon>
   </view>
 </component>

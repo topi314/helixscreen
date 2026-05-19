@@ -14,5 +14,8 @@
     <text_tiny text="Empty" translation_tag="Empty" style_text_align="center">
       <bind_flag_if_not_eq subject="filament_runout_detected" flag="hidden" ref_value="0"/>
     </text_tiny>
+    <text_tiny text="Off" translation_tag="Off" style_text_align="center">
+      <bind_flag_if_not_eq subject="filament_runout_detected" flag="hidden" ref_value="2"/>
+    </text_tiny>
   </view>
 </component>

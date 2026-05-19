@@ -405,18 +405,19 @@ TEST_CASE_METHOD(FilamentSensorTestFixture, "FilamentSensorManager - state updat
     mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
 
     SECTION("Updates filament_detected from status JSON") {
-        // Initially no state set
+        // Initial state defaults to filament_detected=true (commit c176470bb)
+        // so pre-Moonraker reads don't render as false runouts.
         auto state = mgr().get_sensor_state(FilamentSensorRole::RUNOUT);
         REQUIRE(state.has_value());
-        REQUIRE(state->filament_detected == false);
+        REQUIRE(state->filament_detected == true);
 
-        // Update via status
+        // Update via status — flip to empty
         json status;
-        status["filament_switch_sensor runout"]["filament_detected"] = true;
+        status["filament_switch_sensor runout"]["filament_detected"] = false;
         mgr().update_from_status(status);
 
         state = mgr().get_sensor_state(FilamentSensorRole::RUNOUT);
-        REQUIRE(state->filament_detected == true);
+        REQUIRE(state->filament_detected == false);
     }
 
     SECTION("Motion sensor updates include detection_count") {
@@ -449,25 +450,25 @@ TEST_CASE_METHOD(FilamentSensorTestFixture, "FilamentSensorManager - state updat
             new_detected = new_state.filament_detected;
         });
 
-        // Trigger state change
-        update_sensor_state("filament_switch_sensor runout", true);
+        // Trigger state change (default is true → flip to false)
+        update_sensor_state("filament_switch_sensor runout", false);
 
         REQUIRE(callback_fired);
         REQUIRE(changed_sensor == "filament_switch_sensor runout");
-        REQUIRE(old_detected == false);
-        REQUIRE(new_detected == true);
+        REQUIRE(old_detected == true);
+        REQUIRE(new_detected == false);
     }
 
     SECTION("No callback when state doesn't change") {
-        // Set initial state
-        update_sensor_state("filament_switch_sensor runout", true);
+        // Set initial state to non-default value first so a same-value update is observable
+        update_sensor_state("filament_switch_sensor runout", false);
 
         int callback_count = 0;
         mgr().set_state_change_callback([&](const std::string&, const FilamentSensorState&,
                                             const FilamentSensorState&) { callback_count++; });
 
         // Update with same value
-        update_sensor_state("filament_switch_sensor runout", true);
+        update_sensor_state("filament_switch_sensor runout", false);
 
         REQUIRE(callback_count == 0);
     }
@@ -564,34 +565,43 @@ TEST_CASE_METHOD(FilamentSensorTestFixture, "FilamentSensorManager - subject val
     SECTION("Role subjects update when sensor assigned and state changes") {
         mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
 
-        // After assignment, should show 0 (no filament) since state defaults to false
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
-
-        // Update state to detected
-        // Note: reset_for_testing() enables sync_mode, so update_from_status()
-        // updates subjects synchronously instead of using lv_async_call().
-        update_sensor_state("filament_switch_sensor runout", true);
+        // After assignment, should show 1 (loaded) — FilamentSensorState now
+        // defaults filament_detected=true (commit c176470bb) so pre-Moonraker
+        // reads don't render as false runouts.
         REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
 
         // Update state to empty
+        // Note: reset_for_testing() enables sync_mode, so update_from_status()
+        // updates subjects synchronously instead of using lv_async_call().
         update_sensor_state("filament_switch_sensor runout", false);
         REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
+
+        // Update state back to detected
+        update_sensor_state("filament_switch_sensor runout", true);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
     }
 
-    SECTION("Role subjects show -1 when master disabled") {
+    SECTION("Role subjects show 2 (disabled) when master disabled") {
+        // A configured sensor with the master toggle off must surface as
+        // "disabled" (value 2), NOT "no sensor" (-1). The icon needs to
+        // render a muted state so the user can see runout protection is
+        // off — a hidden indicator would be mistaken for "all fine".
         mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
         update_sensor_state("filament_switch_sensor runout", true);
 
         mgr().set_master_enabled(false);
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == -1);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 2);
     }
 
-    SECTION("Role subjects show -1 when sensor disabled") {
+    SECTION("Role subjects show 2 (disabled) when sensor disabled") {
+        // Per-sensor enabled=false has the same UX implication as a master
+        // off: runout protection is inactive on this role and the user
+        // needs a visible indicator that says so.
         mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
         update_sensor_state("filament_switch_sensor runout", true);
 
         mgr().set_sensor_enabled("filament_switch_sensor runout", false);
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == -1);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 2);
     }
 
     SECTION("any_runout subject reflects runout state") {
@@ -618,40 +628,41 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
     mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
 
     // set_sensor_role() calls update_subjects() internally, which moves subjects
-    // from -1 to 0 (no filament, default state). That's expected.
-    // The bug was: update_from_status() with filament_detected=false (matching default)
-    // would NOT call update_subjects() because no state change was detected.
-    // The fix: always trigger update_subjects() on the first status update.
+    // from -1 to 1 (the post-c176470bb optimistic default is filament_detected=true).
+    // The bug this case guards against: update_from_status() with a value matching
+    // the in-memory default would NOT call update_subjects() because no state change
+    // was detected. The fix: always trigger update_subjects() on the first status
+    // update — even when the observed value happens to equal the default.
 
-    SECTION("First update with false (matching default) still updates subjects") {
-        // Subjects should be 0 after role assignment
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
+    SECTION("First update with true (matching default) still updates subjects") {
+        // Subjects should be 1 after role assignment (default detected=true)
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
 
-        // Simulate what happens on first Moonraker status — sensor reports false
+        // Simulate what happens on first Moonraker status — sensor reports true
         // (matching default). Before the fix, this was a no-op because any_changed=false.
-        update_sensor_state("filament_switch_sensor runout", false);
+        update_sensor_state("filament_switch_sensor runout", true);
 
-        // Subject should still be 0 (not -1)
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
+        // Subject should still be 1 (not -1)
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
     }
 
-    SECTION("First update with true correctly sets subject to 1") {
-        update_sensor_state("filament_switch_sensor runout", true);
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
+    SECTION("First update with false correctly sets subject to 0") {
+        update_sensor_state("filament_switch_sensor runout", false);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
     }
 
     SECTION("Re-discovery resets initial status tracking") {
         // First update
-        update_sensor_state("filament_switch_sensor runout", true);
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
+        update_sensor_state("filament_switch_sensor runout", false);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
 
         // Re-discover (simulates Moonraker reconnect)
         discover_test_sensors();
         mgr().set_sensor_role("filament_switch_sensor runout", FilamentSensorRole::RUNOUT);
 
-        // After re-discovery, first status with false should still trigger subjects
-        update_sensor_state("filament_switch_sensor runout", false);
-        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 0);
+        // After re-discovery, first status with true should still trigger subjects
+        update_sensor_state("filament_switch_sensor runout", true);
+        REQUIRE(lv_subject_get_int(mgr().get_runout_detected_subject()) == 1);
     }
 }
 
@@ -742,11 +753,11 @@ TEST_CASE_METHOD(FilamentSensorTestFixture, "FilamentSensorManager - edge cases"
         mgr().set_state_change_callback([&](const std::string&, const FilamentSensorState&,
                                             const FilamentSensorState&) { callback_count++; });
 
-        // Rapid changes
-        update_sensor_state("filament_switch_sensor runout", true);
+        // Rapid changes — start with false since default is now true
         update_sensor_state("filament_switch_sensor runout", false);
         update_sensor_state("filament_switch_sensor runout", true);
         update_sensor_state("filament_switch_sensor runout", false);
+        update_sensor_state("filament_switch_sensor runout", true);
 
         REQUIRE(callback_count == 4);
     }
@@ -1030,26 +1041,27 @@ TEST_CASE_METHOD(FilamentSensorTestFixture, "FilamentSensorManager - is_probe_tr
         mgr().discover_sensors({"filament_switch_sensor e1"});
         mgr().set_sensor_role("filament_switch_sensor e1", FilamentSensorRole::Z_PROBE);
 
-        // Initial state - not triggered
-        REQUIRE_FALSE(mgr().is_probe_triggered());
-
-        // Trigger
-        json status1;
-        status1["filament_switch_sensor e1"]["filament_detected"] = true;
-        mgr().update_from_status(status1);
+        // Initial state — default detected=true means probe reports as triggered
+        // until the first Klipper status flips it.
         REQUIRE(mgr().is_probe_triggered());
 
         // Untrigger
-        json status2;
-        status2["filament_switch_sensor e1"]["filament_detected"] = false;
-        mgr().update_from_status(status2);
+        json status1;
+        status1["filament_switch_sensor e1"]["filament_detected"] = false;
+        mgr().update_from_status(status1);
         REQUIRE_FALSE(mgr().is_probe_triggered());
 
-        // Trigger again
-        json status3;
-        status3["filament_switch_sensor e1"]["filament_detected"] = true;
-        mgr().update_from_status(status3);
+        // Trigger
+        json status2;
+        status2["filament_switch_sensor e1"]["filament_detected"] = true;
+        mgr().update_from_status(status2);
         REQUIRE(mgr().is_probe_triggered());
+
+        // Untrigger again
+        json status3;
+        status3["filament_switch_sensor e1"]["filament_detected"] = false;
+        mgr().update_from_status(status3);
+        REQUIRE_FALSE(mgr().is_probe_triggered());
     }
 }
 
@@ -1063,12 +1075,14 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
         REQUIRE(lv_subject_get_int(subject) == -1);
     }
 
-    SECTION("Subject returns 0 after probe assignment with no state update") {
+    SECTION("Subject returns 1 after probe assignment with no state update") {
+        // Default detected=true means the subject reports triggered until
+        // the first explicit status update flips it (c176470bb optimism).
         mgr().discover_sensors({"filament_switch_sensor probe"});
         mgr().set_sensor_role("filament_switch_sensor probe", FilamentSensorRole::Z_PROBE);
 
         auto* subject = mgr().get_probe_triggered_subject();
-        REQUIRE(lv_subject_get_int(subject) == 0);
+        REQUIRE(lv_subject_get_int(subject) == 1);
     }
 
     SECTION("Subject returns 1 when probe is triggered") {
@@ -1095,7 +1109,10 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
         REQUIRE(lv_subject_get_int(subject) == 0);
     }
 
-    SECTION("Subject returns -1 when master disabled") {
+    SECTION("Subject returns 2 (disabled) when master disabled") {
+        // A configured Z_PROBE sensor with the master toggle off surfaces as
+        // "disabled" (value 2), not "no sensor" (-1) — matches the runout
+        // role behavior so the indicator shows a muted icon instead of hiding.
         mgr().discover_sensors({"filament_switch_sensor probe"});
         mgr().set_sensor_role("filament_switch_sensor probe", FilamentSensorRole::Z_PROBE);
 
@@ -1106,10 +1123,10 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
         mgr().set_master_enabled(false);
 
         auto* subject = mgr().get_probe_triggered_subject();
-        REQUIRE(lv_subject_get_int(subject) == -1);
+        REQUIRE(lv_subject_get_int(subject) == 2);
     }
 
-    SECTION("Subject returns -1 when probe sensor disabled") {
+    SECTION("Subject returns 2 (disabled) when probe sensor disabled") {
         mgr().discover_sensors({"filament_switch_sensor probe"});
         mgr().set_sensor_role("filament_switch_sensor probe", FilamentSensorRole::Z_PROBE);
 
@@ -1120,7 +1137,7 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
         mgr().set_sensor_enabled("filament_switch_sensor probe", false);
 
         auto* subject = mgr().get_probe_triggered_subject();
-        REQUIRE(lv_subject_get_int(subject) == -1);
+        REQUIRE(lv_subject_get_int(subject) == 2);
     }
 
     SECTION("Subject updates correctly via update_from_status with JSON") {
@@ -1173,8 +1190,8 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
     SECTION("State change callback fires for probe sensor changes") {
         bool callback_fired = false;
         std::string changed_sensor;
-        bool old_detected = true;
-        bool new_detected = false;
+        bool old_detected = false;
+        bool new_detected = true;
 
         mgr().set_state_change_callback([&](const std::string& name,
                                             const FilamentSensorState& old_state,
@@ -1185,13 +1202,14 @@ TEST_CASE_METHOD(FilamentSensorTestFixture,
             new_detected = new_state.filament_detected;
         });
 
+        // Default detected=true → flip to false to observe a transition
         json status;
-        status["filament_switch_sensor probe"]["filament_detected"] = true;
+        status["filament_switch_sensor probe"]["filament_detected"] = false;
         mgr().update_from_status(status);
 
         REQUIRE(callback_fired);
         REQUIRE(changed_sensor == "filament_switch_sensor probe");
-        REQUIRE(old_detected == false);
-        REQUIRE(new_detected == true);
+        REQUIRE(old_detected == true);
+        REQUIRE(new_detected == false);
     }
 }

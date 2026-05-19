@@ -98,7 +98,15 @@ void FilamentSensorManager::init_subjects() {
     spdlog::trace("[FilamentSensorManager] Initializing subjects");
 
     // Initialize all subjects with SubjectManager for automatic cleanup
-    // -1 = no sensor, 0 = no filament/not triggered, 1 = filament detected/triggered
+    // Role-state encoding (filament_runout_detected, filament_toolhead_detected,
+    // filament_entry_detected, probe_triggered):
+    //   -1 = no sensor configured for this role (hide indicator entirely)
+    //    0 = sensor enabled, no filament / not triggered (empty/red)
+    //    1 = sensor enabled, filament present / triggered (loaded/green)
+    //    2 = sensor configured but DISABLED (master toggle off or per-sensor
+    //        enabled=false) — render as "off/unknown" so the user can see
+    //        runout protection is inactive instead of mistaking a hidden
+    //        indicator for "everything is fine".
     UI_MANAGED_SUBJECT_INT(runout_detected_, -1, "filament_runout_detected", subjects_);
     UI_MANAGED_SUBJECT_INT(toolhead_detected_, -1, "filament_toolhead_detected", subjects_);
     UI_MANAGED_SUBJECT_INT(entry_detected_, -1, "filament_entry_detected", subjects_);
@@ -798,20 +806,25 @@ void FilamentSensorManager::update_subjects() {
         return;
     }
 
-    // Helper to get subject value for a role
+    // Helper to get subject value for a role. See init_subjects() for the
+    // -1/0/1/2 encoding rationale.
     auto get_role_value = [this](FilamentSensorRole role) -> int {
-        if (!master_enabled_) {
-            return -1; // Disabled
+        const auto* config = find_config_by_role(role);
+        if (!config) {
+            return -1; // No sensor configured for this role — hide
         }
 
-        const auto* config = find_config_by_role(role);
-        if (!config || !config->enabled) {
-            return -1; // No sensor assigned or disabled
+        // A configured sensor that is turned off (master toggle or per-sensor)
+        // surfaces as "disabled" so the user sees runout protection is OFF
+        // rather than seeing a hidden indicator and assuming all is well.
+        if (!master_enabled_ || !config->enabled) {
+            return 2; // Configured but disabled
         }
 
         auto it = states_.find(config->klipper_name);
         if (it == states_.end() || !it->second.available) {
-            return -1; // Sensor unavailable
+            return -1; // Sensor transiently unavailable — hide (not the same
+                       // as user-disabled; treat as no-opinion)
         }
 
         return it->second.filament_detected ? 1 : 0;
