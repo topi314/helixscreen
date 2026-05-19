@@ -64,6 +64,7 @@ translations:
   90°: 90°
   = Loosen: = Loosen
   = Tighten: = Tighten
+  A: A
   ABS: ABS
   ACCELEROMETERS: ACCELEROMETERS
   ACTIONS: ACTIONS
@@ -162,6 +163,7 @@ translations:
   Automatic: Automatic
   Automatic Heater Control Calibration: Automatic Heater Control Calibration
   Automatic LED Control: Automatic LED Control
+  Aux: Aux
   Available: Available
   Available Networks: Available Networks
   Available networks: Available networks
@@ -259,6 +261,7 @@ translations:
   Calibrate Y: Calibrate Y
   Calibrate input shaping to reduce ringing artifacts in prints: Calibrate input shaping to reduce ringing artifacts in prints
   Calibrate your touchscreen for accurate input: Calibrate your touchscreen for accurate input
+  'Calibrate, tune jitter and scroll feel': 'Calibrate, tune jitter and scroll feel'
   Calibrated: Calibrated
   Calibrating...: Calibrating...
   Calibration & Tools: Calibration & Tools
@@ -286,6 +289,7 @@ translations:
   'Cannot modify G-code: scan result not available': 'Cannot modify G-code: scan result not available'
   'Cannot modify G-code: {}. Printing original file.': 'Cannot modify G-code: {}. Printing original file.'
   'Cannot reprint: not connected to printer': 'Cannot reprint: not connected to printer'
+  Cannot restart — no filename: Cannot restart — no filename
   'Cannot start print: internal error': 'Cannot start print: internal error'
   'Cannot start print: not connected to printer': 'Cannot start print: not connected to printer'
   'Cannot start print: printer is {}': 'Cannot start print: printer is {}'
@@ -469,6 +473,7 @@ translations:
   Date (newest): Date (newest)
   Date (oldest): Date (oldest)
   Day: Day
+  'Dead zone in pixels (raise if taps register as swipes; 0 disables)': 'Dead zone in pixels (raise if taps register as swipes; 0 disables)'
   Debug: Debug
   Default border thickness: Default border thickness
   Define macros in your printer.cfg: Define macros in your printer.cfg
@@ -510,6 +515,7 @@ translations:
   Download update?: Download update?
   Download v{}?: Download v{}?
   Downloading...: Downloading...
+  'Draw a ripple at each touch — helps diagnose offsets': 'Draw a ripple at each touch — helps diagnose offsets'
   Drive Cal: Drive Cal
   Drop shadow strength (0 = disabled): Drop shadow strength (0 = disabled)
   Dryer Controls: Dryer Controls
@@ -599,6 +605,7 @@ translations:
   Extruding {}mm...: Extruding {}mm...
   FAILED: FAILED
   FILAMENT MAPPING: FILAMENT MAPPING
+  FILAMENTS: FILAMENTS
   FILTERS: FILTERS
   Factory Reset: Factory Reset
   Failed: Failed
@@ -606,6 +613,7 @@ translations:
   Failed to apply limits: Failed to apply limits
   Failed to apply settings: Failed to apply settings
   'Failed to cancel: {}': 'Failed to cancel: {}'
+  'Failed to clear print state: {}': 'Failed to clear print state: {}'
   'Failed to connect to ''{}'': {}': 'Failed to connect to ''{}'': {}'
   'Failed to connect: %s': 'Failed to connect: %s'
   'Failed to cool down: {}': 'Failed to cool down: {}'
@@ -644,6 +652,7 @@ translations:
   'Failed to reset speed: {}': 'Failed to reset speed: {}'
   Failed to reset theme: Failed to reset theme
   Failed to restart Moonraker.: Failed to restart Moonraker.
+  'Failed to restart: {}': 'Failed to restart: {}'
   'Failed to resume print: {}': 'Failed to resume print: {}'
   'Failed to resume: {}': 'Failed to resume: {}'
   Failed to save LED configuration: Failed to save LED configuration
@@ -786,6 +795,7 @@ translations:
   Heating to {}°C for {}...: Heating to {}°C for {}...
   Heating to {}°C...: Heating to {}°C...
   Heating...: Heating...
+  'Heating: %d / %d°C': 'Heating: %d / %d°C'
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen Crashed
   HelixScreen is detecting your display orientation: HelixScreen is detecting your display orientation
@@ -828,6 +838,7 @@ translations:
   Idle: Idle
   If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically
   Ignore: Ignore
+  Ignore the click that fires when you lift after scrolling: Ignore the click that fires when you lift after scrolling
   'Import failed: {}': 'Import failed: {}'
   Imported {}: Imported {}
   In Progress: In Progress
@@ -1205,6 +1216,7 @@ translations:
   Pause macro not configured: Pause macro not configured
   Paused: Paused
   Paused (attention needed): Paused (attention needed)
+  Pausing...: Pausing...
   Peak Freq: Peak Freq
   'Peak:': 'Peak:'
   Phase Tracking: Phase Tracking
@@ -1216,6 +1228,7 @@ translations:
   Pick: Pick
   Pick Color: Pick Color
   Pill: Pill
+  'Pixels before a press becomes a scroll (lower = scrolls engage sooner)': 'Pixels before a press becomes a scroll (lower = scrolls engage sooner)'
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': 'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.'
   Place plugins in the plugins directory to extend HelixScreen: Place plugins in the plugins directory to extend HelixScreen
   Placed: Placed
@@ -1277,6 +1290,7 @@ translations:
   Print Status: Print Status
   Print Time: Print Time
   Print Tuning: Print Tuning
+  Print Was Terminated: Print Was Terminated
   Print failed: Print failed
   'Print preparation failed: {}': 'Print preparation failed: {}'
   Print quality: Print quality
@@ -1433,6 +1447,8 @@ translations:
   Resume: Resume
   Resume Print: Resume Print
   Resume macro not configured: Resume macro not configured
+  'Resume preparation failed: {}': 'Resume preparation failed: {}'
+  Resuming...: Resuming...
   Retract: Retract
   Retract Distance: Retract Distance
   Retract Length: Retract Length
@@ -1514,6 +1530,8 @@ translations:
   Screensaver: Screensaver
   Screensaver disabled: Screensaver disabled
   Screws Tilt: Screws Tilt
+  Scroll Engage Distance: Scroll Engage Distance
+  Scroll Guard: Scroll Guard
   Search filename...: Search filename...
   Search spools...: Search spools...
   Search vendors...: Search vendors...
@@ -1575,6 +1593,7 @@ translations:
   'Shininess:': 'Shininess:'
   Show Printer Switcher: Show Printer Switcher
   Show Sections: Show Sections
+  Show Touch Points: Show Touch Points
   Show a confirmation dialog when tapping a macro: Show a confirmation dialog when tapping a macro
   Show detailed print preparation status: Show detailed print preparation status
   Show instead of dimming: Show instead of dimming
@@ -1723,6 +1742,7 @@ translations:
   ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   : The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   The heater will cycle on and off several times.: The heater will cycle on and off several times.
+  The printer halted this print and cannot resume it. Restart from the beginning?: The printer halted this print and cannot resume it. Restart from the beginning?
   The runout sensor indicates no filament is loaded. Start print anyway?: The runout sensor indicates no filament is loaded. Start print anyway?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: The toolhead sensor indicates filament is already loaded. Proceed with load anyway?
   The toolhead sensor indicates no filament is present. Proceed with unload anyway?: The toolhead sensor indicates no filament is present. Proceed with unload anyway?
@@ -1785,8 +1805,10 @@ translations:
   Toolhead, G-code, limits, and materials: Toolhead, G-code, limits, and materials
   Top: Top
   Total Prints: Total Prints
+  Touch & Input: Touch & Input
   Touch Cal: Touch Cal
   Touch Calibration: Touch Calibration
+  Touch Jitter Filter: Touch Jitter Filter
   Touch anywhere to test calibration: Touch anywhere to test calibration
   Touch anywhere to verify accuracy: Touch anywhere to verify accuracy
   Touch screen to wake from sleep: Touch screen to wake from sleep
@@ -1994,20 +2016,12 @@ translations:
   tour.step.welcome.title: Welcome to HelixScreen
   used: used
   v{} is available. Tap to update.: v{} is available. Tap to update.
+  you have: you have
   '{} axis homed': '{} axis homed'
+  '{} command timed out': '{} command timed out'
   '{} complete': '{} complete'
   '{} heater turned off': '{} heater turned off'
   '{} macro not configured': '{} macro not configured'
   '{} may cause unintended changes. Are you sure?': '{} may cause unintended changes. Are you sure?'
   '{} more taps to {} beta features': '{} more taps to {} beta features'
   '{} target set to {}°C': '{} target set to {}°C'
-  Touch & Input: Touch & Input
-  'Calibrate, tune jitter and scroll feel': 'Calibrate, tune jitter and scroll feel'
-  Show Touch Points: Show Touch Points
-  'Draw a ripple at each touch — helps diagnose offsets': 'Draw a ripple at each touch — helps diagnose offsets'
-  Touch Jitter Filter: Touch Jitter Filter
-  'Dead zone in pixels (raise if taps register as swipes; 0 disables)': 'Dead zone in pixels (raise if taps register as swipes; 0 disables)'
-  Scroll Engage Distance: Scroll Engage Distance
-  'Pixels before a press becomes a scroll (lower = scrolls engage sooner)': 'Pixels before a press becomes a scroll (lower = scrolls engage sooner)'
-  Scroll Guard: Scroll Guard
-  Ignore the click that fires when you lift after scrolling: Ignore the click that fires when you lift after scrolling

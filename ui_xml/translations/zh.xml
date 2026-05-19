@@ -64,6 +64,7 @@
   <translation tag="90°" zh="90°"/>
   <translation tag="= Loosen" zh="= 松开"/>
   <translation tag="= Tighten" zh="= 拧紧"/>
+  <translation tag="A" zh="辅"/>
   <translation tag="ABS" zh="ABS"/>
   <translation tag="ACCELEROMETERS" zh="加速度计"/>
   <translation tag="ACTIONS" zh="操作"/>
@@ -124,7 +125,7 @@
   <translation tag="Allow display to sleep during active prints" zh="打印时允许屏幕休眠"/>
   <translation tag="Allwinner" zh="Allwinner"/>
   <translation tag="Already connecting — wait a moment and try again" zh="正在连接中 — 请稍候再试"/>
-  <translation tag="Always show Android navigation bar instead of using gestures"/>
+  <translation tag="Always show Android navigation bar instead of using gestures" zh="始终显示 Android 导航栏而不使用手势"/>
   <translation tag="Ambient Transfer" zh="环境传热"/>
   <translation tag="An accelerometer was detected on your printer." zh="在您的打印机上检测到加速度计。"/>
   <translation tag="An error occurred during calibration." zh="校准过程中发生错误。"/>
@@ -162,7 +163,8 @@
   <translation tag="Automatic" zh="自动"/>
   <translation tag="Automatic Heater Control Calibration" zh="自动加热控制校准"/>
   <translation tag="Automatic LED Control" zh="自动 LED 控制"/>
-  <translation tag="Available"/>
+  <translation tag="Aux" zh="辅助"/>
+  <translation tag="Available" zh="可用"/>
   <translation tag="Available Networks" zh="可用网络"/>
   <translation tag="Available networks" zh="可用网络"/>
   <translation tag="Average" zh="平均值"/>
@@ -203,7 +205,7 @@
   <translation tag="Beta features: OFF" zh="测试版功能: 关"/>
   <translation tag="Beta features: ON" zh="测试版功能: 开"/>
   <translation tag="Black" zh="黑色"/>
-  <translation tag="Blocked"/>
+  <translation tag="Blocked" zh="已阻塞"/>
   <translation tag="Bluetooth" zh="蓝牙"/>
   <translation tag="Bluetooth initialization failed" zh="蓝牙初始化失败"/>
   <translation tag="Bluetooth is not available on this device" zh="此设备不支持蓝牙"/>
@@ -259,6 +261,7 @@
   <translation tag="Calibrate Y" zh="校准 Y 轴"/>
   <translation tag="Calibrate input shaping to reduce ringing artifacts in prints" zh="校准输入整形以减少打印中的振纹"/>
   <translation tag="Calibrate your touchscreen for accurate input" zh="校准触摸屏以确保输入准确"/>
+  <translation tag="Calibrate, tune jitter and scroll feel" zh="校准、调整抖动和滚动手感"/>
   <translation tag="Calibrated" zh="已校准"/>
   <translation tag="Calibrating..." zh="正在校准..."/>
   <translation tag="Calibration &amp; Tools" zh="校准与工具"/>
@@ -286,6 +289,7 @@
   <translation tag="Cannot modify G-code: scan result not available" zh="无法修改 G-code: 扫描结果不可用"/>
   <translation tag="Cannot modify G-code: {}. Printing original file." zh="无法修改 G-code: {}。正在打印原始文件。"/>
   <translation tag="Cannot reprint: not connected to printer" zh="无法重新打印: 未连接打印机"/>
+  <translation tag="Cannot restart — no filename" zh="无法重启 — 没有文件名"/>
   <translation tag="Cannot start print: internal error" zh="无法开始打印: 内部错误"/>
   <translation tag="Cannot start print: not connected to printer" zh="无法开始打印: 未连接打印机"/>
   <translation tag="Cannot start print: printer is {}" zh="无法开始打印: 打印机状态为 {}"/>
@@ -314,7 +318,7 @@
   <translation tag="Check for Updates" zh="检查更新"/>
   <translation tag="Check the filament path and try again." zh="检查耗材路径并重试。"/>
   <translation tag="Check your heater&apos;s rating (typically 40-60W for hotends)" zh="检查加热器功率（热端通常为 40-60W）"/>
-  <translation tag="Checking"/>
+  <translation tag="Checking" zh="检查中"/>
   <translation tag="Checking Spoolman server..." zh="正在检查 Spoolman 服务器..."/>
   <translation tag="Checking accelerometer..." zh="正在检查加速度计..."/>
   <translation tag="Checking for plugin..." zh="正在检查插件..."/>
@@ -455,7 +459,7 @@
   <translation tag="Customize Macro" zh="自定义宏"/>
   <translation tag="Customize preset temperatures" zh="自定义预设温度"/>
   <translation tag="Cutter jam" zh="切刀卡住"/>
-  <translation tag="Cutting"/>
+  <translation tag="Cutting" zh="切割中"/>
   <translation tag="Cutting filament..." zh="正在切断耗材..."/>
   <translation tag="DETECTED USB PRINTERS" zh="已检测到的 USB 打印机"/>
   <translation tag="DISABLED" zh="已禁用"/>
@@ -469,6 +473,7 @@
   <translation tag="Date (newest)" zh="日期（最新）"/>
   <translation tag="Date (oldest)" zh="日期（最早）"/>
   <translation tag="Day" zh="日"/>
+  <translation tag="Dead zone in pixels (raise if taps register as swipes; 0 disables)" zh="死区像素值（如果点击被识别为滑动则调高；0 表示禁用）"/>
   <translation tag="Debug" zh="调试"/>
   <translation tag="Default border thickness" zh="默认边框厚度"/>
   <translation tag="Define macros in your printer.cfg" zh="在 printer.cfg 中定义宏"/>
@@ -510,6 +515,7 @@
   <translation tag="Download update?" zh="下载更新？"/>
   <translation tag="Download v{}?" zh="下载 v{}？"/>
   <translation tag="Downloading..." zh="下载中..."/>
+  <translation tag="Draw a ripple at each touch — helps diagnose offsets" zh="在每次触摸时绘制涟漪 — 有助于诊断偏移"/>
   <translation tag="Drive Cal" zh="驱动校准"/>
   <translation tag="Drop shadow strength (0 = disabled)" zh="阴影强度（0 = 禁用）"/>
   <translation tag="Dryer Controls" zh="烘干机控制"/>
@@ -599,6 +605,7 @@
   <translation tag="Extruding {}mm..." zh="正在挤出 {}mm..."/>
   <translation tag="FAILED" zh="失败"/>
   <translation tag="FILAMENT MAPPING" zh="耗材映射"/>
+  <translation tag="FILAMENTS" zh="耗材"/>
   <translation tag="FILTERS" zh="筛选"/>
   <translation tag="Factory Reset" zh="恢复出厂设置"/>
   <translation tag="Failed" zh="失败"/>
@@ -606,6 +613,7 @@
   <translation tag="Failed to apply limits" zh="应用限制失败"/>
   <translation tag="Failed to apply settings" zh="应用设置失败"/>
   <translation tag="Failed to cancel: {}" zh="取消失败: {}"/>
+  <translation tag="Failed to clear print state: {}" zh="无法清除打印状态：{}"/>
   <translation tag="Failed to connect to &apos;{}&apos;: {}" zh="无法连接到 &apos;{}&apos;: {}"/>
   <translation tag="Failed to connect: %s" zh="连接失败：%s"/>
   <translation tag="Failed to cool down: {}" zh="冷却失败: {}"/>
@@ -644,6 +652,7 @@
   <translation tag="Failed to reset speed: {}" zh="重置速度失败: {}"/>
   <translation tag="Failed to reset theme" zh="重置主题失败"/>
   <translation tag="Failed to restart Moonraker." zh="重启 Moonraker 失败。"/>
+  <translation tag="Failed to restart: {}" zh="重启失败：{}"/>
   <translation tag="Failed to resume print: {}" zh="恢复打印失败: {}"/>
   <translation tag="Failed to resume: {}" zh="恢复失败: {}"/>
   <translation tag="Failed to save LED configuration" zh="保存 LED 配置失败"/>
@@ -689,7 +698,7 @@
   <translation tag="Filament Mapping" zh="耗材映射"/>
   <translation tag="Filament Runout" zh="耗材用尽"/>
   <translation tag="Filament Sensor" zh="耗材传感器"/>
-  <translation tag="Filament System Error"/>
+  <translation tag="Filament System Error" zh="耗材系统错误"/>
   <translation tag="Filament Used" zh="已用耗材"/>
   <translation tag="Filament already exists" zh="耗材已存在"/>
   <translation tag="Filament by Type" zh="按类型分类的耗材"/>
@@ -725,17 +734,17 @@
   <translation tag="Flow change failed: {}" zh="流量更改失败: {}"/>
   <translation tag="Flowguard" zh="流量保护"/>
   <translation tag="Flying Toasters" zh="飞行烤面包机"/>
-  <translation tag="Follow active tool"/>
+  <translation tag="Follow active tool" zh="跟随当前工具"/>
   <translation tag="Follow graph screen" zh="跟随图表屏幕"/>
   <translation tag="Forget" zh="忘记"/>
-  <translation tag="Forming Tip"/>
+  <translation tag="Forming Tip" zh="形成尖端"/>
   <translation tag="Forming tip..." zh="正在成型尖端..."/>
   <translation tag="Found %zu printers" zh="找到 %zu 台打印机"/>
   <translation tag="Found 1 printer" zh="找到 1 台打印机"/>
   <translation tag="Framerate" zh="帧率"/>
   <translation tag="Freq Graph" zh="频率图"/>
   <translation tag="Frequency Delta" zh="频率差"/>
-  <translation tag="From Buffer"/>
+  <translation tag="From Buffer" zh="来自缓冲区"/>
   <translation tag="Front" zh="前"/>
   <translation tag="Full" zh="完整"/>
   <translation tag="G-code Console" zh="G-code 控制台"/>
@@ -768,7 +777,7 @@
   <translation tag="Heat Capacity" zh="热容量"/>
   <translation tag="Heat Soak" zh="预热浸泡"/>
   <translation tag="Heat bed before calibrating for accurate offset with thermal expansion." zh="校准前加热热床，以获得考虑热膨胀的精确偏移。"/>
-  <translation tag="Heat nozzle"/>
+  <translation tag="Heat nozzle" zh="加热喷嘴"/>
   <translation tag="Heatbed Temperature" zh="热床温度"/>
   <translation tag="Heated Bed" zh="加热床"/>
   <translation tag="Heated Bed MPC Calibration" zh="热床 MPC 校准"/>
@@ -776,7 +785,7 @@
   <translation tag="Heater" zh="加热器"/>
   <translation tag="Heater Power" zh="加热器功率"/>
   <translation tag="Heaters off" zh="加热器已关闭"/>
-  <translation tag="Heating"/>
+  <translation tag="Heating" zh="加热中"/>
   <translation tag="Heating (%d°C below minimum)" zh="加热中（低于最低温度 %d°C）"/>
   <translation tag="Heating Bed..." zh="正在加热热床..."/>
   <translation tag="Heating Nozzle..." zh="正在加热喷嘴..."/>
@@ -785,6 +794,7 @@
   <translation tag="Heating to {}°C for {}..." zh="正在加热至{}°C，持续{}..."/>
   <translation tag="Heating to {}°C..." zh="正在加热至{}°C..."/>
   <translation tag="Heating..." zh="正在加热..."/>
+  <translation tag="Heating: %d / %d°C" zh="加热中：%d / %d°C"/>
   <translation tag="HelixScreen" zh="HelixScreen"/>
   <translation tag="HelixScreen Crashed" zh="HelixScreen 崩溃"/>
   <translation tag="HelixScreen is detecting your display orientation" zh="HelixScreen正在检测显示屏方向"/>
@@ -827,6 +837,7 @@
   <translation tag="Idle" zh="空闲"/>
   <translation tag="If Moonraker is local or your screen is attached to the printer directly, we&apos;ll connect automatically" zh="如果 Moonraker 在本地或屏幕直接连接到打印机，将自动连接"/>
   <translation tag="Ignore" zh="忽略"/>
+  <translation tag="Ignore the click that fires when you lift after scrolling" zh="忽略滚动后抬起手指时触发的点击"/>
   <translation tag="Import failed: {}" zh="导入失败: {}"/>
   <translation tag="Imported {}" zh="已导入 {}"/>
   <translation tag="In Progress" zh="进行中"/>
@@ -865,7 +876,7 @@
   <translation tag="Just now" zh="刚刚"/>
   <translation tag="KEYBOARD LAYOUT" zh="键盘布局"/>
   <translation tag="KLICKY CONTROLS" zh="KLICKY 控制"/>
-  <translation tag="Keep Navigation Bar"/>
+  <translation tag="Keep Navigation Bar" zh="保留导航栏"/>
   <translation tag="Keep Printing" zh="继续打印"/>
   <translation tag="Keep Required" zh="保持必需"/>
   <translation tag="Keyboard Test (Gboard-style)" zh="键盘测试（Gboard 风格）"/>
@@ -906,7 +917,7 @@
   <translation tag="Learn More" zh="了解更多"/>
   <translation tag="Length:" zh="长度："/>
   <translation tag="Leveling Gantry..." zh="正在调平龙门..."/>
-  <translation tag="Library"/>
+  <translation tag="Library" zh="库"/>
   <translation tag="Lifetime Print Stats" zh="累计打印统计"/>
   <translation tag="Light" zh="浅色"/>
   <translation tag="Listen to all theme sounds" zh="试听所有主题声音"/>
@@ -916,7 +927,7 @@
   <translation tag="Load may still be running — response timed out" zh="加载可能仍在运行 — 响应超时"/>
   <translation tag="Load the required filaments or start anyway?" zh="加载所需耗材还是直接开始？"/>
   <translation tag="Loaded" zh="已加载"/>
-  <translation tag="Loading"/>
+  <translation tag="Loading" zh="加载中"/>
   <translation tag="Loading Bed Mesh..." zh="正在加载热床网格..."/>
   <translation tag="Loading Error" zh="加载错误"/>
   <translation tag="Loading Filament..." zh="正在加载耗材..."/>
@@ -1148,7 +1159,7 @@
   <translation tag="ON" zh="开"/>
   <translation tag="OS" zh="OS"/>
   <translation tag="Object positions unavailable" zh="对象位置不可用"/>
-  <translation tag="Objects"/>
+  <translation tag="Objects" zh="对象"/>
   <translation tag="Off" zh="关"/>
   <translation tag="On" zh="开"/>
   <translation tag="On and Off macros must be different" zh="开和关的宏必须不同"/>
@@ -1202,6 +1213,7 @@
   <translation tag="Pause macro not configured" zh="暂停宏未配置"/>
   <translation tag="Paused" zh="已暂停"/>
   <translation tag="Paused (attention needed)" zh="已暂停（需要处理）"/>
+  <translation tag="Pausing..." zh="暂停中..."/>
   <translation tag="Peak Freq" zh="峰值频率"/>
   <translation tag="Peak:" zh="峰值："/>
   <translation tag="Phase Tracking" zh="相位跟踪"/>
@@ -1213,6 +1225,7 @@
   <translation tag="Pick" zh="选取"/>
   <translation tag="Pick Color" zh="选择颜色"/>
   <translation tag="Pill" zh="胶囊"/>
+  <translation tag="Pixels before a press becomes a scroll (lower = scrolls engage sooner)" zh="按下转为滚动前的像素数(越低 = 滚动越快触发)"/>
   <translation tag="Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels." zh="将图片文件 (PNG, JPEG, BMP, GIF) 放入 config/custom_images/。最大尺寸: 2048×2048 像素。"/>
   <translation tag="Place plugins in the plugins directory to extend HelixScreen" zh="将插件放在 plugins 目录中以扩展 HelixScreen"/>
   <translation tag="Placed" zh="已放置"/>
@@ -1274,6 +1287,7 @@
   <translation tag="Print Status" zh="打印状态"/>
   <translation tag="Print Time" zh="打印时间"/>
   <translation tag="Print Tuning" zh="打印调优"/>
+  <translation tag="Print Was Terminated" zh="打印已终止"/>
   <translation tag="Print failed" zh="打印失败"/>
   <translation tag="Print preparation failed: {}" zh="打印准备失败: {}"/>
   <translation tag="Print quality" zh="打印质量"/>
@@ -1408,7 +1422,7 @@
   <translation tag="Reset failed: {}" zh="重置失败: {}"/>
   <translation tag="Reset to Default" zh="重置为默认"/>
   <translation tag="Reset to original values" zh="重置为原始值"/>
-  <translation tag="Resetting"/>
+  <translation tag="Resetting" zh="重置中"/>
   <translation tag="Resetting..." zh="正在重置..."/>
   <translation tag="Response (Kp)" zh="响应 (Kp)"/>
   <translation tag="Restart" zh="重启"/>
@@ -1430,6 +1444,8 @@
   <translation tag="Resume" zh="恢复"/>
   <translation tag="Resume Print" zh="恢复打印"/>
   <translation tag="Resume macro not configured" zh="恢复宏未配置"/>
+  <translation tag="Resume preparation failed: {}" zh="恢复准备失败：{}"/>
+  <translation tag="Resuming..." zh="恢复中..."/>
   <translation tag="Retract" zh="回抽"/>
   <translation tag="Retract Distance" zh="回抽距离"/>
   <translation tag="Retract Length" zh="回抽长度"/>
@@ -1510,6 +1526,8 @@
   <translation tag="Screensaver" zh="屏保"/>
   <translation tag="Screensaver disabled" zh="屏保已禁用"/>
   <translation tag="Screws Tilt" zh="螺丝倾斜"/>
+  <translation tag="Scroll Engage Distance" zh="滚动触发距离"/>
+  <translation tag="Scroll Guard" zh="滚动保护"/>
   <translation tag="Search filename..." zh="搜索文件名..."/>
   <translation tag="Search spools..." zh="搜索料盘..."/>
   <translation tag="Search vendors..." zh="搜索供应商…"/>
@@ -1539,7 +1557,7 @@
   <translation tag="Select which sensor triggers pause on filament runout" zh="选择耗材用尽时触发暂停的传感器"/>
   <translation tag="Select your preferred language" zh="选择您的首选语言"/>
   <translation tag="Selected" zh="已选择"/>
-  <translation tag="Selecting"/>
+  <translation tag="Selecting" zh="选择中"/>
   <translation tag="Selecting slot..." zh="正在选择料仓..."/>
   <translation tag="Self-Test" zh="自检"/>
   <translation tag="Semantic Size Parameter Tests" zh="语义大小参数测试"/>
@@ -1571,11 +1589,12 @@
   <translation tag="Shininess:" zh="光泽度："/>
   <translation tag="Show Printer Switcher" zh="显示打印机切换器"/>
   <translation tag="Show Sections" zh="显示区段"/>
+  <translation tag="Show Touch Points" zh="显示触摸点"/>
   <translation tag="Show a confirmation dialog when tapping a macro" zh="点击宏时显示确认对话框"/>
   <translation tag="Show detailed print preparation status" zh="显示详细的打印准备状态"/>
   <translation tag="Show instead of dimming" zh="显示而非变暗"/>
   <translation tag="Show printer icon in navigation bar" zh="在导航栏中显示打印机图标"/>
-  <translation tag="Show temp for"/>
+  <translation tag="Show temp for" zh="显示温度"/>
   <translation tag="Show text labels on icon-only home screen widgets" zh="在仅图标的主屏小组件上显示文字标签"/>
   <translation tag="Show whatever curves you last had visible on the full graph." zh="显示您上次在完整图表上可见的曲线。"/>
   <translation tag="Shutdown" zh="关机"/>
@@ -1717,6 +1736,7 @@
   <translation tag="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints." zh="HelixPrint 插件可在打印机上直接进行快速 G-code 修改——例如跳过热床网格以快速重新打印。"/>
   <translation tag="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display." zh="为防止动画屏保干扰打印，已在此设备上将其关闭。您可以在设置 &gt; 显示中重新启用。"/>
   <translation tag="The heater will cycle on and off several times." zh="加热器将多次开关循环。"/>
+  <translation tag="The printer halted this print and cannot resume it. Restart from the beginning?" zh="打印机已停止此打印且无法恢复。从头重新开始？"/>
   <translation tag="The runout sensor indicates no filament is loaded. Start print anyway?" zh="断料传感器显示未装载耗材。仍要开始打印吗？"/>
   <translation tag="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?" zh="工具头传感器显示耗材已装载。仍要继续装载吗？"/>
   <translation tag="The toolhead sensor indicates no filament is present. Proceed with unload anyway?" zh="工具头传感器显示无耗材。仍要继续卸载吗？"/>
@@ -1775,8 +1795,10 @@
   <translation tag="Toolhead, G-code, limits, and materials" zh="打印头、G代码、限制和材料"/>
   <translation tag="Top" zh="顶部"/>
   <translation tag="Total Prints" zh="总打印数"/>
+  <translation tag="Touch &amp; Input" zh="触摸和输入"/>
   <translation tag="Touch Cal" zh="触摸校准"/>
   <translation tag="Touch Calibration" zh="触摸校准"/>
+  <translation tag="Touch Jitter Filter" zh="触摸抖动过滤"/>
   <translation tag="Touch anywhere to test calibration" zh="触摸任意位置测试校准"/>
   <translation tag="Touch anywhere to verify accuracy" zh="触摸任意位置验证精度"/>
   <translation tag="Touch screen to wake from sleep" zh="触摸屏幕唤醒"/>
@@ -1811,7 +1833,7 @@
   <translation tag="Unload failed: {}" zh="卸载失败: {}"/>
   <translation tag="Unload macro not configured" zh="卸载宏未配置"/>
   <translation tag="Unload may still be running — response timed out" zh="卸载可能仍在运行 — 响应超时"/>
-  <translation tag="Unloading"/>
+  <translation tag="Unloading" zh="卸载中"/>
   <translation tag="Unloading before bypass..." zh="旁通前正在卸载..."/>
   <translation tag="Unloading filament ({}mm)..." zh="正在卸载耗材 ({}mm)..."/>
   <translation tag="Unloading filament..." zh="正在卸载耗材..."/>
@@ -1981,7 +2003,9 @@
   <translation tag="tour.step.welcome.title" zh="欢迎使用 HelixScreen"/>
   <translation tag="used" zh="已使用"/>
   <translation tag="v{} is available. Tap to update." zh="v{} 可用。点击以更新。"/>
+  <translation tag="you have" zh="您有"/>
   <translation tag="{} axis homed" zh="{} 轴已归位"/>
+  <translation tag="{} command timed out" zh="{} 命令超时"/>
   <translation tag="{} complete" zh="{} 完成"/>
   <translation tag="{} heater turned off" zh="{} 加热器已关闭"/>
   <translation tag="{} macro not configured" zh="{} 宏未配置"/>

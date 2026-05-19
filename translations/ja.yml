@@ -64,6 +64,7 @@ translations:
   90°: 90°
   = Loosen: = 緩める
   = Tighten: = 締める
+  A: 'A'
   ABS: ABS
   ACCELEROMETERS: 加速度センサー
   ACTIONS: ACTIONS
@@ -124,7 +125,7 @@ translations:
   Allow display to sleep during active prints: 印刷中のスリープを許可
   Allwinner: Allwinner
   Already connecting — wait a moment and try again: '接続処理中です — 少し待ってからもう一度お試しください'
-  Always show Android navigation bar instead of using gestures: ''
+  Always show Android navigation bar instead of using gestures: 'ジェスチャーの代わりにAndroidナビゲーションバーを常に表示'
   Ambient Transfer: 環境熱伝達
   An accelerometer was detected on your printer.: プリンターで加速度センサーが検出されました。
   An error occurred during calibration.: キャリブレーション中にエラーが発生しました。
@@ -162,7 +163,8 @@ translations:
   Automatic: 自動
   Automatic Heater Control Calibration: 自動ヒーター制御キャリブレーション
   Automatic LED Control: 自動LED制御
-  Available: ''
+  Aux: '補助'
+  Available: '利用可能'
   Available Networks: 利用可能なネットワーク
   Available networks: 利用可能なネットワーク
   Average: 平均
@@ -203,7 +205,7 @@ translations:
   'Beta features: OFF': 'ベータ機能: OFF'
   'Beta features: ON': 'ベータ機能: ON'
   Black: ブラック
-  Blocked: ''
+  Blocked: 'ブロック中'
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Bluetooth の初期化に失敗しました
   Bluetooth is not available on this device: 'このデバイスでは Bluetooth を利用できません'
@@ -259,6 +261,7 @@ translations:
   Calibrate Y: Y軸をキャリブレート
   Calibrate input shaping to reduce ringing artifacts in prints: 入力シェーピングをキャリブレートして印刷のリンギングを軽減します
   Calibrate your touchscreen for accurate input: タッチスクリーンの入力精度をキャリブレートします
+  Calibrate, tune jitter and scroll feel: キャリブレーション、ジッターとスクロール感度の調整
   Calibrated: キャリブレーション済み
   Calibrating...: キャリブレーション中...
   Calibration & Tools: キャリブレーションとツール
@@ -286,6 +289,7 @@ translations:
   'Cannot modify G-code: scan result not available': 'G-code を変更できません: スキャン結果がありません'
   'Cannot modify G-code: {}. Printing original file.': 'G-code を変更できません: {}。元のファイルで印刷します。'
   'Cannot reprint: not connected to printer': '再印刷できません: プリンター未接続'
+  Cannot restart — no filename: '再起動できません — ファイル名がありません'
   'Cannot start print: internal error': '印刷を開始できません: 内部エラー'
   'Cannot start print: not connected to printer': '印刷を開始できません: プリンター未接続'
   'Cannot start print: printer is {}': '印刷を開始できません: プリンターは {} 状態です'
@@ -314,7 +318,7 @@ translations:
   Check for Updates: 更新を確認
   Check the filament path and try again.: フィラメント経路を確認して、もう一度お試しください。
   Check your heater's rating (typically 40-60W for hotends): ヒーターの定格を確認してください（ホットエンドは通常40〜60W）
-  Checking: ''
+  Checking: '確認中'
   Checking Spoolman server...: Spoolman サーバーを確認中...
   Checking accelerometer...: 加速度センサーを確認中...
   Checking for plugin...: プラグインを確認中...
@@ -455,7 +459,7 @@ translations:
   Customize Macro: マクロをカスタマイズ
   Customize preset temperatures: プリセット温度をカスタマイズ
   Cutter jam: カッター詰まり
-  Cutting: ''
+  Cutting: 'カット中'
   Cutting filament...: フィラメントを切断中...
   DETECTED USB PRINTERS: 検出されたUSBプリンター
   DISABLED: 無効
@@ -469,6 +473,7 @@ translations:
   Date (newest): 日付（新しい順）
   Date (oldest): 日付（古い順）
   Day: 日
+  Dead zone in pixels (raise if taps register as swipes; 0 disables): デッドゾーン (ピクセル) — タップがスワイプとして認識される場合は増やす (0で無効)
   Debug: デバッグ
   Default border thickness: デフォルトの境界線の太さ
   Define macros in your printer.cfg: printer.cfg でマクロを定義してください
@@ -510,6 +515,7 @@ translations:
   Download update?: アップデートをダウンロードしますか？
   Download v{}?: v{}をダウンロードしますか？
   Downloading...: ダウンロード中...
+  Draw a ripple at each touch — helps diagnose offsets: タッチごとに波紋を描画 — ズレの診断に役立ちます
   Drive Cal: ドライブキャリブレーション
   Drop shadow strength (0 = disabled): 影の強さ (0 = 無効)
   Dryer Controls: 乾燥機の操作
@@ -599,6 +605,7 @@ translations:
   Extruding {}mm...: '{}mm 押出中...'
   FAILED: 失敗
   FILAMENT MAPPING: フィラメントマッピング
+  FILAMENTS: 'フィラメント'
   FILTERS: フィルター
   Factory Reset: 工場出荷時リセット
   Failed: 失敗
@@ -606,6 +613,7 @@ translations:
   Failed to apply limits: 制限の適用に失敗しました
   Failed to apply settings: 設定の適用に失敗しました
   'Failed to cancel: {}': 'キャンセルに失敗しました: {}'
+  'Failed to clear print state: {}': '印刷状態をクリアできませんでした: {}'
   'Failed to connect to ''{}'': {}': '''{}'' への接続に失敗しました: {}'
   'Failed to connect: %s': '接続に失敗: %s'
   'Failed to cool down: {}': '冷却に失敗しました: {}'
@@ -644,6 +652,7 @@ translations:
   'Failed to reset speed: {}': '速度のリセットに失敗しました: {}'
   Failed to reset theme: テーマのリセットに失敗しました
   Failed to restart Moonraker.: Moonrakerの再起動に失敗しました。
+  'Failed to restart: {}': '再起動に失敗しました: {}'
   'Failed to resume print: {}': '印刷の再開に失敗しました: {}'
   'Failed to resume: {}': '再開に失敗しました: {}'
   Failed to save LED configuration: LED設定の保存に失敗しました
@@ -689,7 +698,7 @@ translations:
   Filament Mapping: フィラメントマッピング
   Filament Runout: フィラメント切れ
   Filament Sensor: フィラメントセンサー
-  Filament System Error: ''
+  Filament System Error: 'フィラメントシステムエラー'
   Filament Used: 使用済みフィラメント
   Filament already exists: フィラメントはすでに存在します
   Filament by Type: 種類別フィラメント
@@ -725,17 +734,17 @@ translations:
   'Flow change failed: {}': 'フロー変更に失敗しました: {}'
   Flowguard: フローガード
   Flying Toasters: フライングトースター
-  Follow active tool: ''
+  Follow active tool: 'アクティブツールに追従'
   Follow graph screen: グラフ画面に追従
   Forget: '登録解除'
-  Forming Tip: ''
+  Forming Tip: 'チップ形成中'
   Forming tip...: チップを形成中...
   Found %zu printers: '%zu台のプリンターを検出'
   Found 1 printer: プリンター1台を検出
   Framerate: フレームレート
   Freq Graph: 周波数グラフ
   Frequency Delta: 周波数差
-  From Buffer: ''
+  From Buffer: 'バッファから'
   Front: 正面
   Full: 'フル'
   G-code Console: G-code コンソール
@@ -769,7 +778,7 @@ translations:
   Heat Capacity: 熱容量
   Heat Soak: ヒートソーク
   Heat bed before calibrating for accurate offset with thermal expansion.: 熱膨張を考慮した正確なオフセットのため、キャリブレーション前にベッドを加熱してください。
-  Heat nozzle: ''
+  Heat nozzle: 'ノズルを加熱'
   Heatbed Temperature: ヒートベッド温度
   Heated Bed: 加熱ベッド
   Heated Bed MPC Calibration: ヒートベッド MPCキャリブレーション
@@ -777,7 +786,7 @@ translations:
   Heater: ヒーター
   Heater Power: ヒーター出力
   Heaters off: ヒーターをオフにしました
-  Heating: ''
+  Heating: '加熱中'
   Heating (%d°C below minimum): '"加熱中（最低温度より%d°C低い）"'
   Heating Bed...: ベッド加熱中...
   Heating Nozzle...: ノズル加熱中...
@@ -786,6 +795,7 @@ translations:
   Heating to {}°C for {}...: '{}°Cに加熱中（{}）...'
   Heating to {}°C...: '{}°Cに加熱中...'
   Heating...: 加熱中...
+  'Heating: %d / %d°C': '加熱中: %d / %d°C'
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen がクラッシュしました
   HelixScreen is detecting your display orientation: HelixScreenがディスプレイの向きを検出しています
@@ -828,6 +838,7 @@ translations:
   Idle: アイドル
   If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: Moonraker がローカルまたは画面がプリンターに直接接続されている場合、自動的に接続します
   Ignore: 無視
+  Ignore the click that fires when you lift after scrolling: スクロール後に指を離したときに発生するクリックを無視
   'Import failed: {}': 'インポートに失敗しました: {}'
   Imported {}: '{} をインポートしました'
   In Progress: 進行中
@@ -866,7 +877,7 @@ translations:
   Just now: たった今
   KEYBOARD LAYOUT: 'KEYBOARD LAYOUT'
   KLICKY CONTROLS: KLICKY CONTROLS
-  Keep Navigation Bar: ''
+  Keep Navigation Bar: 'ナビゲーションバーを維持'
   Keep Printing: 印刷を続行
   Keep Required: 必須を維持
   Keyboard Test (Gboard-style): キーボードテスト（Gboard風）
@@ -908,7 +919,7 @@ translations:
   Learn More: 詳細を見る
   'Length:': '長さ:'
   Leveling Gantry...: ガントリーレベリング中...
-  Library: ''
+  Library: 'ライブラリ'
   Lifetime Print Stats: 累計印刷統計
   Light: ライト
   Listen to all theme sounds: 'すべてのテーマサウンドを試聴'
@@ -918,7 +929,7 @@ translations:
   Load may still be running — response timed out: 装填がまだ実行中の可能性があります — 応答タイムアウト
   Load the required filaments or start anyway?: 必要なフィラメントを装填しますか？それともこのまま開始しますか？
   Loaded: 装填済み
-  Loading: ''
+  Loading: 'ロード中'
   Loading Bed Mesh...: ベッドメッシュ読込中...
   Loading Error: 装填エラー
   Loading Filament...: フィラメントを装填中...
@@ -1151,7 +1162,7 @@ translations:
   'ON': 'ON'
   OS: OS
   Object positions unavailable: オブジェクト位置が利用できません
-  Objects: ''
+  Objects: 'オブジェクト'
   'Off': オフ
   'On': オン
   On and Off macros must be different: オンとオフのマクロは異なるものにしてください
@@ -1205,6 +1216,7 @@ translations:
   Pause macro not configured: 一時停止マクロが未設定です
   Paused: 一時停止
   Paused (attention needed): 一時停止（対応が必要）
+  Pausing...: '一時停止中...'
   Peak Freq: ピーク周波数
   'Peak:': 'ピーク:'
   Phase Tracking: フェーズトラッキング
@@ -1216,6 +1228,7 @@ translations:
   Pick: 選択
   Pick Color: 色を選択
   Pill: 'ピル'
+  Pixels before a press becomes a scroll (lower = scrolls engage sooner): 押下がスクロールに変わるまでのピクセル数 (低いほどスクロールが早く開始)
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '画像ファイル (PNG, JPEG, BMP, GIF) を config/custom_images/ に配置してください。最大サイズ: 2048×2048 ピクセル。'
   Place plugins in the plugins directory to extend HelixScreen: HelixScreen を拡張するには、プラグインディレクトリにプラグインを配置してください
   Placed: 配置済み
@@ -1277,6 +1290,7 @@ translations:
   Print Status: 印刷ステータス
   Print Time: 印刷時間
   Print Tuning: 印刷チューニング
+  Print Was Terminated: '印刷が中止されました'
   Print failed: 印刷失敗
   'Print preparation failed: {}': '印刷準備に失敗しました: {}'
   Print quality: 印刷品質
@@ -1411,7 +1425,7 @@ translations:
   'Reset failed: {}': 'リセットに失敗しました: {}'
   Reset to Default: デフォルトにリセット
   Reset to original values: 元の値にリセット
-  Resetting: ''
+  Resetting: 'リセット中'
   Resetting...: リセット中...
   Response (Kp): 応答 (Kp)
   Restart: 再起動
@@ -1433,6 +1447,8 @@ translations:
   Resume: 再開
   Resume Print: 印刷を再開
   Resume macro not configured: 再開マクロが未設定です
+  'Resume preparation failed: {}': '再開準備に失敗しました: {}'
+  Resuming...: '再開中...'
   Retract: 引き戻し
   Retract Distance: リトラクト距離
   Retract Length: リトラクト長
@@ -1514,6 +1530,8 @@ translations:
   Screensaver: スクリーンセーバー
   Screensaver disabled: スクリーンセーバーを無効化しました
   Screws Tilt: ネジ傾き
+  Scroll Engage Distance: スクロール開始距離
+  Scroll Guard: スクロールガード
   Search filename...: ファイル名を検索...
   Search spools...: スプール検索...
   Search vendors...: ベンダーを検索...
@@ -1543,7 +1561,7 @@ translations:
   Select which sensor triggers pause on filament runout: フィラメント切れ時に一時停止するセンサーを選択してください
   Select your preferred language: ご希望の言語を選択してください
   Selected: '選択済み'
-  Selecting: ''
+  Selecting: '選択中'
   Selecting slot...: スロットを選択中...
   Self-Test: セルフテスト
   Semantic Size Parameter Tests: セマンティックサイズパラメータテスト
@@ -1575,11 +1593,12 @@ translations:
   'Shininess:': '光沢:'
   Show Printer Switcher: プリンター切替を表示
   Show Sections: セクションを表示
+  Show Touch Points: タッチポイントを表示
   Show a confirmation dialog when tapping a macro: 'マクロをタップした際に確認ダイアログを表示'
   Show detailed print preparation status: 詳細な印刷準備ステータスを表示
   Show instead of dimming: 暗くする代わりに表示
   Show printer icon in navigation bar: ナビゲーションバーにプリンターアイコンを表示
-  Show temp for: ''
+  Show temp for: '温度表示対象'
   Show text labels on icon-only home screen widgets: アイコンのみのホーム画面ウィジェットにテキストラベルを表示
   Show whatever curves you last had visible on the full graph.: フルグラフで最後に表示していた曲線を表示します。
   Shutdown: シャットダウン
@@ -1723,6 +1742,7 @@ translations:
   ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   : アニメーション付きスクリーンセーバーが印刷に干渉しないよう、このデバイスではオフになっています。設定 > ディスプレイで再度有効にできます。
   The heater will cycle on and off several times.: ヒーターは数回オン/オフを繰り返します。
+  The printer halted this print and cannot resume it. Restart from the beginning?: 'プリンターはこの印刷を停止し、再開できません。最初からやり直しますか？'
   The runout sensor indicates no filament is loaded. Start print anyway?: フィラメント切れセンサーがフィラメント未装填を検出しました。それでも印刷を開始しますか？
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: ツールヘッドセンサーがフィラメント装填済みを検出しました。それでも装填を続行しますか？
   The toolhead sensor indicates no filament is present. Proceed with unload anyway?: ツールヘッドセンサーがフィラメント未検出を報告しました。それでもアンロードを続行しますか？
@@ -1785,8 +1805,10 @@ translations:
   Toolhead, G-code, limits, and materials: ツールヘッド、Gコード、制限、材料
   Top: 上
   Total Prints: 総印刷数
+  Touch & Input: タッチと入力
   Touch Cal: タッチキャリブレーション
   Touch Calibration: タッチキャリブレーション
+  Touch Jitter Filter: タッチジッターフィルター
   Touch anywhere to test calibration: どこでもタッチしてキャリブレーションをテスト
   Touch anywhere to verify accuracy: どこかをタッチして精度を確認
   Touch screen to wake from sleep: 画面をタッチしてスリープ解除
@@ -1821,7 +1843,7 @@ translations:
   'Unload failed: {}': 'アンロードに失敗しました: {}'
   Unload macro not configured: アンロードマクロが未設定です
   Unload may still be running — response timed out: 排出がまだ実行中の可能性があります — 応答タイムアウト
-  Unloading: ''
+  Unloading: 'アンロード中'
   Unloading before bypass...: バイパス前にアンロード中...
   Unloading filament ({}mm)...: フィラメントを排出中 ({}mm)...
   Unloading filament...: フィラメントを排出中...
@@ -1994,7 +2016,9 @@ translations:
   tour.step.welcome.title: 'HelixScreen へようこそ'
   used: 使用
   v{} is available. Tap to update.: v{} が利用可能です。タップして更新してください。
+  you have: '現在は'
   '{} axis homed': '{} 軸がホーミング済み'
+  '{} command timed out': '{} コマンドがタイムアウトしました'
   '{} complete': '{} 完了'
   '{} heater turned off': '{} ヒーターをオフにしました'
   '{} macro not configured': '{} マクロが未設定です'

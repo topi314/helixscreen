@@ -64,6 +64,7 @@ translations:
   90°: 90°
   = Loosen: = 松开
   = Tighten: = 拧紧
+  A: '辅'
   ABS: ABS
   ACCELEROMETERS: 加速度计
   ACTIONS: 操作
@@ -124,7 +125,7 @@ translations:
   Allow display to sleep during active prints: 打印时允许屏幕休眠
   Allwinner: Allwinner
   Already connecting — wait a moment and try again: '正在连接中 — 请稍候再试'
-  Always show Android navigation bar instead of using gestures: ''
+  Always show Android navigation bar instead of using gestures: '始终显示 Android 导航栏而不使用手势'
   Ambient Transfer: 环境传热
   An accelerometer was detected on your printer.: 在您的打印机上检测到加速度计。
   An error occurred during calibration.: 校准过程中发生错误。
@@ -162,7 +163,8 @@ translations:
   Automatic: 自动
   Automatic Heater Control Calibration: 自动加热控制校准
   Automatic LED Control: 自动 LED 控制
-  Available: ''
+  Aux: '辅助'
+  Available: '可用'
   Available Networks: 可用网络
   Available networks: 可用网络
   Average: 平均值
@@ -203,7 +205,7 @@ translations:
   'Beta features: OFF': '测试版功能: 关'
   'Beta features: ON': '测试版功能: 开'
   Black: 黑色
-  Blocked: ''
+  Blocked: '已阻塞'
   Bluetooth: 蓝牙
   Bluetooth initialization failed: 蓝牙初始化失败
   Bluetooth is not available on this device: '此设备不支持蓝牙'
@@ -259,6 +261,7 @@ translations:
   Calibrate Y: 校准 Y 轴
   Calibrate input shaping to reduce ringing artifacts in prints: 校准输入整形以减少打印中的振纹
   Calibrate your touchscreen for accurate input: 校准触摸屏以确保输入准确
+  Calibrate, tune jitter and scroll feel: 校准、调整抖动和滚动手感
   Calibrated: 已校准
   Calibrating...: 正在校准...
   Calibration & Tools: 校准与工具
@@ -286,6 +289,7 @@ translations:
   'Cannot modify G-code: scan result not available': '无法修改 G-code: 扫描结果不可用'
   'Cannot modify G-code: {}. Printing original file.': '无法修改 G-code: {}。正在打印原始文件。'
   'Cannot reprint: not connected to printer': '无法重新打印: 未连接打印机'
+  Cannot restart — no filename: '无法重启 — 没有文件名'
   'Cannot start print: internal error': '无法开始打印: 内部错误'
   'Cannot start print: not connected to printer': '无法开始打印: 未连接打印机'
   'Cannot start print: printer is {}': '无法开始打印: 打印机状态为 {}'
@@ -314,7 +318,7 @@ translations:
   Check for Updates: 检查更新
   Check the filament path and try again.: 检查耗材路径并重试。
   Check your heater's rating (typically 40-60W for hotends): 检查加热器功率（热端通常为 40-60W）
-  Checking: ''
+  Checking: '检查中'
   Checking Spoolman server...: 正在检查 Spoolman 服务器...
   Checking accelerometer...: 正在检查加速度计...
   Checking for plugin...: 正在检查插件...
@@ -455,7 +459,7 @@ translations:
   Customize Macro: 自定义宏
   Customize preset temperatures: 自定义预设温度
   Cutter jam: 切刀卡住
-  Cutting: ''
+  Cutting: '切割中'
   Cutting filament...: 正在切断耗材...
   DETECTED USB PRINTERS: 已检测到的 USB 打印机
   DISABLED: 已禁用
@@ -469,6 +473,7 @@ translations:
   Date (newest): 日期（最新）
   Date (oldest): 日期（最早）
   Day: 日
+  Dead zone in pixels (raise if taps register as swipes; 0 disables): 死区像素值（如果点击被识别为滑动则调高；0 表示禁用）
   Debug: 调试
   Default border thickness: 默认边框厚度
   Define macros in your printer.cfg: 在 printer.cfg 中定义宏
@@ -510,6 +515,7 @@ translations:
   Download update?: 下载更新？
   Download v{}?: 下载 v{}？
   Downloading...: 下载中...
+  Draw a ripple at each touch — helps diagnose offsets: 在每次触摸时绘制涟漪 — 有助于诊断偏移
   Drive Cal: 驱动校准
   Drop shadow strength (0 = disabled): 阴影强度（0 = 禁用）
   Dryer Controls: 烘干机控制
@@ -599,6 +605,7 @@ translations:
   Extruding {}mm...: 正在挤出 {}mm...
   FAILED: 失败
   FILAMENT MAPPING: 耗材映射
+  FILAMENTS: '耗材'
   FILTERS: 筛选
   Factory Reset: 恢复出厂设置
   Failed: 失败
@@ -606,6 +613,7 @@ translations:
   Failed to apply limits: 应用限制失败
   Failed to apply settings: 应用设置失败
   'Failed to cancel: {}': '取消失败: {}'
+  'Failed to clear print state: {}': '无法清除打印状态：{}'
   'Failed to connect to ''{}'': {}': '无法连接到 ''{}'': {}'
   'Failed to connect: %s': 连接失败：%s
   'Failed to cool down: {}': '冷却失败: {}'
@@ -644,6 +652,7 @@ translations:
   'Failed to reset speed: {}': '重置速度失败: {}'
   Failed to reset theme: 重置主题失败
   Failed to restart Moonraker.: 重启 Moonraker 失败。
+  'Failed to restart: {}': '重启失败：{}'
   'Failed to resume print: {}': '恢复打印失败: {}'
   'Failed to resume: {}': '恢复失败: {}'
   Failed to save LED configuration: 保存 LED 配置失败
@@ -689,7 +698,7 @@ translations:
   Filament Mapping: 耗材映射
   Filament Runout: 耗材用尽
   Filament Sensor: 耗材传感器
-  Filament System Error: ''
+  Filament System Error: '耗材系统错误'
   Filament Used: 已用耗材
   Filament already exists: 耗材已存在
   Filament by Type: 按类型分类的耗材
@@ -725,17 +734,17 @@ translations:
   'Flow change failed: {}': '流量更改失败: {}'
   Flowguard: 流量保护
   Flying Toasters: 飞行烤面包机
-  Follow active tool: ''
+  Follow active tool: '跟随当前工具'
   Follow graph screen: 跟随图表屏幕
   Forget: '忘记'
-  Forming Tip: ''
+  Forming Tip: '形成尖端'
   Forming tip...: 正在成型尖端...
   Found %zu printers: 找到 %zu 台打印机
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
   Freq Graph: 频率图
   Frequency Delta: 频率差
-  From Buffer: ''
+  From Buffer: '来自缓冲区'
   Front: 前
   Full: '完整'
   G-code Console: G-code 控制台
@@ -769,7 +778,7 @@ translations:
   Heat Capacity: 热容量
   Heat Soak: 预热浸泡
   Heat bed before calibrating for accurate offset with thermal expansion.: 校准前加热热床，以获得考虑热膨胀的精确偏移。
-  Heat nozzle: ''
+  Heat nozzle: '加热喷嘴'
   Heatbed Temperature: 热床温度
   Heated Bed: 加热床
   Heated Bed MPC Calibration: 热床 MPC 校准
@@ -777,7 +786,7 @@ translations:
   Heater: 加热器
   Heater Power: 加热器功率
   Heaters off: 加热器已关闭
-  Heating: ''
+  Heating: '加热中'
   Heating (%d°C below minimum): 加热中（低于最低温度 %d°C）
   Heating Bed...: 正在加热热床...
   Heating Nozzle...: 正在加热喷嘴...
@@ -786,6 +795,7 @@ translations:
   Heating to {}°C for {}...: 正在加热至{}°C，持续{}...
   Heating to {}°C...: 正在加热至{}°C...
   Heating...: 正在加热...
+  'Heating: %d / %d°C': '加热中：%d / %d°C'
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen 崩溃
   HelixScreen is detecting your display orientation: HelixScreen正在检测显示屏方向
@@ -828,6 +838,7 @@ translations:
   Idle: 空闲
   If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: 如果 Moonraker 在本地或屏幕直接连接到打印机，将自动连接
   Ignore: 忽略
+  Ignore the click that fires when you lift after scrolling: 忽略滚动后抬起手指时触发的点击
   'Import failed: {}': '导入失败: {}'
   Imported {}: 已导入 {}
   In Progress: 进行中
@@ -866,7 +877,7 @@ translations:
   Just now: 刚刚
   KEYBOARD LAYOUT: '键盘布局'
   KLICKY CONTROLS: KLICKY 控制
-  Keep Navigation Bar: ''
+  Keep Navigation Bar: '保留导航栏'
   Keep Printing: 继续打印
   Keep Required: 保持必需
   Keyboard Test (Gboard-style): 键盘测试（Gboard 风格）
@@ -908,7 +919,7 @@ translations:
   Learn More: 了解更多
   'Length:': 长度：
   Leveling Gantry...: 正在调平龙门...
-  Library: ''
+  Library: '库'
   Lifetime Print Stats: 累计打印统计
   Light: 浅色
   Listen to all theme sounds: '试听所有主题声音'
@@ -918,7 +929,7 @@ translations:
   Load may still be running — response timed out: 加载可能仍在运行 — 响应超时
   Load the required filaments or start anyway?: 加载所需耗材还是直接开始？
   Loaded: 已加载
-  Loading: ''
+  Loading: '加载中'
   Loading Bed Mesh...: 正在加载热床网格...
   Loading Error: 加载错误
   Loading Filament...: 正在加载耗材...
@@ -1151,7 +1162,7 @@ translations:
   'ON': 开
   OS: OS
   Object positions unavailable: 对象位置不可用
-  Objects: ''
+  Objects: '对象'
   'Off': 关
   'On': 开
   On and Off macros must be different: 开和关的宏必须不同
@@ -1205,6 +1216,7 @@ translations:
   Pause macro not configured: 暂停宏未配置
   Paused: 已暂停
   Paused (attention needed): 已暂停（需要处理）
+  Pausing...: '暂停中...'
   Peak Freq: 峰值频率
   'Peak:': 峰值：
   Phase Tracking: 相位跟踪
@@ -1216,6 +1228,7 @@ translations:
   Pick: 选取
   Pick Color: 选择颜色
   Pill: '胶囊'
+  Pixels before a press becomes a scroll (lower = scrolls engage sooner): 按下转为滚动前的像素数(越低 = 滚动越快触发)
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '将图片文件 (PNG, JPEG, BMP, GIF) 放入 config/custom_images/。最大尺寸: 2048×2048 像素。'
   Place plugins in the plugins directory to extend HelixScreen: 将插件放在 plugins 目录中以扩展 HelixScreen
   Placed: 已放置
@@ -1277,6 +1290,7 @@ translations:
   Print Status: 打印状态
   Print Time: 打印时间
   Print Tuning: 打印调优
+  Print Was Terminated: '打印已终止'
   Print failed: 打印失败
   'Print preparation failed: {}': '打印准备失败: {}'
   Print quality: 打印质量
@@ -1411,7 +1425,7 @@ translations:
   'Reset failed: {}': '重置失败: {}'
   Reset to Default: 重置为默认
   Reset to original values: 重置为原始值
-  Resetting: ''
+  Resetting: '重置中'
   Resetting...: 正在重置...
   Response (Kp): 响应 (Kp)
   Restart: 重启
@@ -1433,6 +1447,8 @@ translations:
   Resume: 恢复
   Resume Print: 恢复打印
   Resume macro not configured: 恢复宏未配置
+  'Resume preparation failed: {}': '恢复准备失败：{}'
+  Resuming...: '恢复中...'
   Retract: 回抽
   Retract Distance: 回抽距离
   Retract Length: 回抽长度
@@ -1514,6 +1530,8 @@ translations:
   Screensaver: 屏保
   Screensaver disabled: 屏保已禁用
   Screws Tilt: 螺丝倾斜
+  Scroll Engage Distance: 滚动触发距离
+  Scroll Guard: 滚动保护
   Search filename...: 搜索文件名...
   Search spools...: 搜索料盘...
   Search vendors...: 搜索供应商…
@@ -1543,7 +1561,7 @@ translations:
   Select which sensor triggers pause on filament runout: 选择耗材用尽时触发暂停的传感器
   Select your preferred language: 选择您的首选语言
   Selected: '已选择'
-  Selecting: ''
+  Selecting: '选择中'
   Selecting slot...: 正在选择料仓...
   Self-Test: 自检
   Semantic Size Parameter Tests: 语义大小参数测试
@@ -1575,11 +1593,12 @@ translations:
   'Shininess:': 光泽度：
   Show Printer Switcher: 显示打印机切换器
   Show Sections: 显示区段
+  Show Touch Points: 显示触摸点
   Show a confirmation dialog when tapping a macro: '点击宏时显示确认对话框'
   Show detailed print preparation status: 显示详细的打印准备状态
   Show instead of dimming: 显示而非变暗
   Show printer icon in navigation bar: 在导航栏中显示打印机图标
-  Show temp for: ''
+  Show temp for: '显示温度'
   Show text labels on icon-only home screen widgets: 在仅图标的主屏小组件上显示文字标签
   Show whatever curves you last had visible on the full graph.: 显示您上次在完整图表上可见的曲线。
   Shutdown: 关机
@@ -1723,6 +1742,7 @@ translations:
   ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   : 为防止动画屏保干扰打印，已在此设备上将其关闭。您可以在设置 > 显示中重新启用。
   The heater will cycle on and off several times.: 加热器将多次开关循环。
+  The printer halted this print and cannot resume it. Restart from the beginning?: '打印机已停止此打印且无法恢复。从头重新开始？'
   The runout sensor indicates no filament is loaded. Start print anyway?: 断料传感器显示未装载耗材。仍要开始打印吗？
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: 工具头传感器显示耗材已装载。仍要继续装载吗？
   The toolhead sensor indicates no filament is present. Proceed with unload anyway?: 工具头传感器显示无耗材。仍要继续卸载吗？
@@ -1785,8 +1805,10 @@ translations:
   Toolhead, G-code, limits, and materials: 打印头、G代码、限制和材料
   Top: 顶部
   Total Prints: 总打印数
+  Touch & Input: 触摸和输入
   Touch Cal: 触摸校准
   Touch Calibration: 触摸校准
+  Touch Jitter Filter: 触摸抖动过滤
   Touch anywhere to test calibration: 触摸任意位置测试校准
   Touch anywhere to verify accuracy: 触摸任意位置验证精度
   Touch screen to wake from sleep: 触摸屏幕唤醒
@@ -1821,7 +1843,7 @@ translations:
   'Unload failed: {}': '卸载失败: {}'
   Unload macro not configured: 卸载宏未配置
   Unload may still be running — response timed out: 卸载可能仍在运行 — 响应超时
-  Unloading: ''
+  Unloading: '卸载中'
   Unloading before bypass...: 旁通前正在卸载...
   Unloading filament ({}mm)...: 正在卸载耗材 ({}mm)...
   Unloading filament...: 正在卸载耗材...
@@ -1994,7 +2016,9 @@ translations:
   tour.step.welcome.title: '欢迎使用 HelixScreen'
   used: 已使用
   v{} is available. Tap to update.: v{} 可用。点击以更新。
+  you have: '您有'
   '{} axis homed': '{} 轴已归位'
+  '{} command timed out': '{} 命令超时'
   '{} complete': '{} 完成'
   '{} heater turned off': '{} 加热器已关闭'
   '{} macro not configured': '{} 宏未配置'

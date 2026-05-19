@@ -64,6 +64,7 @@ translations:
   90°: 90°
   = Loosen: = Ослабить
   = Tighten: = Затянуть
+  A: 'A'
   ABS: ABS
   ACCELEROMETERS: АКСЕЛЕРОМЕТРЫ
   ACTIONS: ДЕЙСТВИЯ
@@ -124,7 +125,7 @@ translations:
   Allow display to sleep during active prints: Разрешить спящий режим дисплея во время печати
   Allwinner: Allwinner
   Already connecting — wait a moment and try again: 'Подключение уже выполняется — подождите и попробуйте снова'
-  Always show Android navigation bar instead of using gestures: ''
+  Always show Android navigation bar instead of using gestures: 'Всегда показывать панель навигации Android вместо жестов'
   Ambient Transfer: Теплообмен с окружающей средой
   An accelerometer was detected on your printer.: На вашем принтере обнаружен акселерометр.
   An error occurred during calibration.: Во время калибровки произошла ошибка.
@@ -162,7 +163,8 @@ translations:
   Automatic: Автоматический
   Automatic Heater Control Calibration: Автоматическая калибровка нагревателя
   Automatic LED Control: Автоматическое управление LED
-  Available: ''
+  Aux: 'Доп'
+  Available: 'Доступен'
   Available Networks: Доступные сети
   Available networks: Доступные сети
   Average: Среднее
@@ -203,7 +205,7 @@ translations:
   'Beta features: OFF': 'Beta-функции: ВЫКЛ'
   'Beta features: ON': 'Beta-функции: ВКЛ'
   Black: Чёрный
-  Blocked: ''
+  Blocked: 'Заблокирован'
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Ошибка инициализации Bluetooth
   Bluetooth is not available on this device: 'Bluetooth недоступен на этом устройстве'
@@ -259,6 +261,7 @@ translations:
   Calibrate Y: Калибровать Y
   Calibrate input shaping to reduce ringing artifacts in prints: Калибровка компенсации вибраций для уменьшения артефактов звона
   Calibrate your touchscreen for accurate input: Калибровка сенсорного экрана для точного ввода
+  Calibrate, tune jitter and scroll feel: Калибровка, настройка дрожания и поведения прокрутки
   Calibrated: Откалиброван
   Calibrating...: Калибровка...
   Calibration & Tools: Калибровка и инструменты
@@ -286,6 +289,7 @@ translations:
   'Cannot modify G-code: scan result not available': 'Невозможно изменить G-code: результат сканирования недоступен'
   'Cannot modify G-code: {}. Printing original file.': 'Невозможно изменить G-code: {}. Печать оригинального файла.'
   'Cannot reprint: not connected to printer': 'Невозможно перепечатать: не подключено к принтеру'
+  Cannot restart — no filename: 'Не удалось перезапустить — нет имени файла'
   'Cannot start print: internal error': 'Невозможно начать печать: внутренняя ошибка'
   'Cannot start print: not connected to printer': 'Невозможно начать печать: не подключено к принтеру'
   'Cannot start print: printer is {}': 'Невозможно начать печать: принтер {}'
@@ -314,7 +318,7 @@ translations:
   Check for Updates: Проверить обновления
   Check the filament path and try again.: Проверьте путь филамента и попробуйте снова.
   Check your heater's rating (typically 40-60W for hotends): Проверьте мощность нагревателя (обычно 40–60W для хотэндов)
-  Checking: ''
+  Checking: 'Проверка'
   Checking Spoolman server...: Проверка сервера Spoolman...
   Checking accelerometer...: Проверка акселерометра...
   Checking for plugin...: Поиск плагина...
@@ -455,7 +459,7 @@ translations:
   Customize Macro: Настроить макрос
   Customize preset temperatures: Настройка пресетов температур
   Cutter jam: Замятие резака
-  Cutting: ''
+  Cutting: 'Резка'
   Cutting filament...: Обрезка филамента...
   DETECTED USB PRINTERS: ОБНАРУЖЕННЫЕ USB-ПРИНТЕРЫ
   DISABLED: ОТКЛЮЧЕНО
@@ -469,6 +473,7 @@ translations:
   Date (newest): Дата (новые)
   Date (oldest): Дата (старые)
   Day: День
+  Dead zone in pixels (raise if taps register as swipes; 0 disables): Мёртвая зона в пикселях (увеличьте, если касания распознаются как свайпы; 0 отключает)
   Debug: Отладка
   Default border thickness: Толщина границы по умолчанию
   Define macros in your printer.cfg: Определите макросы в вашем printer.cfg
@@ -510,6 +515,7 @@ translations:
   Download update?: Загрузить обновление?
   Download v{}?: Загрузить v{}?
   Downloading...: Загрузка...
+  Draw a ripple at each touch — helps diagnose offsets: Рисовать круг при каждом касании — помогает диагностировать смещения
   Drive Cal: Кал. привода
   Drop shadow strength (0 = disabled): Интенсивность тени (0 = отключено)
   Dryer Controls: Управление сушилкой
@@ -599,6 +605,7 @@ translations:
   Extruding {}mm...: Экструзия {}мм...
   FAILED: ОШИБКА
   FILAMENT MAPPING: НАЗНАЧЕНИЕ ФИЛАМЕНТА
+  FILAMENTS: 'ФИЛАМЕНТЫ'
   FILTERS: ФИЛЬТРЫ
   Factory Reset: Сброс к заводским настройкам
   Failed: Ошибка
@@ -606,6 +613,7 @@ translations:
   Failed to apply limits: Не удалось применить ограничения
   Failed to apply settings: Не удалось применить настройки
   'Failed to cancel: {}': 'Не удалось отменить: {}'
+  'Failed to clear print state: {}': 'Не удалось очистить состояние печати: {}'
   'Failed to connect to ''{}'': {}': 'Не удалось подключиться к ''{}'': {}'
   'Failed to connect: %s': 'Не удалось подключиться: %s'
   'Failed to cool down: {}': 'Не удалось охладить: {}'
@@ -644,6 +652,7 @@ translations:
   'Failed to reset speed: {}': 'Не удалось сбросить скорость: {}'
   Failed to reset theme: Не удалось сбросить тему
   Failed to restart Moonraker.: Не удалось перезапустить Moonraker.
+  'Failed to restart: {}': 'Не удалось перезапустить: {}'
   'Failed to resume print: {}': 'Не удалось возобновить печать: {}'
   'Failed to resume: {}': 'Не удалось возобновить: {}'
   Failed to save LED configuration: Не удалось сохранить настройки LED
@@ -689,7 +698,7 @@ translations:
   Filament Mapping: Назначение филамента
   Filament Runout: Окончание филамента
   Filament Sensor: Датчик филамента
-  Filament System Error: ''
+  Filament System Error: 'Ошибка системы филамента'
   Filament Used: Использовано филамента
   Filament already exists: Такой филамент уже существует
   Filament by Type: Филамент по типу
@@ -725,17 +734,17 @@ translations:
   'Flow change failed: {}': 'Ошибка изменения потока: {}'
   Flowguard: Flowguard
   Flying Toasters: Летающие тостеры
-  Follow active tool: ''
+  Follow active tool: 'Следовать активному инструменту'
   Follow graph screen: Следовать экрану графика
   Forget: 'Забыть'
-  Forming Tip: ''
+  Forming Tip: 'Формирование кончика'
   Forming tip...: Формирование кончика...
   Found %zu printers: Найдено %zu принтеров
   Found 1 printer: Найден 1 принтер
   Framerate: Частота кадров
   Freq Graph: График частот
   Frequency Delta: Разница частот
-  From Buffer: ''
+  From Buffer: 'Из буфера'
   Front: Спереди
   Full: 'Полный'
   G-code Console: Консоль G-code
@@ -769,7 +778,7 @@ translations:
   Heat Capacity: Теплоёмкость
   Heat Soak: Прогрев
   Heat bed before calibrating for accurate offset with thermal expansion.: Нагрейте стол перед калибровкой для точного смещения с учётом теплового расширения.
-  Heat nozzle: ''
+  Heat nozzle: 'Нагреть сопло'
   Heatbed Temperature: Температура стола
   Heated Bed: Подогреваемый стол
   Heated Bed MPC Calibration: Калибровка MPC стола
@@ -777,7 +786,7 @@ translations:
   Heater: Нагреватель
   Heater Power: Мощность нагревателя
   Heaters off: Нагреватели выключены
-  Heating: ''
+  Heating: 'Нагрев'
   Heating (%d°C below minimum): Нагрев (%d°C ниже минимума)
   Heating Bed...: Нагрев стола...
   Heating Nozzle...: Нагрев сопла...
@@ -786,6 +795,7 @@ translations:
   Heating to {}°C for {}...: Нагрев до {}°C в течение {}...
   Heating to {}°C...: Нагрев до {}°C...
   Heating...: Нагрев...
+  'Heating: %d / %d°C': 'Нагрев: %d / %d°C'
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen аварийно завершился
   HelixScreen is detecting your display orientation: HelixScreen определяет ориентацию дисплея
@@ -828,6 +838,7 @@ translations:
   Idle: Ожидание
   If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: Если Moonraker локальный или экран подключён к принтеру напрямую, подключение произойдёт автоматически
   Ignore: Игнорировать
+  Ignore the click that fires when you lift after scrolling: Игнорировать клик, возникающий при отпускании после прокрутки
   'Import failed: {}': 'Ошибка импорта: {}'
   Imported {}: Импортировано {}
   In Progress: В процессе
@@ -866,7 +877,7 @@ translations:
   Just now: Только что
   KEYBOARD LAYOUT: 'РАСКЛАДКА КЛАВИАТУРЫ'
   KLICKY CONTROLS: УПРАВЛЕНИЕ KLICKY
-  Keep Navigation Bar: ''
+  Keep Navigation Bar: 'Сохранить панель навигации'
   Keep Printing: Продолжить печать
   Keep Required: Оставить обязательным
   Keyboard Test (Gboard-style): Тест клавиатуры (стиль Gboard)
@@ -908,7 +919,7 @@ translations:
   Learn More: Подробнее
   'Length:': 'Длина:'
   Leveling Gantry...: Выравнивание портала...
-  Library: ''
+  Library: 'Библиотека'
   Lifetime Print Stats: Статистика за всё время
   Light: Подсветка
   Listen to all theme sounds: 'Прослушать все звуки темы'
@@ -918,7 +929,7 @@ translations:
   Load may still be running — response timed out: Загрузка может ещё выполняться — время ожидания истекло
   Load the required filaments or start anyway?: Загрузить нужные филаменты или начать без них?
   Loaded: Загружен
-  Loading: ''
+  Loading: 'Загрузка'
   Loading Bed Mesh...: Загрузка сетки стола...
   Loading Error: Ошибка загрузки
   Loading Filament...: Загрузка филамента...
@@ -1151,7 +1162,7 @@ translations:
   'ON': ВКЛ
   OS: OS
   Object positions unavailable: Позиции объектов недоступны
-  Objects: ''
+  Objects: 'Объекты'
   'Off': Выкл
   'On': Вкл
   On and Off macros must be different: Макросы включения и выключения должны отличаться
@@ -1205,6 +1216,7 @@ translations:
   Pause macro not configured: Макрос паузы не настроен
   Paused: Приостановлено
   Paused (attention needed): Приостановлено (требует внимания)
+  Pausing...: 'Приостановка...'
   Peak Freq: Пиковая частота
   'Peak:': 'Пик:'
   Phase Tracking: Отслеживание фазы
@@ -1216,6 +1228,7 @@ translations:
   Pick: Выбрать
   Pick Color: Выбрать цвет
   Pill: 'Овал'
+  Pixels before a press becomes a scroll (lower = scrolls engage sooner): Пикселей до того, как нажатие станет прокруткой (меньше = прокрутка начинается раньше)
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': 'Поместите файлы изображений (PNG, JPEG, BMP, GIF) в config/custom_images/. Макс. размер: 2048×2048 пикселей.'
   Place plugins in the plugins directory to extend HelixScreen: Поместите плагины в директорию plugins для расширения HelixScreen
   Placed: Добавлено
@@ -1277,6 +1290,7 @@ translations:
   Print Status: Статус печати
   Print Time: Время печати
   Print Tuning: Настройка печати
+  Print Was Terminated: 'Печать была прекращена'
   Print failed: Печать не удалась
   'Print preparation failed: {}': 'Ошибка подготовки печати: {}'
   Print quality: Качество печати
@@ -1411,7 +1425,7 @@ translations:
   'Reset failed: {}': 'Ошибка сброса: {}'
   Reset to Default: Сбросить до умолчания
   Reset to original values: Сбросить к исходным значениям
-  Resetting: ''
+  Resetting: 'Сброс'
   Resetting...: Сброс...
   Response (Kp): Отклик (Kp)
   Restart: Перезапуск
@@ -1433,6 +1447,8 @@ translations:
   Resume: Продолжить
   Resume Print: Продолжить печать
   Resume macro not configured: Макрос возобновления не настроен
+  'Resume preparation failed: {}': 'Не удалось подготовиться к возобновлению: {}'
+  Resuming...: 'Возобновление...'
   Retract: Ретракция
   Retract Distance: Расстояние ретракта
   Retract Length: Длина ретракта
@@ -1514,6 +1530,8 @@ translations:
   Screensaver: Заставка
   Screensaver disabled: Заставка отключена
   Screws Tilt: Наклон винтов
+  Scroll Engage Distance: Расстояние активации прокрутки
+  Scroll Guard: Защита прокрутки
   Search filename...: Поиск файла...
   Search spools...: Поиск катушек...
   Search vendors...: Поиск производителей...
@@ -1543,7 +1561,7 @@ translations:
   Select which sensor triggers pause on filament runout: Выберите датчик, который ставит на паузу при окончании филамента
   Select your preferred language: Выберите предпочитаемый язык
   Selected: 'Выбрано'
-  Selecting: ''
+  Selecting: 'Выбор'
   Selecting slot...: Выбор слота...
   Self-Test: Самотестирование
   Semantic Size Parameter Tests: Тесты семантических параметров размера
@@ -1575,11 +1593,12 @@ translations:
   'Shininess:': 'Блеск:'
   Show Printer Switcher: Показывать переключатель принтеров
   Show Sections: Показать разделы
+  Show Touch Points: Показывать точки касания
   Show a confirmation dialog when tapping a macro: 'Показывать диалог подтверждения при нажатии на макрос'
   Show detailed print preparation status: Показывать детальный статус подготовки к печати
   Show instead of dimming: Показывать вместо затемнения
   Show printer icon in navigation bar: Показывать значок принтера в панели навигации
-  Show temp for: ''
+  Show temp for: 'Показывать темп. для'
   Show text labels on icon-only home screen widgets: Показывать текстовые подписи на виджетах главного экрана
   Show whatever curves you last had visible on the full graph.: Показывать те кривые, что были видны на полном графике в последний раз.
   Shutdown: Выключение
@@ -1723,6 +1742,7 @@ translations:
   ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   : Анимированная заставка была отключена на данном устройстве, чтобы она не мешала печати. Вы можете снова включить её в Настройки > Дисплей.
   The heater will cycle on and off several times.: Нагреватель будет несколько раз включаться и выключаться.
+  The printer halted this print and cannot resume it. Restart from the beginning?: 'Принтер остановил эту печать и не может её возобновить. Начать с начала?'
   The runout sensor indicates no filament is loaded. Start print anyway?: Датчик окончания филамента показывает, что филамент не загружен. Всё равно начать печать?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: Датчик печатающей головки показывает, что филамент уже загружен. Всё равно продолжить загрузку?
   The toolhead sensor indicates no filament is present. Proceed with unload anyway?: Датчик печатающей головки показывает, что филамент отсутствует. Всё равно продолжить выгрузку?
@@ -1785,8 +1805,10 @@ translations:
   Toolhead, G-code, limits, and materials: Печатающая головка, G-code, лимиты и материалы
   Top: Сверху
   Total Prints: Всего печатей
+  Touch & Input: Касание и ввод
   Touch Cal: Кал. касания
   Touch Calibration: Калибровка касания
+  Touch Jitter Filter: Фильтр дрожания касания
   Touch anywhere to test calibration: Коснитесь в любом месте для проверки калибровки
   Touch anywhere to verify accuracy: Коснитесь в любом месте для проверки точности
   Touch screen to wake from sleep: Коснитесь экрана для выхода из сна
@@ -1821,7 +1843,7 @@ translations:
   'Unload failed: {}': 'Ошибка выгрузки: {}'
   Unload macro not configured: Макрос выгрузки не настроен
   Unload may still be running — response timed out: Выгрузка может ещё выполняться — время ожидания истекло
-  Unloading: ''
+  Unloading: 'Выгрузка'
   Unloading before bypass...: Выгрузка перед байпасом...
   Unloading filament ({}mm)...: Выгрузка филамента ({}мм)...
   Unloading filament...: Выгрузка филамента...
@@ -1994,7 +2016,9 @@ translations:
   tour.step.welcome.title: 'Добро пожаловать в HelixScreen'
   used: использ.
   v{} is available. Tap to update.: v{} доступна. Нажмите для обновления.
+  you have: 'у вас'
   '{} axis homed': Ось {} запаркована
+  '{} command timed out': 'Время команды {} истекло'
   '{} complete': '{} завершено'
   '{} heater turned off': Нагреватель {} выключен
   '{} macro not configured': Макрос {} не настроен

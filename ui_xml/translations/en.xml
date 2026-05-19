@@ -64,6 +64,7 @@
   <translation tag="90°" en="90°"/>
   <translation tag="= Loosen" en="= Loosen"/>
   <translation tag="= Tighten" en="= Tighten"/>
+  <translation tag="A" en="A"/>
   <translation tag="ABS" en="ABS"/>
   <translation tag="ACCELEROMETERS" en="ACCELEROMETERS"/>
   <translation tag="ACTIONS" en="ACTIONS"/>
@@ -162,6 +163,7 @@
   <translation tag="Automatic" en="Automatic"/>
   <translation tag="Automatic Heater Control Calibration" en="Automatic Heater Control Calibration"/>
   <translation tag="Automatic LED Control" en="Automatic LED Control"/>
+  <translation tag="Aux" en="Aux"/>
   <translation tag="Available" en="Available"/>
   <translation tag="Available Networks" en="Available Networks"/>
   <translation tag="Available networks" en="Available networks"/>
@@ -287,6 +289,7 @@
   <translation tag="Cannot modify G-code: scan result not available" en="Cannot modify G-code: scan result not available"/>
   <translation tag="Cannot modify G-code: {}. Printing original file." en="Cannot modify G-code: {}. Printing original file."/>
   <translation tag="Cannot reprint: not connected to printer" en="Cannot reprint: not connected to printer"/>
+  <translation tag="Cannot restart — no filename" en="Cannot restart — no filename"/>
   <translation tag="Cannot start print: internal error" en="Cannot start print: internal error"/>
   <translation tag="Cannot start print: not connected to printer" en="Cannot start print: not connected to printer"/>
   <translation tag="Cannot start print: printer is {}" en="Cannot start print: printer is {}"/>
@@ -602,6 +605,7 @@
   <translation tag="Extruding {}mm..." en="Extruding {}mm..."/>
   <translation tag="FAILED" en="FAILED"/>
   <translation tag="FILAMENT MAPPING" en="FILAMENT MAPPING"/>
+  <translation tag="FILAMENTS" en="FILAMENTS"/>
   <translation tag="FILTERS" en="FILTERS"/>
   <translation tag="Factory Reset" en="Factory Reset"/>
   <translation tag="Failed" en="Failed"/>
@@ -609,6 +613,7 @@
   <translation tag="Failed to apply limits" en="Failed to apply limits"/>
   <translation tag="Failed to apply settings" en="Failed to apply settings"/>
   <translation tag="Failed to cancel: {}" en="Failed to cancel: {}"/>
+  <translation tag="Failed to clear print state: {}" en="Failed to clear print state: {}"/>
   <translation tag="Failed to connect to &apos;{}&apos;: {}" en="Failed to connect to &apos;{}&apos;: {}"/>
   <translation tag="Failed to connect: %s" en="Failed to connect: %s"/>
   <translation tag="Failed to cool down: {}" en="Failed to cool down: {}"/>
@@ -647,6 +652,7 @@
   <translation tag="Failed to reset speed: {}" en="Failed to reset speed: {}"/>
   <translation tag="Failed to reset theme" en="Failed to reset theme"/>
   <translation tag="Failed to restart Moonraker." en="Failed to restart Moonraker."/>
+  <translation tag="Failed to restart: {}" en="Failed to restart: {}"/>
   <translation tag="Failed to resume print: {}" en="Failed to resume print: {}"/>
   <translation tag="Failed to resume: {}" en="Failed to resume: {}"/>
   <translation tag="Failed to save LED configuration" en="Failed to save LED configuration"/>
@@ -788,6 +794,7 @@
   <translation tag="Heating to {}°C for {}..." en="Heating to {}°C for {}..."/>
   <translation tag="Heating to {}°C..." en="Heating to {}°C..."/>
   <translation tag="Heating..." en="Heating..."/>
+  <translation tag="Heating: %d / %d°C" en="Heating: %d / %d°C"/>
   <translation tag="HelixScreen" en="HelixScreen"/>
   <translation tag="HelixScreen Crashed" en="HelixScreen Crashed"/>
   <translation tag="HelixScreen is detecting your display orientation" en="HelixScreen is detecting your display orientation"/>
@@ -1206,6 +1213,7 @@
   <translation tag="Pause macro not configured" en="Pause macro not configured"/>
   <translation tag="Paused" en="Paused"/>
   <translation tag="Paused (attention needed)" en="Paused (attention needed)"/>
+  <translation tag="Pausing..." en="Pausing..."/>
   <translation tag="Peak Freq" en="Peak Freq"/>
   <translation tag="Peak:" en="Peak:"/>
   <translation tag="Phase Tracking" en="Phase Tracking"/>
@@ -1279,6 +1287,7 @@
   <translation tag="Print Status" en="Print Status"/>
   <translation tag="Print Time" en="Print Time"/>
   <translation tag="Print Tuning" en="Print Tuning"/>
+  <translation tag="Print Was Terminated" en="Print Was Terminated"/>
   <translation tag="Print failed" en="Print failed"/>
   <translation tag="Print preparation failed: {}" en="Print preparation failed: {}"/>
   <translation tag="Print quality" en="Print quality"/>
@@ -1435,6 +1444,8 @@
   <translation tag="Resume" en="Resume"/>
   <translation tag="Resume Print" en="Resume Print"/>
   <translation tag="Resume macro not configured" en="Resume macro not configured"/>
+  <translation tag="Resume preparation failed: {}" en="Resume preparation failed: {}"/>
+  <translation tag="Resuming..." en="Resuming..."/>
   <translation tag="Retract" en="Retract"/>
   <translation tag="Retract Distance" en="Retract Distance"/>
   <translation tag="Retract Length" en="Retract Length"/>
@@ -1725,6 +1736,7 @@
   <translation tag="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints." en="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints."/>
   <translation tag="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display." en="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display."/>
   <translation tag="The heater will cycle on and off several times." en="The heater will cycle on and off several times."/>
+  <translation tag="The printer halted this print and cannot resume it. Restart from the beginning?" en="The printer halted this print and cannot resume it. Restart from the beginning?"/>
   <translation tag="The runout sensor indicates no filament is loaded. Start print anyway?" en="The runout sensor indicates no filament is loaded. Start print anyway?"/>
   <translation tag="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?" en="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?"/>
   <translation tag="The toolhead sensor indicates no filament is present. Proceed with unload anyway?" en="The toolhead sensor indicates no filament is present. Proceed with unload anyway?"/>
@@ -1991,7 +2003,9 @@
   <translation tag="tour.step.welcome.title" en="Welcome to HelixScreen"/>
   <translation tag="used" en="used"/>
   <translation tag="v{} is available. Tap to update." en="v{} is available. Tap to update."/>
+  <translation tag="you have" en="you have"/>
   <translation tag="{} axis homed" en="{} axis homed"/>
+  <translation tag="{} command timed out" en="{} command timed out"/>
   <translation tag="{} complete" en="{} complete"/>
   <translation tag="{} heater turned off" en="{} heater turned off"/>
   <translation tag="{} macro not configured" en="{} macro not configured"/>
