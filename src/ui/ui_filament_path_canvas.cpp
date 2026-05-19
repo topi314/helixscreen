@@ -3842,3 +3842,26 @@ void ui_filament_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool)
     data->bypass_has_spool = has_spool;
     layered_mark_dirty(obj, true, true);
 }
+
+bool ui_filament_path_canvas_get_bypass_merge_pos(lv_obj_t* obj, int32_t* cx_out,
+                                                  int32_t* cy_out) {
+    auto* data = get_data(obj);
+    if (!data || data->hub_only || !data->show_bypass) {
+        return false;
+    }
+    lv_obj_update_layout(obj);
+    lv_area_t obj_coords;
+    lv_obj_get_coords(obj, &obj_coords);
+    int32_t width = lv_area_get_width(&obj_coords);
+    int32_t height = lv_area_get_height(&obj_coords);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    if (cx_out) {
+        *cx_out = obj_coords.x1 + (int32_t)(width * BYPASS_X_RATIO);
+    }
+    if (cy_out) {
+        *cy_out = obj_coords.y1 + (int32_t)(height * BYPASS_MERGE_Y_RATIO);
+    }
+    return true;
+}

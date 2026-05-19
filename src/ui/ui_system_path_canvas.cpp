@@ -122,6 +122,12 @@ struct BypassGeometry {
     int32_t merge_y;
     int32_t center_x; // hub center (already shifted left when bypass is present)
 };
+
+// Mirrors ui_filament_path_canvas's BYPASS_X_RATIO so both canvases place the
+// bypass spool at the same horizontal fraction — keeps a long visible tube
+// segment instead of cramming the spool right next to the hub.
+static constexpr float BYPASS_X_RATIO = 0.85f;
+
 static BypassGeometry compute_bypass_geometry(const SystemPathData* data,
                                               const lv_area_t& obj_coords) {
     int32_t width = lv_area_get_width(&obj_coords);
@@ -129,11 +135,11 @@ static BypassGeometry compute_bypass_geometry(const SystemPathData* data,
     int32_t x_off = obj_coords.x1;
     int32_t y_off = obj_coords.y1;
 
-    // Hub shifts ~10% left to make room for the bypass path on the right
-    // (single-tool, has_bypass — multi_tool path doesn't render bypass).
+    // Hub shifts ~10% left to keep its label clear of the long horizontal
+    // bypass merge line (single-tool, has_bypass — multi_tool path doesn't
+    // render bypass).
     int32_t center_x = x_off + width / 2 - width / 10;
-    int32_t hub_right = center_x + data->hub_width / 2;
-    int32_t bypass_x = hub_right + width / 8;
+    int32_t bypass_x = x_off + (int32_t)(width * BYPASS_X_RATIO);
 
     int32_t hub_y = y_off + (int32_t)(height * HUB_Y_RATIO);
     int32_t hub_h = (int32_t)(height * HUB_HEIGHT_RATIO);

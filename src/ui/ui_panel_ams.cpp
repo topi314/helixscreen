@@ -743,7 +743,7 @@ void AmsPanel::setup_bypass_spool() {
         path_container,
         [](lv_event_t* e) {
             if (auto* self = static_cast<AmsPanel*>(lv_event_get_user_data(e))) {
-                self->show_edit_modal(-2);
+                self->handle_bypass_spool_click();
             }
         },
         this);
@@ -776,26 +776,16 @@ void AmsPanel::update_bypass_spool_position() {
     if (!bypass_widgets_.valid() || !path_canvas_)
         return;
 
-    // Read the canvas's CURRENT absolute coords. Matches the draw function's
-    // coord source so the spool sits exactly on the rendered bypass endpoint.
-    lv_obj_update_layout(path_canvas_);
-    lv_area_t canvas_abs;
-    lv_obj_get_coords(path_canvas_, &canvas_abs);
-    int32_t canvas_abs_w = lv_area_get_width(&canvas_abs);
-    int32_t canvas_abs_h = lv_area_get_height(&canvas_abs);
-
-    // Match ui_filament_path_canvas.cpp's BYPASS_X_RATIO / BYPASS_MERGE_Y_RATIO.
-    static constexpr float BYPASS_X_RATIO = 0.85f;
-    static constexpr float BYPASS_MERGE_Y_RATIO = 0.58f;
-    int32_t bypass_abs_x = canvas_abs.x1 + (int32_t)(canvas_abs_w * BYPASS_X_RATIO);
-    int32_t bypass_abs_y = canvas_abs.y1 + (int32_t)(canvas_abs_h * BYPASS_MERGE_Y_RATIO);
-
+    int32_t abs_cx = 0;
+    int32_t abs_cy = 0;
+    if (!ui_filament_path_canvas_get_bypass_merge_pos(path_canvas_, &abs_cx, &abs_cy)) {
+        return;
+    }
     lv_obj_t* parent = lv_obj_get_parent(bypass_widgets_.box);
     lv_area_t parent_abs;
     lv_obj_get_content_coords(parent, &parent_abs);
-
-    helix::ui::bypass_spool_set_position(bypass_widgets_, bypass_abs_x - parent_abs.x1,
-                                         bypass_abs_y - parent_abs.y1);
+    helix::ui::bypass_spool_set_position(bypass_widgets_, abs_cx - parent_abs.x1,
+                                         abs_cy - parent_abs.y1);
 }
 
 void AmsPanel::update_bypass_spool_from_state() {

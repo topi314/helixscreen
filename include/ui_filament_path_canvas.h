@@ -372,6 +372,16 @@ void ui_filament_path_canvas_set_bypass_color(lv_obj_t* obj, uint32_t color);
 void ui_filament_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool);
 
 /**
+ * @brief Compute where the bypass tube terminates (absolute screen coords).
+ *
+ * The owning panel anchors its shared BypassSpoolWidgets overlay at this
+ * point. Returns false when bypass isn't enabled (`show_bypass=false`,
+ * hub-only mode) or the canvas hasn't been laid out yet.
+ */
+bool ui_filament_path_canvas_get_bypass_merge_pos(lv_obj_t* obj, int32_t* cx_out,
+                                                  int32_t* cy_out);
+
+/**
  * @brief Set the mapped tool index for a slot
  *
  * Overrides the default slot-index-as-tool-number with the actual AFC map value.
