@@ -1974,11 +1974,22 @@ void PrintStatusWidget::DetailedFormatter::attach_arc(lv_obj_t* arc) {
         int pct = lv_subject_get_int(get_printer_state().get_print_progress_subject());
         lv_arc_set_value(arc, pct);
         // Null arc_widget_ when LVGL destroys the arc — lets the progress
-        // observer null-check without lv_obj_is_valid (L075).
+        // observer null-check without lv_obj_is_valid (L075). Guard against
+        // the layout-rebuild race: the home panel attaches widget A → detaches A
+        // → attaches B in quick succession; A's deferred LV_EVENT_DELETE fires
+        // AFTER B has already overwritten arc_widget_ with its own arc. An
+        // unconditional null here clobbers B's live arc and leaves the
+        // progress observer with no widget to update — the arc renders the
+        // grey track only, forever. Only clear when the deleted object is
+        // still the one we're tracking.
         lv_obj_add_event_cb(
             arc,
-            [](lv_event_t* /*e*/) {
-                if (s_formatter_) s_formatter_->arc_widget_ = nullptr;
+            [](lv_event_t* e) {
+                if (!s_formatter_) return;
+                lv_obj_t* deleted = lv_event_get_target_obj(e);
+                if (s_formatter_->arc_widget_ == deleted) {
+                    s_formatter_->arc_widget_ = nullptr;
+                }
             },
             LV_EVENT_DELETE, nullptr);
         // Auto-resize + diameter-driven thickness via the shared helper.
