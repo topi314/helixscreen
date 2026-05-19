@@ -17,6 +17,7 @@ class PrinterPrintStateTestAccess {
         pps.slicer_progress_active_ = false;
         pps.smoothed_remaining_ = 0.0;
         pps.has_smoothed_remaining_ = false;
+        pps.sdcard_active_ = false;
     }
 };
 
