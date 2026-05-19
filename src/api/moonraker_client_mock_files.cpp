@@ -230,6 +230,13 @@ static json build_mock_file_metadata_response(const std::string& filename) {
         filament_colors.push_back(color);
     }
 
+    // Per-tool filament weights — drives "unused tool" filtering in the
+    // material-mismatch check (only tools with >0 weight actually extrude).
+    json filament_weights = json::array();
+    for (double g : header_meta.filament_used_per_tool_g) {
+        filament_weights.push_back(g);
+    }
+
     // Use fallback values for mock when G-code headers lack metadata
     double estimated_time =
         (header_meta.estimated_time_seconds > 0) ? header_meta.estimated_time_seconds : 300.0;
@@ -247,6 +254,7 @@ static json build_mock_file_metadata_response(const std::string& filename) {
                    {"filament_weight_total", filament_g},
                    {"filament_type", header_meta.filament_type},
                    {"filament_colors", filament_colors},
+                   {"filament_weights", filament_weights},
                    {"layer_count", header_meta.layer_count},
                    {"layer_height", header_meta.layer_height},
                    {"first_layer_height", header_meta.first_layer_height},

@@ -723,7 +723,10 @@ struct GCodeHeaderMetadata {
     double estimated_time_seconds = 0.0;
     double filament_used_mm = 0.0;
     double filament_used_g = 0.0;
-    std::string filament_type; ///< e.g., "PLA", "PETG", "ABS", "TPU", "ASA"
+    std::vector<double>
+        filament_used_per_tool_g; ///< Per-tool grams from "; filament used [g] = a, b, c, ..."
+                                  ///< Empty when the slicer didn't emit a per-tool breakdown.
+    std::string filament_type;    ///< e.g., "PLA", "PETG", "ABS", "TPU", "ASA"
     uint32_t layer_count = 0;
     double layer_height = 0.0;       ///< mm per layer (e.g. 0.2)
     double first_layer_height = 0.0; ///< mm first layer (e.g. 0.3)

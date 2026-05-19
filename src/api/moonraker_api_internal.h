@@ -629,4 +629,67 @@ inline std::string json_string_list_or(const nlohmann::json& obj, const char* ke
     return raw;
 }
 
+/**
+ * @brief Parse per-tool filament weight metadata into a vector of doubles.
+ *
+ * Slicers vary in how they expose per-tool filament usage. We accept:
+ *   - "filament_weights" as a JSON array of numbers (grams)         — preferred
+ *   - "filament_used"    as a JSON array of numbers (mm or grams)   — fallback
+ *   - "filament_used"    as a comma/semicolon-delimited string       — fallback
+ *
+ * For the fallbacks, only the >0 / ==0 distinction is meaningful to callers
+ * (which use this to decide if a tool actually extrudes); unit mismatches
+ * (mm vs grams) don't affect that decision.
+ *
+ * Non-numeric / unparseable entries are recorded as 0.0 so the index alignment
+ * with tool_index is preserved.
+ *
+ * Returns an empty vector when the slicer emitted no per-tool data. Callers
+ * MUST treat empty as "unknown — check every tool" rather than "all zero".
+ */
+inline std::vector<double> parse_filament_weights(const nlohmann::json& obj) {
+    std::vector<double> weights;
+
+    auto push_number_or_zero = [&weights](const nlohmann::json& v) {
+        if (v.is_number()) {
+            weights.push_back(v.get<double>());
+        } else {
+            weights.push_back(0.0);
+        }
+    };
+
+    if (obj.contains("filament_weights") && obj["filament_weights"].is_array()) {
+        for (const auto& w : obj["filament_weights"]) {
+            push_number_or_zero(w);
+        }
+        return weights;
+    }
+    if (obj.contains("filament_used") && obj["filament_used"].is_array()) {
+        for (const auto& w : obj["filament_used"]) {
+            push_number_or_zero(w);
+        }
+        return weights;
+    }
+    if (obj.contains("filament_used") && obj["filament_used"].is_string()) {
+        std::string used_str = obj["filament_used"].get<std::string>();
+        const char* delims = ";,";
+        size_t pos = 0;
+        while (pos < used_str.size()) {
+            size_t end = used_str.find_first_of(delims, pos);
+            if (end == std::string::npos) {
+                end = used_str.size();
+            }
+            std::string token = used_str.substr(pos, end - pos);
+            try {
+                weights.push_back(std::stod(token));
+            } catch (...) {
+                weights.push_back(0.0);
+            }
+            pos = end + 1;
+        }
+        return weights;
+    }
+    return weights;
+}
+
 } // namespace moonraker_internal

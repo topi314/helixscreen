@@ -1736,9 +1736,40 @@ bool parse_metadata_line(const std::string& line, GCodeHeaderMetadata& metadata)
         }
     } else if (key == "total filament used [g]" || key == "filament used [g]" ||
                key == "total filament weight") {
-        try {
-            metadata.filament_used_g = std::stod(value);
-        } catch (...) {
+        // Multi-tool slicers emit "0.00, 0.00, 0.00, 0.00, 10.16" — record per-tool
+        // breakdown if there are commas (OrcaSlicer / PrusaSlicer / Bambu format),
+        // and use the sum as the total. Single-value form is handled the same way
+        // (one element in the vector, total = that value).
+        if (value.find(',') != std::string::npos) {
+            metadata.filament_used_per_tool_g.clear();
+            double total_g = 0.0;
+            size_t pos = 0;
+            while (pos < value.size()) {
+                size_t end = value.find(',', pos);
+                if (end == std::string::npos) {
+                    end = value.size();
+                }
+                std::string token = value.substr(pos, end - pos);
+                try {
+                    double v = std::stod(token);
+                    metadata.filament_used_per_tool_g.push_back(v);
+                    total_g += v;
+                } catch (...) {
+                    metadata.filament_used_per_tool_g.push_back(0.0);
+                }
+                pos = end + 1;
+            }
+            // Only overwrite the total if the "total filament used [g]" line hasn't
+            // already set it directly (key == "total filament used [g]" wins
+            // because it's the slicer's authoritative sum).
+            if (metadata.filament_used_g == 0.0 || key == "filament used [g]") {
+                metadata.filament_used_g = total_g;
+            }
+        } else {
+            try {
+                metadata.filament_used_g = std::stod(value);
+            } catch (...) {
+            }
         }
     } else if (key == "filament used [mm]" || key == "total filament used [mm]") {
         try {

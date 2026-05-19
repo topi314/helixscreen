@@ -7,6 +7,8 @@
 #include "ams_backend_happy_hare.h"
 #ifdef HELIX_ENABLE_MOCKS
 #include "ams_backend_mock.h"
+#include "app_globals.h"
+#include "moonraker_client_mock.h"
 #endif
 #if HELIX_HAS_IFS
 #include "ams_backend_ad5x_ifs.h"
@@ -88,9 +90,33 @@ static std::string to_lower(const std::string& s) {
     return result;
 }
 
-// Helper to create mock backend with optional features
-static std::unique_ptr<AmsBackendMock> create_mock_with_features(int gate_count) {
+// Helper to create mock backend with optional features.
+//
+// `mock_client` (when non-null) is the MoonrakerClientMock driving the
+// simulated printer. The AMS mock subscribes to its active-gcode-tool
+// notifications so the active-tool indicator follows the gcode (mock-side
+// proxy for production's printer.mmu.tool / toolchanger.tool_number).
+static std::unique_ptr<AmsBackendMock>
+create_mock_with_features(int gate_count, MoonrakerClient* mock_client = nullptr) {
     auto mock = std::make_unique<AmsBackendMock>(gate_count);
+
+    // Find the moonraker mock to subscribe to. Caller may pass it explicitly;
+    // otherwise fall back to the global registered by MoonrakerManager. The
+    // AmsState init path calls AmsBackend::create(NONE, null, null) before the
+    // factory hooks up specific backends, so the global is the only handle we
+    // have at that point.
+    MoonrakerClient* mc_raw = mock_client ? mock_client : get_moonraker_client();
+    if (auto* mc = dynamic_cast<::MoonrakerClientMock*>(mc_raw)) {
+        AmsBackendMock* mock_ptr = mock.get();
+        mc->add_active_gcode_tool_observer([mock_ptr](int tool, uint32_t color) {
+            mock_ptr->on_simulated_gcode_tool_changed(tool, color);
+        });
+        spdlog::info("[AMS Backend] Mock backend subscribed to MoonrakerClientMock "
+                     "active-gcode-tool notifications");
+    } else {
+        spdlog::debug("[AMS Backend] No MoonrakerClientMock available; mock backend "
+                      "current_tool will stay at default (not simulator-driven)");
+    }
 
     // ========================================================================
     // HELIX_MOCK_AMS — topology/type selection
@@ -172,7 +198,7 @@ static std::unique_ptr<AmsBackendMock> create_mock_with_features(int gate_count)
 }
 
 // Check if mock mode is requested and not explicitly disabled via HELIX_MOCK_AMS=none
-static std::unique_ptr<AmsBackend> try_create_mock() {
+static std::unique_ptr<AmsBackend> try_create_mock(MoonrakerClient* mock_client = nullptr) {
     const auto* config = get_runtime_config();
     if (!config->should_mock_ams()) {
         return nullptr;
@@ -186,7 +212,7 @@ static std::unique_ptr<AmsBackend> try_create_mock() {
 
     spdlog::debug("[AMS Backend] Creating mock backend with {} gates (mock mode enabled)",
                   config->mock_ams_gate_count);
-    return create_mock_with_features(config->mock_ams_gate_count);
+    return create_mock_with_features(config->mock_ams_gate_count, mock_client);
 }
 #endif
 
@@ -282,7 +308,7 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type) {
 std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerAPI* api,
                                                MoonrakerClient* client) {
 #ifdef HELIX_ENABLE_MOCKS
-    if (auto mock = try_create_mock()) {
+    if (auto mock = try_create_mock(client)) {
         return mock;
     }
 #endif

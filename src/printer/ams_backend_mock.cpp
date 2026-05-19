@@ -408,6 +408,67 @@ int AmsBackendMock::get_current_tool() const {
     return system_info_.current_tool;
 }
 
+void AmsBackendMock::on_simulated_gcode_tool_changed(int tool_index,
+                                                     uint32_t slicer_color_rgb) {
+    // Called from MoonrakerClientMock at print start with the gcode's dominant
+    // tool. Mirrors what Klipper would set on printer.mmu.tool. Negative means
+    // "no print active / no per-tool data" — clear back to -1.
+    bool changed = false;
+    bool overrode_slot_color = false;
+    int virtual_slot_color_slot = -1;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (system_info_.current_tool == tool_index) {
+            return;
+        }
+        spdlog::info("[AmsBackendMock] Active tool updated by simulator: T{} → T{}",
+                     system_info_.current_tool, tool_index);
+        system_info_.current_tool = tool_index;
+
+        // Read tool→slot map fresh from slot registry (system_info_ is stale —
+        // set_tool_mapping writes to slots_ registry, not the cached struct).
+        auto fresh_map = slots_.build_system_info().tool_to_slot_map;
+        spdlog::debug("[AmsBackendMock] notify: tool_to_slot_map size={}, T{}={}",
+                      fresh_map.size(), tool_index,
+                      (tool_index >= 0 && tool_index < static_cast<int>(fresh_map.size()))
+                          ? fresh_map[tool_index]
+                          : -99);
+        if (tool_index >= 0 &&
+            tool_index < static_cast<int>(fresh_map.size())) {
+            int mapped_slot = fresh_map[tool_index];
+            if (mapped_slot >= 0 && slots_.is_valid_index(mapped_slot)) {
+                // Mapped: follow the user's mapping.
+                system_info_.current_slot = mapped_slot;
+            } else if (slicer_color_rgb != 0) {
+                // Unmapped: show the slicer's intended color for this tool by
+                // temporarily overriding current_slot's color. Without this,
+                // the swatch falls back to whatever current_slot was last
+                // (often slot 0 = PLA) and looks wrong (the "midnight blue"
+                // bug). Real fix is #959 — for now we patch the current slot's
+                // color and let AmsState pick it up.
+                int cs = system_info_.current_slot;
+                if (cs >= 0 && slots_.is_valid_index(cs)) {
+                    auto* entry = slots_.get_mut(cs);
+                    if (entry) {
+                        entry->info.color_rgb = slicer_color_rgb;
+                        overrode_slot_color = true;
+                        virtual_slot_color_slot = cs;
+                    }
+                }
+            }
+        }
+        changed = true;
+    }
+    if (changed) {
+        if (overrode_slot_color) {
+            spdlog::debug("[AmsBackendMock] T{} unmapped — using slicer color "
+                          "0x{:06X} on slot {}",
+                          tool_index, slicer_color_rgb, virtual_slot_color_slot);
+        }
+        emit_event(EVENT_STATE_CHANGED);
+    }
+}
+
 int AmsBackendMock::get_current_slot() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return system_info_.current_slot;
@@ -740,9 +801,12 @@ AmsError AmsBackendMock::set_slot_info(int slot_index, const SlotInfo& info, boo
 AmsError AmsBackendMock::set_tool_mapping(int tool_number, int slot_index) {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    // Get current tool map from registry
-    auto current_info = slots_.build_system_info();
-    if (tool_number < 0 || tool_number >= static_cast<int>(current_info.tool_to_slot_map.size())) {
+    // Tools can have a higher index than the number of slots — multi-tool
+    // slicer files often reference T0..T7 even when only 4 lanes exist. The
+    // sentinel for "too large" is arbitrary; 64 is generous and matches the
+    // production slot_registry behavior of growing on demand.
+    constexpr int kMaxToolIndex = 64;
+    if (tool_number < 0 || tool_number >= kMaxToolIndex) {
         return AmsError(AmsResult::INVALID_TOOL,
                         "Tool " + std::to_string(tool_number) + " out of range",
                         "Invalid tool number", "");
@@ -750,6 +814,12 @@ AmsError AmsBackendMock::set_tool_mapping(int tool_number, int slot_index) {
 
     if (!slots_.is_valid_index(slot_index)) {
         return AmsErrorHelper::invalid_slot(slot_index, slots_.slot_count() - 1);
+    }
+
+    // Get current tool map and grow it if needed so the new tool index fits.
+    auto current_info = slots_.build_system_info();
+    if (tool_number >= static_cast<int>(current_info.tool_to_slot_map.size())) {
+        current_info.tool_to_slot_map.resize(tool_number + 1, -1);
     }
 
     // Update the tool map entry and re-apply

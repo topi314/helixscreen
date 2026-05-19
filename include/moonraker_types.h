@@ -124,6 +124,10 @@ struct FileMetadata {
     double layer_height = 0.0;                // mm (per-layer height)
     double first_layer_height = 0.0;          // mm (first layer height, may differ)
     std::vector<std::string> filament_colors; // Hex colors per tool (e.g., ["#ED1C24", "#00C1AE"])
+    std::vector<double>
+        filament_weights; // Per-tool filament weight in grams (e.g., [0.0, 0.0, 0.0, 12.5]).
+                          // Empty when slicer omits per-tool breakdown — callers must treat
+                          // empty as "unknown" (do NOT assume all-zero).
     double first_layer_bed_temp = 0.0;
     double first_layer_extr_temp = 0.0;
     uint64_t gcode_start_byte = 0;

@@ -254,19 +254,29 @@ std::vector<uint32_t> FilamentMappingCard::get_mapped_colors() const {
         const auto& mapping = mappings_[i];
 
         if (!mapping.is_auto && mapping.mapped_slot >= 0) {
-            // Look up chosen slot color
             uint32_t slot_color = (i < tool_info_.size()) ? tool_info_[i].color_rgb : 0x808080;
+            bool found = false;
             for (const auto& s : available_slots_) {
                 if (s.slot_index == mapping.mapped_slot &&
                     s.backend_index == mapping.mapped_backend) {
                     slot_color = s.color_rgb;
+                    found = true;
                     break;
                 }
             }
+            spdlog::debug("[FilamentMapping] T{}: mapped slot={} backend={} → "
+                          "0x{:06X} (found={}, slots_seen={})",
+                          mapping.tool_index, mapping.mapped_slot,
+                          mapping.mapped_backend, slot_color, found,
+                          available_slots_.size());
             colors.push_back(slot_color);
         } else {
-            // Auto or unmapped: use gcode tool's original color
-            colors.push_back((i < tool_info_.size()) ? tool_info_[i].color_rgb : 0x808080);
+            uint32_t fallback =
+                (i < tool_info_.size()) ? tool_info_[i].color_rgb : 0x808080;
+            spdlog::debug("[FilamentMapping] T{}: auto={} slot={} → slicer 0x{:06X}",
+                          mapping.tool_index, mapping.is_auto, mapping.mapped_slot,
+                          fallback);
+            colors.push_back(fallback);
         }
     }
 

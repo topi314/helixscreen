@@ -623,6 +623,27 @@ PrintStartController::find_material_mismatches() {
         return mismatches;
     }
 
+    // Per-tool filament weights from gcode metadata. Used to skip tools the
+    // slicer assigned a material to but that never actually extrude (common
+    // when a multi-tool profile prints a single-tool file: T0..T2 inherit the
+    // profile's defaults but only T3 is used). Empty vector means the slicer
+    // didn't emit per-tool data — in that case we keep the old behavior and
+    // check every tool. Graceful fallback, no false-negatives possible.
+    std::vector<double> filament_weights;
+    if (auto md = detail_view_->get_file_metadata()) {
+        filament_weights = md->filament_weights;
+    }
+    auto tool_is_used = [&filament_weights](int tool_index) -> bool {
+        if (filament_weights.empty()) {
+            return true; // No data → check everything (old behavior).
+        }
+        if (tool_index < 0 ||
+            tool_index >= static_cast<int>(filament_weights.size())) {
+            return true; // Out-of-range → can't prove unused, be safe.
+        }
+        return filament_weights[tool_index] > 0.0;
+    };
+
     auto& ams = AmsState::instance();
 
     if (ams.is_available()) {
@@ -633,6 +654,12 @@ PrintStartController::find_material_mismatches() {
 
         for (const auto& m : mappings) {
             if (!m.material_mismatch) {
+                continue;
+            }
+            if (!tool_is_used(m.tool_index)) {
+                spdlog::debug("[PrintStartController] Skipping T{} mismatch — "
+                              "tool has zero filament usage in gcode",
+                              m.tool_index);
                 continue;
             }
 
@@ -772,12 +799,13 @@ void PrintStartController::show_material_mismatch_warning(
                 loaded_temps =
                     fmt::format(" ({}\u2013{}°C)", m.loaded_nozzle_min, m.loaded_nozzle_max);
             }
-            // ASCII "->" instead of "\u2192" since the bundled NotoSans
-            // weights don't include U+2190-U+2193 glyphs (only NotoSansCJK
-            // does, and CJK isn't a font fallback path for the dialog body).
-            message += fmt::format("  {} T{}: {} {}{} -> {}{}\n", LV_SYMBOL_BULLET,
+            // "needs X (range): You have Y (range)" \u2014 clearer than the old
+            // "X -> Y" form, which read as a transformation rather than a
+            // comparison. Two short clauses joined by a colon scan well.
+            message += fmt::format("  {} T{}: {} {}{}: {} {}{}\n", LV_SYMBOL_BULLET,
                                    m.tool_index, lv_tr("needs"), m.expected_material,
-                                   expected_temps, m.loaded_material, loaded_temps);
+                                   expected_temps, lv_tr("you have"), m.loaded_material,
+                                   loaded_temps);
         }
     }
 

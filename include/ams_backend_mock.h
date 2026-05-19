@@ -40,6 +40,16 @@ class AmsBackendMock : public AmsBackend {
     void stop() override;
     [[nodiscard]] bool is_running() const override;
 
+    // Mock-only: receiver for MoonrakerClientMock's active-gcode-tool
+    // notifications. Wired up by MoonrakerManager when both mocks are live.
+    // Production AMS backends get equivalent state from real Klipper via
+    // printer.mmu.tool / toolchanger.tool_number subscriptions.
+    //
+    // slicer_color_rgb: fallback color from the gcode header — used when the
+    // active tool isn't mapped to a real slot (avoids the swatch lying about
+    // slot 0's color). Pass 0 if no slicer color metadata is available.
+    void on_simulated_gcode_tool_changed(int tool_index, uint32_t slicer_color_rgb = 0);
+
     // Events
     void set_event_callback(EventCallback callback) override;
 

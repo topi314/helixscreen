@@ -28,6 +28,7 @@
 #include "power_device_state.h"
 #include "sensor_state.h"
 #ifdef HELIX_ENABLE_MOCKS
+#include "ams_backend_mock.h"
 #include "moonraker_api_mock.h"
 #include "moonraker_client_mock.h"
 #endif
@@ -326,6 +327,26 @@ void MoonrakerManager::create_client(const RuntimeConfig& runtime_config) {
 
     // Initialize SoundManager with client for M300 audio feedback
     SoundManager::instance().set_moonraker_client(m_client.get());
+
+#ifdef HELIX_ENABLE_MOCKS
+    // Mock-to-mock wiring: if an AmsBackendMock was already created during the
+    // earlier AmsState init phase (which happens before this method runs),
+    // hook it up to the freshly created moonraker mock so it follows the
+    // simulator's active-gcode-tool. Production AMS backends ignore this —
+    // they read printer.mmu.tool / toolchanger.tool_number directly from
+    // Klipper. See post-1.0 issue #958 for the architecturally-correct fix.
+    if (auto* mock_client = dynamic_cast<MoonrakerClientMock*>(m_client.get())) {
+        auto* backend = AmsState::instance().get_backend();
+        if (auto* ams_mock = dynamic_cast<AmsBackendMock*>(backend)) {
+            mock_client->add_active_gcode_tool_observer(
+                [ams_mock](int tool, uint32_t color) {
+                    ams_mock->on_simulated_gcode_tool_changed(tool, color);
+                });
+            spdlog::info("[MoonrakerManager] Mock AMS backend subscribed to simulator's "
+                         "active-gcode-tool notifications");
+        }
+    }
+#endif
 }
 
 void MoonrakerManager::configure_timeouts(Config* config) {

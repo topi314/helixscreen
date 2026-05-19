@@ -406,6 +406,15 @@ FileMetadata MoonrakerFileAPI::parse_file_metadata(const json& response) {
     // Filament info
     metadata.filament_total = get_double("filament_total");
     metadata.filament_weight_total = get_double("filament_weight_total");
+
+    // Per-tool filament weights / usage. Multi-format parser handles slicer
+    // variance. Empty result means "unknown" — caller must NOT treat as all-zero.
+    metadata.filament_weights = moonraker_internal::parse_filament_weights(result);
+    if (!metadata.filament_weights.empty()) {
+        spdlog::trace("[FileAPI] Parsed {} per-tool filament weights",
+                      metadata.filament_weights.size());
+    }
+
     // Normalize filament_type: may be semicolon string, JSON array, or stringified array
     metadata.filament_type = moonraker_internal::json_string_list_or(result, "filament_type");
     // Full filament name — use first entry only for display

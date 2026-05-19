@@ -92,6 +92,8 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
         double target_bed_temp = 60.0;         ///< First layer bed temp
         double target_nozzle_temp = 210.0;     ///< First layer nozzle temp
         double filament_mm = 0.0;              ///< Total filament length
+        std::vector<double>
+            filament_weights_g; ///< Per-tool grams (empty when slicer didn't emit)
 
         void reset() {
             estimated_time_seconds = 300.0;
@@ -99,6 +101,7 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
             target_bed_temp = 60.0;
             target_nozzle_temp = 210.0;
             filament_mm = 0.0;
+            filament_weights_g.clear();
         }
     };
 
@@ -956,6 +959,57 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
     MockPrintMetadata print_metadata_;        // Current print job metadata
     mutable std::mutex metadata_mutex_;       // Protects print_metadata_
     std::atomic<double> speedup_factor_{1.0}; // Simulation speedup (1.0 = real-time)
+
+    // Dominant gcode tool (highest filament weight). Mock-side proxy for what
+    // Klipper would publish via printer.mmu.tool / toolchanger.tool_number.
+    // -1 when no print active or slicer didn't emit per-tool data.
+    std::atomic<int> active_gcode_tool_{-1};
+    // Per-tool slicer colors parsed from the gcode header. Used by observers
+    // as a fallback color when the active tool isn't mapped to a real slot
+    // — gives the swatch a meaningful color instead of slot 0's default.
+    std::vector<uint32_t> active_gcode_tool_colors_;
+    mutable std::mutex active_gcode_tool_mutex_;
+    std::vector<std::function<void(int, uint32_t)>> active_gcode_tool_observers_;
+
+  public:
+    /**
+     * @brief Register a callback fired when the simulated print's active gcode
+     * tool changes. Used by AmsBackendMock to follow tool state.
+     *
+     * Args: (tool_index, slicer_color_rgb). slicer_color_rgb is 0 when no
+     * per-tool color metadata was emitted by the slicer. Callback may fire
+     * from any thread; receiver is responsible for marshalling.
+     */
+    void add_active_gcode_tool_observer(std::function<void(int, uint32_t)> cb) {
+        std::lock_guard<std::mutex> lock(active_gcode_tool_mutex_);
+        active_gcode_tool_observers_.push_back(std::move(cb));
+    }
+
+    /**
+     * @brief Current active gcode tool index (-1 if none / no per-tool data).
+     */
+    [[nodiscard]] int get_active_gcode_tool() const {
+        return active_gcode_tool_.load();
+    }
+
+  private:
+    void notify_active_gcode_tool_observers(int tool) {
+        std::vector<std::function<void(int, uint32_t)>> snapshot;
+        uint32_t color = 0;
+        {
+            std::lock_guard<std::mutex> lock(active_gcode_tool_mutex_);
+            snapshot = active_gcode_tool_observers_;
+            if (tool >= 0 &&
+                tool < static_cast<int>(active_gcode_tool_colors_.size())) {
+                color = active_gcode_tool_colors_[tool];
+            }
+        }
+        for (auto& cb : snapshot) {
+            if (cb) {
+                cb(tool, color);
+            }
+        }
+    }
 
     // Print timing (wall-clock for internal tracking)
     std::optional<std::chrono::steady_clock::time_point> preheat_start_time_;

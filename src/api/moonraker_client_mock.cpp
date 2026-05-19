@@ -2397,6 +2397,50 @@ bool MoonrakerClientMock::start_print_internal(const std::string& filename) {
             (meta.first_layer_nozzle_temp > 0) ? meta.first_layer_nozzle_temp : 210.0;
         print_metadata_.filament_mm =
             (meta.filament_used_mm > 0) ? meta.filament_used_mm : 5400.0; // Default: ~5.4m
+        print_metadata_.filament_weights_g = meta.filament_used_per_tool_g;
+    }
+
+    // Compute dominant tool (highest per-tool weight) for the mock to expose
+    // as the active gcode tool during simulated print. This is the moonraker
+    // mock's equivalent of "Klipper saw a T-command" — production AMS backends
+    // would read printer.mmu.tool / toolchanger.tool_number on real hardware.
+    {
+        int dominant = -1;
+        double max_w = 0.0;
+        const auto& weights = print_metadata_.filament_weights_g;
+        for (size_t i = 0; i < weights.size(); ++i) {
+            if (weights[i] > max_w) {
+                max_w = weights[i];
+                dominant = static_cast<int>(i);
+            }
+        }
+
+        // Cache per-tool slicer colors so observers can show the slicer's
+        // intended color when the active tool isn't mapped to a real slot.
+        {
+            std::lock_guard<std::mutex> lock(active_gcode_tool_mutex_);
+            active_gcode_tool_colors_.clear();
+            for (const auto& hex : meta.tool_colors) {
+                // tool_colors come as "#RRGGBB" or "RRGGBB" — parse defensively.
+                const char* p = hex.c_str();
+                if (*p == '#') {
+                    ++p;
+                }
+                uint32_t rgb = 0;
+                try {
+                    rgb = static_cast<uint32_t>(std::stoul(p, nullptr, 16)) & 0xFFFFFF;
+                } catch (...) {
+                    rgb = 0;
+                }
+                active_gcode_tool_colors_.push_back(rgb);
+            }
+        }
+
+        active_gcode_tool_.store(dominant);
+        spdlog::debug(
+            "[MoonrakerClientMock] Active gcode tool: T{} (from per-tool weights, max {:.2f}g)",
+            dominant, max_w);
+        notify_active_gcode_tool_observers(dominant);
     }
 
     // Set temperature targets for preheat
