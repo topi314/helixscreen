@@ -121,12 +121,11 @@ void ui_system_path_canvas_set_bypass(lv_obj_t* obj, bool has_bypass, bool bypas
 /// Set whether an external spool is assigned to bypass
 void ui_system_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool);
 
-/// Callback type for bypass spool clicks
-typedef void (*system_path_bypass_cb_t)(void* user_data);
-
-/// Set callback for when the bypass spool box is clicked
-void ui_system_path_canvas_set_bypass_callback(lv_obj_t* obj, system_path_bypass_cb_t cb,
-                                               void* user_data);
+/// Read the canvas's most-recently-drawn bypass spool position (absolute
+/// screen coords). The panel uses this to place the shared BypassSpoolWidgets
+/// overlay on top of the canvas. Returns false before the first draw.
+bool ui_system_path_canvas_get_bypass_spool_pos(lv_obj_t* obj, int32_t* cx_out,
+                                                int32_t* cy_out);
 
 /**
  * @brief Set per-unit hub sensor state

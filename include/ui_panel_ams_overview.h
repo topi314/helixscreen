@@ -8,6 +8,7 @@
 #include "ui_ams_detail.h"
 #include "ui_ams_edit_modal.h"
 #include "ui_ams_sidebar.h"
+#include "ui_bypass_spool_widget.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 
@@ -94,6 +95,11 @@ class AmsOverviewPanel : public PanelBase {
     lv_obj_t* cards_row_ = nullptr;
     lv_obj_t* system_path_ = nullptr;
     lv_obj_t* system_path_area_ = nullptr;
+
+    // Shared bypass spool overlay (see include/ui_bypass_spool_widget.h). Lives
+    // on top of system_path_ — the canvas only draws the connecting lines.
+    helix::ui::BypassSpoolWidgets bypass_widgets_{};
+    void update_bypass_widgets_position();
 
     // === Detail View State ===
     static constexpr int MAX_DETAIL_SLOTS = 16;

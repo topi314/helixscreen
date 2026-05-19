@@ -192,6 +192,22 @@ void AmsOverviewPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
         if (system_path_) {
             lv_obj_set_size(system_path_, LV_PCT(100), LV_PCT(100));
             spdlog::debug("[{}] Created system path canvas", get_name());
+
+            // Create the shared bypass-spool overlay. The canvas no longer
+            // draws the spool box / "Bypass" label / material label — those
+            // are siblings positioned over the canvas at the bypass endpoint.
+            bypass_widgets_ = helix::ui::bypass_spool_create(
+                system_path_area_, &AmsOverviewPanel::on_bypass_spool_clicked, this);
+            lv_obj_add_event_cb(
+                system_path_,
+                [](lv_event_t* e) {
+                    auto* self =
+                        static_cast<AmsOverviewPanel*>(lv_event_get_user_data(e));
+                    if (self) {
+                        self->update_bypass_widgets_position();
+                    }
+                },
+                LV_EVENT_SIZE_CHANGED, this);
         }
     }
 
@@ -476,7 +492,7 @@ void AmsOverviewPanel::refresh_system_path(const AmsSystemInfo& info, int curren
     // Set whether filament is fully loaded
     ui_system_path_canvas_set_filament_loaded(system_path_, info.filament_loaded);
 
-    // Set bypass path state (bypass is drawn inside the canvas, no card needed)
+    // Set bypass path state (canvas draws the connecting lines only)
     bool bypass_active = info.supports_bypass && (current_slot == -2);
     uint32_t bypass_color = 0x888888; // Default gray when no external spool assigned
     auto ext_spool = AmsState::instance().get_external_spool_info();
@@ -486,11 +502,15 @@ void AmsOverviewPanel::refresh_system_path(const AmsSystemInfo& info, int curren
     ui_system_path_canvas_set_bypass(system_path_, info.supports_bypass, bypass_active,
                                      bypass_color);
 
-    // Set whether an external spool is assigned (controls filled vs hollow spool box)
-    ui_system_path_canvas_set_bypass_has_spool(system_path_, ext_spool.has_value());
-
-    // Register bypass click callback (safe to call repeatedly — just updates the stored cb)
-    ui_system_path_canvas_set_bypass_callback(system_path_, on_bypass_spool_clicked, this);
+    // Drive the shared BypassSpoolWidgets overlay from current state.
+    if (bypass_widgets_.valid()) {
+        bypass_spool_set_has_spool(bypass_widgets_, ext_spool.has_value());
+        bypass_spool_set_color(bypass_widgets_, bypass_color);
+        bypass_spool_set_material(
+            bypass_widgets_,
+            (ext_spool && !ext_spool->material.empty()) ? ext_spool->material.c_str() : "");
+        update_bypass_widgets_position();
+    }
 
     // Compute physical tool layout (handles HUB units with unique per-lane mapped_tools)
     auto* backend = AmsState::instance().get_backend();
@@ -1244,7 +1264,6 @@ void AmsOverviewPanel::refresh_bypass_display() {
     }
 
     auto ext_spool = AmsState::instance().get_external_spool_info();
-    ui_system_path_canvas_set_bypass_has_spool(system_path_, ext_spool.has_value());
 
     if (ext_spool) {
         // Preserve current bypass active state, update color from spool
@@ -1258,7 +1277,39 @@ void AmsOverviewPanel::refresh_bypass_display() {
         }
     }
 
+    if (bypass_widgets_.valid()) {
+        bypass_spool_set_has_spool(bypass_widgets_, ext_spool.has_value());
+        if (ext_spool) {
+            bypass_spool_set_color(bypass_widgets_, ext_spool->color_rgb);
+        } else {
+            bypass_spool_set_color(bypass_widgets_, 0x888888);
+        }
+        bypass_spool_set_material(
+            bypass_widgets_,
+            (ext_spool && !ext_spool->material.empty()) ? ext_spool->material.c_str() : "");
+        update_bypass_widgets_position();
+    }
+
     ui_system_path_canvas_refresh(system_path_);
+}
+
+void AmsOverviewPanel::update_bypass_widgets_position() {
+    if (!bypass_widgets_.valid() || !system_path_ || !system_path_area_) {
+        return;
+    }
+    // The canvas caches the bypass spool position in absolute screen coords.
+    // Translate into system_path_area_ coords (the widgets' parent) by
+    // subtracting the area's content origin.
+    int32_t abs_cx = 0;
+    int32_t abs_cy = 0;
+    if (!ui_system_path_canvas_get_bypass_spool_pos(system_path_, &abs_cx, &abs_cy)) {
+        return; // Canvas hasn't drawn yet — try again on next size change.
+    }
+    lv_obj_update_layout(system_path_area_);
+    lv_area_t parent_abs;
+    lv_obj_get_content_coords(system_path_area_, &parent_abs);
+    helix::ui::bypass_spool_set_position(bypass_widgets_, abs_cx - parent_abs.x1,
+                                         abs_cy - parent_abs.y1);
 }
 
 void AmsOverviewPanel::show_edit_modal(int slot_index) {

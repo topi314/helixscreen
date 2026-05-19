@@ -9,6 +9,7 @@
 #include "ui_ams_edit_modal.h"
 #include "ui_ams_loading_error_modal.h"
 #include "ui_ams_sidebar.h"
+#include "ui_bypass_spool_widget.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 
@@ -158,11 +159,13 @@ class AmsPanel : public PanelBase {
 
     lv_obj_t* path_canvas_ = nullptr; ///< Filament path visualization widget
 
-    // === Bypass Spool Holder (left column, below path canvas) ===
-
-    lv_obj_t* bypass_spool_box_ = nullptr; ///< ui_card container for bypass spool
-    lv_obj_t* bypass_spool_ = nullptr;     ///< spool_canvas widget inside the box
-    lv_obj_t* bypass_label_ = nullptr;     ///< "Bypass" text label below spool widget
+    // === Bypass Spool Holder (overlay on path canvas) ===
+    //
+    // Owned via the shared BypassSpoolWidgets helper so the Multi-Filament panel
+    // and Multi-Filament Overview panel share one source of truth for the spool
+    // box + "Bypass" + material labels. Geometry differs per canvas; we just
+    // call set_position with the right (cx, cy).
+    helix::ui::BypassSpoolWidgets bypass_widgets_{};
 
     // === Endless Spool Arrows Canvas ===
 

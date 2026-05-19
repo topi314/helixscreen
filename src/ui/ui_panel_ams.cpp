@@ -377,15 +377,7 @@ void AmsPanel::on_activate() {
         if (bypass_row)
             lv_obj_add_flag(bypass_row, LV_OBJ_FLAG_HIDDEN);
         // Hide bypass spool holder in scoped view (bypass is system-level)
-        if (bypass_spool_box_) {
-            lv_obj_delete(bypass_spool_box_);
-            bypass_spool_box_ = nullptr;
-            bypass_spool_ = nullptr;
-        }
-        if (bypass_label_) {
-            lv_obj_delete(bypass_label_);
-            bypass_label_ = nullptr;
-        }
+        helix::ui::bypass_spool_destroy(bypass_widgets_);
     } else {
         // Non-scoped: show all system slots
         int slot_count = lv_subject_get_int(AmsState::instance().get_slot_count_subject());
@@ -477,9 +469,7 @@ void AmsPanel::clear_panel_reference() {
     slot_grid_ = nullptr;
     detail_widgets_ = AmsDetailWidgets{};
     path_canvas_ = nullptr;
-    bypass_spool_box_ = nullptr;
-    bypass_spool_ = nullptr;
-    bypass_label_ = nullptr;
+    bypass_widgets_ = {};
     endless_arrows_ = nullptr;
     current_slot_count_ = 0;
 
@@ -744,66 +734,27 @@ void AmsPanel::setup_bypass_spool() {
         return;
     }
 
-    // Create a small card container as child of path_container (sibling of path_canvas)
-    // with absolute positioning to overlay at the bypass endpoint location
     lv_obj_t* path_container = lv_obj_get_parent(path_canvas_);
     if (!path_container) {
         return;
     }
 
-    // Fixed-size box so layout is deterministic (LV_SIZE_CONTENT + flex/pad
-    // interact with the parent's layout in ways that cause the inner canvas to
-    // render dozens of pixels above the box — see prior bug where the spool
-    // drawing detached from its container's bounding rect).
-    static constexpr int32_t BYPASS_SPOOL_SIZE = 48;
-    static constexpr int32_t BOX_PAD = 4;
-    static constexpr int32_t BOX_SIZE = BYPASS_SPOOL_SIZE + BOX_PAD * 2;
-    bypass_spool_box_ = lv_obj_create(path_container);
-    lv_obj_set_size(bypass_spool_box_, BOX_SIZE, BOX_SIZE);
-    lv_obj_set_style_pad_all(bypass_spool_box_, 0, 0);
-    lv_obj_set_style_bg_opa(bypass_spool_box_, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(bypass_spool_box_, theme_manager_get_color("card_bg"), 0);
-    lv_obj_set_style_radius(bypass_spool_box_, theme_manager_get_spacing("border_radius"), 0);
-    lv_obj_set_style_border_width(bypass_spool_box_, 0, 0);
-    lv_obj_remove_flag(bypass_spool_box_, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Create spool_canvas inside the card and pin it to box-relative (BOX_PAD, BOX_PAD)
-    bypass_spool_ = ui_spool_canvas_create(bypass_spool_box_, BYPASS_SPOOL_SIZE);
-    if (!bypass_spool_) {
-        spdlog::warn("[{}] Failed to create bypass spool canvas", get_name());
-        lv_obj_delete(bypass_spool_box_);
-        bypass_spool_box_ = nullptr;
-        return;
-    }
-    lv_obj_set_pos(bypass_spool_, BOX_PAD, BOX_PAD);
-
-    // Position will be set after layout in update_bypass_spool_position()
-    // For now, use flag-based flow positioning (will be corrected on first layout update)
-    lv_obj_add_flag(bypass_spool_box_, LV_OBJ_FLAG_FLOATING);
-
-    // Make clickable → opens edit modal for external spool (slot -2)
-    lv_obj_add_flag(bypass_spool_box_, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(
-        bypass_spool_box_,
-        [](lv_event_t* e) {
-            auto* self = static_cast<AmsPanel*>(lv_event_get_user_data(e));
-            if (self) {
+    bypass_widgets_ = helix::ui::bypass_spool_create(
+        path_container,
+        [](void* user_data) {
+            if (auto* self = static_cast<AmsPanel*>(user_data)) {
                 self->show_edit_modal(-2);
             }
         },
-        LV_EVENT_CLICKED, this);
+        this);
 
-    // Set initial color/fill
+    if (!bypass_widgets_.valid()) {
+        spdlog::warn("[{}] Failed to create bypass spool widgets", get_name());
+        return;
+    }
+
+    // Seed color/fill/material from current state
     update_bypass_spool_from_state();
-
-    // "Bypass" label, floating sibling of the spool widget. The path canvas
-    // clips draws to its own bounds, but the spool extends past the canvas
-    // bottom (FLOATING). A panel-owned label can sit below the spool without
-    // getting clipped.
-    bypass_label_ = lv_label_create(path_container);
-    lv_label_set_text(bypass_label_, "Bypass");
-    lv_obj_set_style_text_color(bypass_label_, theme_manager_get_color("text"), 0);
-    lv_obj_add_flag(bypass_label_, LV_OBJ_FLAG_FLOATING);
 
     // Reposition whenever the path canvas resizes — the canvas size at the
     // time setup_bypass_spool() runs is not its final size; the surrounding
@@ -822,12 +773,11 @@ void AmsPanel::setup_bypass_spool() {
 }
 
 void AmsPanel::update_bypass_spool_position() {
-    if (!bypass_spool_box_ || !path_canvas_)
+    if (!bypass_widgets_.valid() || !path_canvas_)
         return;
 
-    // Read the canvas's CURRENT absolute coords — the same values its draw
-    // function uses via lv_obj_get_coords(). This sidesteps the relative-pos
-    // staleness that bit setup_bypass_spool() (canvas resized after setup).
+    // Read the canvas's CURRENT absolute coords. Matches the draw function's
+    // coord source so the spool sits exactly on the rendered bypass endpoint.
     lv_obj_update_layout(path_canvas_);
     lv_area_t canvas_abs;
     lv_obj_get_coords(path_canvas_, &canvas_abs);
@@ -840,44 +790,32 @@ void AmsPanel::update_bypass_spool_position() {
     int32_t bypass_abs_x = canvas_abs.x1 + (int32_t)(canvas_abs_w * BYPASS_X_RATIO);
     int32_t bypass_abs_y = canvas_abs.y1 + (int32_t)(canvas_abs_h * BYPASS_MERGE_Y_RATIO);
 
-    // Convert absolute target back into parent-relative coords for set_pos.
-    lv_obj_t* parent = lv_obj_get_parent(bypass_spool_box_);
+    lv_obj_t* parent = lv_obj_get_parent(bypass_widgets_.box);
     lv_area_t parent_abs;
     lv_obj_get_content_coords(parent, &parent_abs);
 
-    lv_obj_update_layout(bypass_spool_box_);
-    int32_t box_w = lv_obj_get_width(bypass_spool_box_);
-    int32_t box_h = lv_obj_get_height(bypass_spool_box_);
-    int32_t box_abs_top = bypass_abs_y - box_h / 2;
-    int32_t box_abs_left = bypass_abs_x - box_w / 2;
-    lv_obj_set_pos(bypass_spool_box_, box_abs_left - parent_abs.x1, box_abs_top - parent_abs.y1);
-
-    if (bypass_label_) {
-        lv_obj_update_layout(bypass_label_);
-        int32_t label_w = lv_obj_get_width(bypass_label_);
-        int32_t label_abs_top = bypass_abs_y + box_h / 2 + 4;
-        lv_obj_set_pos(bypass_label_, bypass_abs_x - label_w / 2 - parent_abs.x1,
-                       label_abs_top - parent_abs.y1);
-    }
+    helix::ui::bypass_spool_set_position(bypass_widgets_, bypass_abs_x - parent_abs.x1,
+                                         bypass_abs_y - parent_abs.y1);
 }
 
 void AmsPanel::update_bypass_spool_from_state() {
-    if (!bypass_spool_) {
+    if (!bypass_widgets_.valid()) {
         return;
     }
 
     auto ext = AmsState::instance().get_external_spool_info();
     if (ext.has_value()) {
-        ui_spool_canvas_set_color(bypass_spool_, lv_color_hex(ext->color_rgb));
-        float fill =
-            (ext->total_weight_g > 0) ? ext->remaining_weight_g / ext->total_weight_g : 0.75f;
-        ui_spool_canvas_set_fill_level(bypass_spool_, fill);
+        helix::ui::bypass_spool_set_color(bypass_widgets_, ext->color_rgb);
+        helix::ui::bypass_spool_set_has_spool(bypass_widgets_, true);
+        helix::ui::bypass_spool_set_material(bypass_widgets_, ext->material.c_str());
     } else {
-        // No spool assigned — show muted empty spool
-        ui_spool_canvas_set_color(bypass_spool_, lv_color_hex(0x505050));
-        ui_spool_canvas_set_fill_level(bypass_spool_, 0.0f);
+        helix::ui::bypass_spool_set_color(bypass_widgets_, 0x505050);
+        helix::ui::bypass_spool_set_has_spool(bypass_widgets_, false);
+        helix::ui::bypass_spool_set_material(bypass_widgets_, "");
     }
-    ui_spool_canvas_redraw(bypass_spool_);
+    // Reposition because the material label visibility may have changed,
+    // which affects the layout above the spool box.
+    update_bypass_spool_position();
 }
 
 void AmsPanel::setup_endless_arrows() {

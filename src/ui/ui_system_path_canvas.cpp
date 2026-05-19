@@ -67,13 +67,12 @@ struct SystemPathData {
     // Bypass spool state (for spool box rendering)
     bool bypass_has_spool = false;
 
-    // Bypass click callback
-    system_path_bypass_cb_t bypass_callback = nullptr;
-    void* bypass_user_data = nullptr;
-
-    // Cached bypass spool box position (for click hit-testing)
+    // Cached bypass spool box position (in absolute screen coords) — read by
+    // the owning panel via ui_system_path_canvas_get_bypass_spool_pos() so it
+    // can place its BypassSpoolWidgets overlay at the right spot.
     int32_t bypass_spool_x = 0;
     int32_t bypass_spool_y = 0;
+    bool bypass_spool_pos_valid = false;
     int32_t cached_sensor_r = 0;
 
     // Per-unit hub sensor states
@@ -1010,7 +1009,11 @@ static void system_path_draw_cb(lv_event_t* e) {
             }
         }
 
-        // Draw bypass path (if supported)
+        // Draw bypass path lines (if supported). The spool box + "Bypass"
+        // label are NOT drawn here — they're rendered as floating widgets by
+        // the owning panel via BypassSpoolWidgets so both panels share one
+        // implementation. We still cache the spool position so the panel can
+        // place its widget overlay at the right spot.
         if (data->has_bypass) {
             int32_t hub_right = center_x + data->hub_width / 2;
             int32_t bypass_x = hub_right + width / 8;
@@ -1021,36 +1024,16 @@ static void system_path_draw_cb(lv_event_t* e) {
 
             int32_t hub_bottom = hub_y + hub_h / 2;
             int32_t bypass_merge_y = hub_bottom + (nozzle_y - hub_bottom) / 3;
-
-            // Draw spool box above merge point
             int32_t spool_y = bypass_merge_y - sensor_r * 3;
-            lv_color_t spool_color =
-                data->bypass_has_spool ? lv_color_hex(data->bypass_color) : idle_color;
-            ui_draw_spool_box(layer, bypass_x, spool_y, spool_color, data->bypass_has_spool,
-                              sensor_r);
 
-            // Cache position for click hit-testing
+            // Cache absolute-screen position for the panel to read via the
+            // getter. Same coord space used elsewhere in this draw function
+            // (x_off/y_off come from lv_obj_get_coords).
             data->bypass_spool_x = bypass_x;
             data->bypass_spool_y = spool_y;
+            data->bypass_spool_pos_valid = true;
 
-            // "Bypass" label above spool box
-            if (data->label_font) {
-                lv_draw_label_dsc_t bp_label_dsc;
-                lv_draw_label_dsc_init(&bp_label_dsc);
-                bp_label_dsc.color =
-                    bp_active ? lv_color_hex(data->bypass_color) : data->color_text;
-                bp_label_dsc.font = data->label_font;
-                bp_label_dsc.align = LV_TEXT_ALIGN_CENTER;
-                bp_label_dsc.text = "Bypass";
-
-                int32_t font_h = lv_font_get_line_height(data->label_font);
-                int32_t label_top = spool_y - sensor_r * 2 - font_h - 2;
-                lv_area_t bp_label_area = {bypass_x - 30, label_top, bypass_x + 30,
-                                           label_top + font_h};
-                lv_draw_label(layer, &bp_label_dsc, &bp_label_area);
-            }
-
-            // Vertical line from spool box to merge point
+            // Vertical line from where the spool sits down to the merge point.
             draw_line(layer, bypass_x, spool_y + sensor_r * 2, bypass_x, bypass_merge_y, bp_color,
                       bp_width);
             // Horizontal line from merge to hub
@@ -1176,29 +1159,8 @@ static void system_path_draw_cb(lv_event_t* e) {
 // Event Handlers
 // ============================================================================
 
-static void on_system_path_clicked(lv_event_t* e) {
-    lv_obj_t* obj = lv_event_get_target_obj(e);
-    auto* data = get_data(obj);
-    if (!data || !data->bypass_callback || !data->has_bypass)
-        return;
-
-    lv_point_t point;
-    lv_indev_t* indev = lv_indev_active();
-    if (!indev)
-        return;
-    lv_indev_get_point(indev, &point);
-
-    // Hit-test bypass spool box (bypass_spool_x/y are in absolute screen coords)
-    int32_t sr = data->cached_sensor_r;
-    int32_t box_w = sr * 3;
-    int32_t box_h = sr * 4;
-    if (abs(point.x - data->bypass_spool_x) < box_w &&
-        abs(point.y - data->bypass_spool_y) < box_h) {
-        spdlog::debug("[SystemPath] Bypass spool box clicked");
-        data->bypass_callback(data->bypass_user_data);
-        return;
-    }
-}
+// Bypass spool clicks are handled by the BypassSpoolWidgets overlay the panel
+// places on top of this canvas — see ui_bypass_spool_widget.h.
 
 static void system_path_delete_cb(lv_event_t* e) {
     lv_obj_t* obj = lv_event_get_target_obj(e);
@@ -1240,7 +1202,8 @@ static void* system_path_xml_create(lv_xml_parser_state_t* state, const char** a
     // Register event handlers
     lv_obj_add_event_cb(obj, system_path_draw_cb, LV_EVENT_DRAW_POST, nullptr);
     lv_obj_add_event_cb(obj, system_path_delete_cb, LV_EVENT_DELETE, nullptr);
-    lv_obj_add_event_cb(obj, on_system_path_clicked, LV_EVENT_CLICKED, nullptr);
+    // Click handling on the canvas is no longer needed — bypass clicks are
+    // captured by the BypassSpoolWidgets overlay the panel places on top.
 
     spdlog::debug("[SystemPath] Created widget via XML");
     return obj;
@@ -1323,7 +1286,8 @@ lv_obj_t* ui_system_path_canvas_create(lv_obj_t* parent) {
     // Register event handlers
     lv_obj_add_event_cb(obj, system_path_draw_cb, LV_EVENT_DRAW_POST, nullptr);
     lv_obj_add_event_cb(obj, system_path_delete_cb, LV_EVENT_DELETE, nullptr);
-    lv_obj_add_event_cb(obj, on_system_path_clicked, LV_EVENT_CLICKED, nullptr);
+    // Click handling on the canvas is no longer needed — bypass clicks are
+    // captured by the BypassSpoolWidgets overlay the panel places on top.
 
     spdlog::debug("[SystemPath] Created widget programmatically");
     return obj;
@@ -1520,13 +1484,19 @@ void ui_system_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool) {
     }
 }
 
-void ui_system_path_canvas_set_bypass_callback(lv_obj_t* obj, system_path_bypass_cb_t cb,
-                                               void* user_data) {
+bool ui_system_path_canvas_get_bypass_spool_pos(lv_obj_t* obj, int32_t* cx_out,
+                                                int32_t* cy_out) {
     auto* data = get_data(obj);
-    if (data) {
-        data->bypass_callback = cb;
-        data->bypass_user_data = user_data;
+    if (!data || !data->bypass_spool_pos_valid) {
+        return false;
     }
+    if (cx_out) {
+        *cx_out = data->bypass_spool_x;
+    }
+    if (cy_out) {
+        *cy_out = data->bypass_spool_y;
+    }
+    return true;
 }
 
 void ui_system_path_canvas_refresh(lv_obj_t* obj) {
