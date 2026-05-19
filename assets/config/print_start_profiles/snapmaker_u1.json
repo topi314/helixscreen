@@ -22,6 +22,10 @@
     { "pattern": "^// trigger_mcu_pos: \\{",   "phase": "HOMING",   "message": "Homing...",         "weight": 8  },
     { "pattern": "^// probe_start_x: ",         "phase": "BED_MESH", "message": "Z Calibration...",  "weight": 5  }
   ],
+  "silent_progression": [
+    { "after_temps_ready_seconds": 0,  "phase": "CLEANING", "message": "Cleaning Nozzle..." },
+    { "after_temps_ready_seconds": 12, "phase": "PURGING",  "message": "Purging..." }
+  ],
   "phase_weights": {
     "HOMING": 5,
     "HEATING_BED": 25,

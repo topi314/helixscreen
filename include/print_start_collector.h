@@ -358,6 +358,14 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     int weights_ext_target_ = 0;
     int weights_bed_target_ = 0;
 
+    // Silent-phase progression (firmwares with silent cleaning/purge macros).
+    // temps_ready_time_ is set the first time temps become ready (and remains
+    // set across subsequent ticks); silent_progression_idx_ tracks how many
+    // SilentPhaseEntry items have already fired. See
+    // PrintStartProfile::SilentPhaseEntry for semantics.
+    std::chrono::steady_clock::time_point temps_ready_time_; // {} = not yet ready
+    size_t silent_progression_idx_ = 0;
+
     // LVGL timer for periodic ETA updates (main thread only)
     lv_timer_t* eta_timer_ = nullptr;
     static constexpr uint32_t ETA_UPDATE_INTERVAL_MS = 5000;

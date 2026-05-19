@@ -52,6 +52,24 @@ class PrintStartProfile {
     };
 
     /**
+     * @brief Time-based phase advancement when the firmware emits no gcode
+     * responses between heat-complete and first-layer.
+     *
+     * Some firmwares run cleaning + purge as silent built-in macros — no
+     * RESPOND, no command echo. Without a fallback the user sees "Preparing
+     * Print..." frozen for 20-30 seconds after temps are ready. Each entry
+     * fires after `after_temps_ready_seconds` of elapsed time *since temps
+     * first became ready*, advancing the phase to give visible motion.
+     * Entries that would regress phase (current_phase >= entry.phase) are
+     * skipped, so real gcode signals still win when available.
+     */
+    struct SilentPhaseEntry {
+        int after_temps_ready_seconds = 0;
+        helix::PrintStartPhase phase = helix::PrintStartPhase::IDLE;
+        std::string message;
+    };
+
+    /**
      * @brief Progress calculation mode
      */
     enum class ProgressMode {
@@ -149,6 +167,12 @@ class PrintStartProfile {
         return is_default_;
     }
 
+    /// Silent-phase progression entries, in firing order (after_temps_ready_seconds
+    /// is monotonically non-decreasing — sorted at parse time).
+    const std::vector<SilentPhaseEntry>& silent_progression() const {
+        return silent_progression_;
+    }
+
   private:
     std::string name_;
     std::string description_;
@@ -157,6 +181,7 @@ class PrintStartProfile {
     std::vector<SignalFormat> signal_formats_;
     std::vector<ResponsePattern> response_patterns_;
     std::unordered_map<helix::PrintStartPhase, int> phase_weights_;
+    std::vector<SilentPhaseEntry> silent_progression_;
 
     /**
      * @brief Parse a JSON object into this profile

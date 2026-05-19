@@ -352,6 +352,39 @@ bool PrintStartProfile::parse_json(const json& j, const std::string& source_path
         }
     }
 
+    // Silent-phase progression (optional) — time-based phase advancement
+    // for firmwares that run cleaning/purge as silent macros (no gcode
+    // response between heat-complete and first layer).
+    if (j.contains("silent_progression") && j["silent_progression"].is_array()) {
+        for (const auto& entry_json : j["silent_progression"]) {
+            if (!entry_json.is_object()) {
+                spdlog::warn("[PrintStartProfile] Skipping non-object silent_progression entry in {}",
+                             source_path);
+                continue;
+            }
+            if (!entry_json.contains("phase") || !entry_json["phase"].is_string()) {
+                spdlog::warn("[PrintStartProfile] silent_progression entry missing 'phase' in {}",
+                             source_path);
+                continue;
+            }
+            SilentPhaseEntry e;
+            e.phase = parse_phase_name(entry_json["phase"].get<std::string>());
+            if (entry_json.contains("after_temps_ready_seconds") &&
+                entry_json["after_temps_ready_seconds"].is_number()) {
+                e.after_temps_ready_seconds =
+                    entry_json["after_temps_ready_seconds"].get<int>();
+            }
+            if (entry_json.contains("message") && entry_json["message"].is_string()) {
+                e.message = entry_json["message"].get<std::string>();
+            }
+            silent_progression_.push_back(std::move(e));
+        }
+        std::sort(silent_progression_.begin(), silent_progression_.end(),
+                  [](const SilentPhaseEntry& a, const SilentPhaseEntry& b) {
+                      return a.after_temps_ready_seconds < b.after_temps_ready_seconds;
+                  });
+    }
+
     // Phase weights (optional)
     if (j.contains("phase_weights") && j["phase_weights"].is_object()) {
         for (auto it = j["phase_weights"].begin(); it != j["phase_weights"].end(); ++it) {
@@ -366,8 +399,9 @@ bool PrintStartProfile::parse_json(const json& j, const std::string& source_path
     }
 
     spdlog::debug("[PrintStartProfile] Parsed '{}': {} signal_formats, {} response_patterns, "
-                  "{} phase_weights",
-                  name_, signal_formats_.size(), response_patterns_.size(), phase_weights_.size());
+                  "{} phase_weights, {} silent_progression",
+                  name_, signal_formats_.size(), response_patterns_.size(), phase_weights_.size(),
+                  silent_progression_.size());
     return true;
 }
 

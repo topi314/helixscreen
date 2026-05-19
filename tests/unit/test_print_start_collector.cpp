@@ -2190,6 +2190,106 @@ TEST_CASE_METHOD(SnapmakerCollectorFixture,
     REQUIRE(msg.find("Bed... (") == std::string::npos);
 }
 
+// ============================================================================
+// Snapmaker U1 silent-phase progression — the U1 runs cleaning + purge as
+// silent macros (no gcode response between temps-ready and first layer).
+// The profile's silent_progression entries time-advance the displayed phase
+// after temps_ready so the user sees motion instead of "Preparing Print..."
+// frozen for ~25s.
+// ============================================================================
+
+TEST_CASE_METHOD(SnapmakerCollectorFixture,
+                 "Snapmaker U1: silent_progression advances phase after temps ready",
+                 "[print][collector][snapmaker][silent_progression]") {
+    collector().start();
+    drain_async_updates();
+    collector().enable_fallbacks();
+
+    // Mark temps as ready by setting current == target. The collector's
+    // proactive-detection path sets phase=INITIALIZING when temps just hit
+    // target from a previously-heating state, so seed via HEATING_NOZZLE
+    // first. Bed at target, ext still ramping — that's the
+    // !bed_heating && nozzle_heating branch.
+    set_all_temps(/*bed*/ 600, 600, /*ext*/ 1000, 2000);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::HEATING_NOZZLE);
+
+    // Now temps reach target — proactive detection sets INITIALIZING.
+    set_all_temps(600, 600, 2000, 2000);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::INITIALIZING);
+
+    // Wind temps_ready_time_ back so 0s and 12s thresholds both fire.
+    PrintStartCollectorTestAccess::set_temps_ready_elapsed_seconds(collector(), 0);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::CLEANING);
+    REQUIRE(get_current_message() == "Cleaning Nozzle...");
+
+    // Advance to +12s — PURGING entry fires.
+    PrintStartCollectorTestAccess::set_temps_ready_elapsed_seconds(collector(), 12);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::PURGING);
+    REQUIRE(get_current_message() == "Purging...");
+}
+
+TEST_CASE_METHOD(SnapmakerCollectorFixture,
+                 "Snapmaker U1: silent_progression skips entries that would regress phase",
+                 "[print][collector][snapmaker][silent_progression]") {
+    collector().start();
+    drain_async_updates();
+    collector().enable_fallbacks();
+
+    // Force phase to PURGING (e.g. real PRINT_PREEXTRUDING signal landed
+    // before silent_progression armed).
+    feed_gcode("// Success: Set action code PRINT_PREEXTRUDING");
+    REQUIRE(get_current_phase() == PrintStartPhase::PURGING);
+
+    // Now temps ready arrives later. silent_progression entries (CLEANING,
+    // PURGING) must NOT clobber the already-active PURGING phase with
+    // CLEANING.
+    set_all_temps(600, 600, 2000, 2000);
+    PrintStartCollectorTestAccess::set_temps_ready_elapsed_seconds(collector(), 20);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+
+    // Phase must stay at PURGING (or later) — silent_progression skip rule.
+    REQUIRE(static_cast<int>(get_current_phase()) >= static_cast<int>(PrintStartPhase::PURGING));
+}
+
+TEST_CASE_METHOD(SnapmakerCollectorFixture,
+                 "Snapmaker U1: silent_progression does not fire before temps ready",
+                 "[print][collector][snapmaker][silent_progression]") {
+    collector().start();
+    drain_async_updates();
+    collector().enable_fallbacks();
+
+    // Heaters still ramping — proactive detection sets HEATING_NOZZLE.
+    set_all_temps(600, 600, 1000, 2000); // bed at target, ext halfway
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::HEATING_NOZZLE);
+
+    // Even with bad luck where temps_ready_time_ got accidentally set,
+    // the check_fallback_completion path requires temps_ready==true on the
+    // current tick. Without temps actually being at target, silent
+    // entries must not fire.
+    PrintStartCollectorTestAccess::set_temps_ready_elapsed_seconds(collector(), 30);
+    collector().check_fallback_completion();
+    drain_async_updates();
+    drain_async_updates();
+    REQUIRE(get_current_phase() == PrintStartPhase::HEATING_NOZZLE);
+}
+
 TEST_CASE_METHOD(SnapmakerCollectorFixture,
                  "Snapmaker U1: same sub-phase repeated → counter keeps incrementing",
                  "[print][collector][snapmaker][bed_mesh]") {

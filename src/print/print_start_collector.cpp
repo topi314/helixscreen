@@ -118,6 +118,8 @@ void PrintStartCollector::start() {
         pre_mesh_probe_count_ = 0;
         pre_mesh_last_probe_time_ = {};
         current_mesh_message_.clear();
+        temps_ready_time_ = {};
+        silent_progression_idx_ = 0;
         // Snapshot stale subject values so fallbacks only trigger on real changes
         baseline_layer_ = lv_subject_get_int(state_.get_print_layer_current_subject());
         baseline_progress_ = lv_subject_get_int(state_.get_print_progress_subject());
@@ -318,6 +320,8 @@ void PrintStartCollector::reset() {
         pre_mesh_probe_count_ = 0;
         pre_mesh_last_probe_time_ = {};
         current_mesh_message_.clear();
+        temps_ready_time_ = {};
+        silent_progression_idx_ = 0;
     }
     fallbacks_enabled_.store(false);
 
@@ -446,6 +450,50 @@ void PrintStartCollector::check_fallback_completion() {
             spdlog::info("[PrintStartCollector] Proactive: initializing (heaters ramping)");
             update_phase(PrintStartPhase::INITIALIZING, lv_tr("Preparing Print..."));
             return;
+        }
+    }
+
+    // =========================================================================
+    // SILENT-PHASE PROGRESSION: time-based phase advancement for firmwares
+    // that run cleaning/purge as silent macros (no gcode echo between
+    // temps-ready and first layer). Driven by the profile's
+    // silent_progression entries — fires only when (a) we have a profile
+    // with entries, (b) temps are ready, (c) the elapsed-since-ready
+    // threshold has been crossed, and (d) the target phase would *advance*
+    // (current_phase_ < entry.phase). The fourth guard means a real gcode
+    // signal that already moved us past the silent phase wins — the silent
+    // fallback never regresses.
+    // =========================================================================
+    if (profile_ && !profile_->silent_progression().empty()) {
+        if (temps_ready) {
+            if (temps_ready_time_.time_since_epoch().count() == 0) {
+                temps_ready_time_ = std::chrono::steady_clock::now();
+                spdlog::debug("[PrintStartCollector] Temps ready — silent progression armed");
+            }
+            const auto& entries = profile_->silent_progression();
+            auto since_ready = std::chrono::duration_cast<std::chrono::seconds>(
+                                   std::chrono::steady_clock::now() - temps_ready_time_)
+                                   .count();
+            while (silent_progression_idx_ < entries.size()) {
+                const auto& entry = entries[silent_progression_idx_];
+                if (since_ready < entry.after_temps_ready_seconds) {
+                    break;
+                }
+                ++silent_progression_idx_;
+                PrintStartPhase cur;
+                {
+                    std::lock_guard<std::mutex> lock(state_mutex_);
+                    cur = current_phase_;
+                }
+                if (static_cast<int>(cur) >= static_cast<int>(entry.phase)) {
+                    spdlog::debug("[PrintStartCollector] Silent progression skip {} (already at {})",
+                                  static_cast<int>(entry.phase), static_cast<int>(cur));
+                    continue;
+                }
+                spdlog::info("[PrintStartCollector] Silent progression: +{}s → '{}' (phase={})",
+                             since_ready, entry.message, static_cast<int>(entry.phase));
+                update_phase(entry.phase, entry.message.c_str());
+            }
         }
     }
 
