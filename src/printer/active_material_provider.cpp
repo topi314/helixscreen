@@ -24,20 +24,33 @@ ActiveMaterial build_active_material(const SlotInfo& slot) {
         result.display_name = "Unknown"; // i18n: do not translate (generic fallback label)
     }
 
-    // Resolve material_info from filament database (with user overrides)
+    // Resolve material_info via the three-tier precedence (#961):
+    //   1. User override (Material Temps overlay) — highest
+    //   2. Vendor preset (slot.nozzle_temp_*, written by backend from
+    //      RFID/cfg/Klipper config)
+    //   3. Internal filament DB default — lowest
+    //
+    // find_material() already merges user overrides into the DB result, so
+    // its return value gives us tier 1 (where set) + tier 3 (everywhere
+    // else). We then need to layer in tier 2 ONLY for fields the user
+    // didn't touch — get_material_override() returns the sparse override so
+    // we can tell which fields are user-set.
     auto db_mat = filament::find_material(slot.material);
+    const auto* user_ovr = filament::get_material_override(slot.material);
 
     if (db_mat.has_value()) {
         result.material_info = *db_mat;
 
-        // If slot has explicit temps, override DB values
-        if (slot.nozzle_temp_min > 0) {
+        // Tier 2 (vendor preset) wins over tier 3 (DB) but loses to tier 1
+        // (user override). Per-field — if the user overrode only nozzle_min,
+        // the vendor preset still wins on nozzle_max.
+        if (slot.nozzle_temp_min > 0 && !(user_ovr && user_ovr->nozzle_min)) {
             result.material_info.nozzle_min = slot.nozzle_temp_min;
         }
-        if (slot.nozzle_temp_max > 0) {
+        if (slot.nozzle_temp_max > 0 && !(user_ovr && user_ovr->nozzle_max)) {
             result.material_info.nozzle_max = slot.nozzle_temp_max;
         }
-        if (slot.bed_temp > 0) {
+        if (slot.bed_temp > 0 && !(user_ovr && user_ovr->bed_temp)) {
             result.material_info.bed_temp = slot.bed_temp;
         }
     } else {

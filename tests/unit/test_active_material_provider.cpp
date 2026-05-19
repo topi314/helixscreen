@@ -2,10 +2,26 @@
 #include "active_material_provider.h"
 #include "ams_types.h"
 #include "filament_database.h"
+#include "material_settings_manager.h"
 
 #include "../catch_amalgamated.hpp"
 
 using namespace helix;
+
+// Fixture that wipes MaterialSettingsManager between tests so an override
+// staged in one case doesn't leak into the next. Uses public clear_override
+// for each known material so we don't need friend access. Config::get_instance()
+// returns nullptr in unit-test scope so save_to_config side effects no-op.
+struct OverrideFixture {
+    ~OverrideFixture() {
+        auto& mgr = MaterialSettingsManager::instance();
+        for (const char* name : {"PETG", "PLA", "PA", "ABS"}) {
+            if (mgr.has_override(name)) {
+                mgr.clear_override(name);
+            }
+        }
+    }
+};
 
 // ============================================================================
 // build_active_material() — Unit tests (no singletons needed)
@@ -129,6 +145,101 @@ TEST_CASE("build_active_material: material alias resolved",
     CHECK(result.material_info.nozzle_min == 250);
     CHECK(result.material_info.nozzle_max == 280);
     CHECK(result.material_name == "Nylon"); // Keep original name for display
+}
+
+// ============================================================================
+// Three-tier precedence (#961): user_override > vendor_preset > db_default
+// ============================================================================
+// Decision (Preston, 2026-05-19): user override wins absolutely. Even
+// RFID-attested vendor temps (Snapmaker, QIDI) do NOT override a user
+// setting. Resolution is per-field — overriding only nozzle_min should
+// still let vendor preset win on nozzle_max.
+
+TEST_CASE_METHOD(OverrideFixture,
+                 "build_active_material: user override beats vendor slot preset",
+                 "[active_material][build][precedence]") {
+    // Stage a user override of PETG nozzle_min only.
+    filament::MaterialOverride ovr;
+    ovr.nozzle_min = 215;
+    MaterialSettingsManager::instance().set_override("PETG", ovr);
+
+    SlotInfo slot;
+    slot.material = "PETG";
+    slot.nozzle_temp_min = 240; // Vendor preset
+    slot.nozzle_temp_max = 255;
+
+    auto result = build_active_material(slot);
+
+    // Tier 1 wins: user override on nozzle_min
+    CHECK(result.material_info.nozzle_min == 215);
+    // Tier 2 wins: vendor preset on nozzle_max (not user-overridden)
+    CHECK(result.material_info.nozzle_max == 255);
+}
+
+TEST_CASE_METHOD(OverrideFixture,
+                 "build_active_material: vendor preset beats DB default when no user override",
+                 "[active_material][build][precedence]") {
+    // No user override staged.
+    SlotInfo slot;
+    slot.material = "PETG";
+    slot.nozzle_temp_min = 240; // Vendor preset
+    slot.nozzle_temp_max = 255;
+
+    auto result = build_active_material(slot);
+
+    // Tier 2 wins both fields (no user override; vendor preset present).
+    CHECK(result.material_info.nozzle_min == 240);
+    CHECK(result.material_info.nozzle_max == 255);
+}
+
+TEST_CASE_METHOD(OverrideFixture,
+                 "build_active_material: DB default wins when no override and no vendor preset",
+                 "[active_material][build][precedence]") {
+    SlotInfo slot;
+    slot.material = "PETG";
+    // No slot temps, no override.
+
+    auto result = build_active_material(slot);
+
+    // Tier 3 wins: DB default for PETG.
+    CHECK(result.material_info.nozzle_min == 230);
+    CHECK(result.material_info.nozzle_max == 260);
+}
+
+TEST_CASE_METHOD(OverrideFixture,
+                 "build_active_material: user override of bed_temp beats vendor preset",
+                 "[active_material][build][precedence]") {
+    filament::MaterialOverride ovr;
+    ovr.bed_temp = 75;
+    MaterialSettingsManager::instance().set_override("PETG", ovr);
+
+    SlotInfo slot;
+    slot.material = "PETG";
+    slot.bed_temp = 85; // vendor
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.bed_temp == 75);
+}
+
+TEST_CASE_METHOD(OverrideFixture,
+                 "build_active_material: per-field mixed precedence resolved correctly",
+                 "[active_material][build][precedence]") {
+    // User overrides nozzle_max only. Slot provides all three. DB has its own.
+    filament::MaterialOverride ovr;
+    ovr.nozzle_max = 270;
+    MaterialSettingsManager::instance().set_override("PETG", ovr);
+
+    SlotInfo slot;
+    slot.material = "PETG";
+    slot.nozzle_temp_min = 235; // vendor
+    slot.nozzle_temp_max = 250; // vendor (will lose to override)
+    slot.bed_temp = 78;          // vendor (no override, no slot conflict)
+
+    auto result = build_active_material(slot);
+
+    CHECK(result.material_info.nozzle_min == 235); // tier 2: vendor
+    CHECK(result.material_info.nozzle_max == 270); // tier 1: user override
+    CHECK(result.material_info.bed_temp == 78);    // tier 2: vendor
 }
 
 // ============================================================================
