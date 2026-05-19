@@ -186,6 +186,7 @@ CrashHistoryEntry CrashHistory::entry_from_json(const json& j) {
     entry.uptime_sec = j.value("uptime_sec", 0);
     entry.fault_addr = j.value("fault_addr", "");
     entry.fault_code_name = j.value("fault_code_name", "");
+    entry.abort_msg = j.value("abort_msg", "");
     entry.github_issue = j.value("github_issue", 0);
     entry.github_url = j.value("github_url", "");
     entry.sent_via = j.value("sent_via", "");
@@ -202,6 +203,7 @@ json CrashHistory::entry_to_json(const CrashHistoryEntry& entry) {
                     {"uptime_sec", entry.uptime_sec},
                     {"fault_addr", entry.fault_addr},
                     {"fault_code_name", entry.fault_code_name},
+                    {"abort_msg", entry.abort_msg},
                     {"github_issue", entry.github_issue},
                     {"github_url", entry.github_url},
                     {"sent_via", entry.sent_via},

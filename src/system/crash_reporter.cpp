@@ -186,6 +186,9 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     if (crash_data.contains("exception"))
         report.exception_what = crash_data["exception"];
 
+    if (crash_data.contains("abort_msg"))
+        report.abort_msg = crash_data["abort_msg"];
+
     if (crash_data.contains("backtrace") && crash_data["backtrace"].is_array()) {
         for (const auto& addr : crash_data["backtrace"]) {
             report.backtrace.push_back(addr.get<std::string>());
@@ -395,6 +398,11 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
     // Exception message (for EXCEPTION crashes)
     if (!report.exception_what.empty()) {
         j["exception"] = report.exception_what;
+    }
+
+    // glibc abort reason for SIGABRT (e.g. "free(): invalid pointer")
+    if (!report.abort_msg.empty()) {
+        j["abort_msg"] = report.abort_msg;
     }
 
     // Fault info (only when present)
@@ -653,6 +661,9 @@ std::string CrashReporter::generate_github_url(const CrashReport& report) {
     body << "- **Uptime:** " << report.uptime_sec << "s\n";
     if (!report.exception_what.empty()) {
         body << "- **Exception:** " << report.exception_what << "\n";
+    }
+    if (!report.abort_msg.empty()) {
+        body << "- **Abort Reason:** `" << report.abort_msg << "`\n";
     }
     if (!report.fault_code_name.empty()) {
         body << "- **Fault:** " << report.fault_code_name << " at " << report.fault_addr << "\n";
@@ -947,6 +958,7 @@ bool CrashReporter::try_auto_send(const CrashReport& report) {
             hist_entry.uptime_sec = report.uptime_sec;
             hist_entry.fault_addr = report.fault_addr;
             hist_entry.fault_code_name = report.fault_code_name;
+            hist_entry.abort_msg = report.abort_msg;
             hist_entry.sent_via = "crash_reporter";
             hist_entry.fingerprint = fingerprint(report);
 

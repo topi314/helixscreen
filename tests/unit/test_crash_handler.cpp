@@ -248,6 +248,102 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: remove_crash_file is safe for non-exi
 }
 
 // ============================================================================
+// abort_msg capture (glibc-only; field is parsed regardless of host libc)
+// ============================================================================
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file extracts abort_msg",
+                 "[telemetry][crash]") {
+    write_crash_file("signal:6\n"
+                     "name:SIGABRT\n"
+                     "version:0.99.62\n"
+                     "timestamp:1707350400\n"
+                     "uptime:100\n"
+                     "abort_msg:free(): invalid pointer\n");
+    auto result = crash_handler::read_crash_file(crash_path());
+
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result.contains("abort_msg"));
+    REQUIRE(result["abort_msg"] == "free(): invalid pointer");
+}
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: abort_msg absent when not in file",
+                 "[telemetry][crash]") {
+    write_realistic_crash_file();
+    auto result = crash_handler::read_crash_file(crash_path());
+
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE_FALSE(result.contains("abort_msg"));
+}
+
+// ============================================================================
+// End-to-end: real glibc abort propagates via __abort_msg into the crash file.
+// Forks a child, triggers a malloc-corruption abort, parent reads the dump.
+// glibc-only — gated below so musl/uclibc/macOS skip cleanly.
+// ============================================================================
+#if defined(__linux__) && defined(__GLIBC__)
+#include <dlfcn.h>
+#include <sys/wait.h>
+TEST_CASE_METHOD(CrashTestFixture,
+                 "Crash: SIGABRT signal handler captures __abort_msg into crash file",
+                 "[telemetry][crash][subprocess]") {
+    // Sanity: __abort_msg must be resolvable on this host. If not, skip cleanly
+    // (musl/uclibc/macOS hit the outer #if guard already, so this should always
+    // resolve on the platforms the test compiles for).
+    if (dlsym(RTLD_DEFAULT, "__abort_msg") == nullptr) {
+        SKIP("__abort_msg not resolvable on this libc");
+    }
+
+    pid_t pid = fork();
+    REQUIRE(pid >= 0);
+
+    if (pid == 0) {
+        // Child. Pre-populate __abort_msg the same way glibc's __libc_message
+        // would for a real abort (free(): invalid pointer / double free /
+        // assertion failure), then raise SIGABRT directly. This exercises the
+        // crash_handler capture path without depending on the real heap-
+        // corruption code path actually firing through Catch2's harness
+        // (Catch2 v3 installs its own SIGABRT handlers that interfere with
+        // letting glibc abort() drive the test child's termination).
+        void** abort_msg_slot =
+            static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+        if (abort_msg_slot == nullptr) {
+            _exit(98);
+        }
+        static const char synthetic_msg[] =
+            "helixscreen abort_msg capture test (synthetic)";
+        *abort_msg_slot = const_cast<char*>(synthetic_msg);
+
+        crash_handler::install(crash_path());
+        raise(SIGABRT);
+        _exit(99); // unreachable
+    }
+
+    int status = 0;
+    REQUIRE(waitpid(pid, &status, 0) == pid);
+    INFO("raw status = " << status << ", WIFEXITED=" << WIFEXITED(status)
+                         << ", WEXITSTATUS=" << WEXITSTATUS(status)
+                         << ", WIFSIGNALED=" << WIFSIGNALED(status)
+                         << ", WTERMSIG=" << WTERMSIG(status));
+    // SIGABRT is auto-blocked during sa_sigaction handlers (sigaction default
+    // unless SA_NODEFER is set), so the handler's tail `raise(SIGABRT)` stays
+    // pending and `_exit(128 + sig)` runs instead. Production watchdog sees
+    // exit code 134 for SIGABRT and respawns — same path as a real crash.
+    REQUIRE(WIFEXITED(status));
+    REQUIRE(WEXITSTATUS(status) == 128 + SIGABRT);
+
+    REQUIRE(crash_handler::has_crash_file(crash_path()));
+    auto result = crash_handler::read_crash_file(crash_path());
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result["signal"] == 6);
+    REQUIRE(result.contains("abort_msg"));
+    std::string msg = result["abort_msg"];
+    INFO("abort_msg = " << msg);
+    REQUIRE_FALSE(msg.empty());
+    REQUIRE(msg.find("helixscreen abort_msg capture test") != std::string::npos);
+}
+#endif
+
+// ============================================================================
 // Install / Uninstall (no real signals) [telemetry][crash]
 // ============================================================================
 

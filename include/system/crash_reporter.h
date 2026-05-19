@@ -60,6 +60,12 @@ class CrashReporter {
         // Exception message (for signal 0 / EXCEPTION crashes)
         std::string exception_what;
 
+        // glibc abort reason captured via __abort_msg on SIGABRT — e.g.
+        // "free(): invalid pointer", "double free or corruption", an assertion
+        // string, etc. Empty for non-SIGABRT signals and on non-glibc libcs
+        // where __abort_msg doesn't exist.
+        std::string abort_msg;
+
         // Fault info (Phase 2 - from siginfo_t)
         std::string fault_addr;
         int fault_code = 0;

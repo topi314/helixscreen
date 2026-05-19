@@ -29,6 +29,7 @@ struct CrashHistoryEntry {
     int uptime_sec = 0;          // App uptime before crash
     std::string fault_addr;      // Fault address (if available)
     std::string fault_code_name; // e.g. "SEGV_MAPERR" (if available)
+    std::string abort_msg;       // glibc abort reason for SIGABRT (if captured)
     int github_issue = 0;        // GitHub issue number (from crash worker)
     std::string github_url;      // GitHub issue URL (from crash worker)
     std::string sent_via;        // "crash_reporter" or "telemetry"

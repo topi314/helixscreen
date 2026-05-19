@@ -59,6 +59,14 @@
 #define HAVE_DL_ITERATE_PHDR 1
 #endif
 
+// dlsym() for resolving glibc's private __abort_msg symbol at install time
+// (used to capture the actual abort reason — "free(): invalid pointer", etc.
+// — on SIGABRT). dlfcn.h is POSIX; -ldl is already linked on every platform.
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#define HAVE_DLSYM 1
+#endif
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -211,6 +219,16 @@ static struct sigaction s_old_sigsegv = {};
 static struct sigaction s_old_sigabrt = {};
 static struct sigaction s_old_sigbus = {};
 static struct sigaction s_old_sigfpe = {};
+
+/// Cached pointer to glibc's private `__abort_msg` symbol. Glibc's
+/// `__libc_message()` writes the abort reason ("free(): invalid pointer",
+/// "double free or corruption", etc.) into a static buffer and stores the
+/// pointer here BEFORE calling `raise(SIGABRT)` — so reading `*s_abort_msg_ptr`
+/// in the SIGABRT branch surfaces the actual glibc diagnostic that issue #960
+/// was missing. Resolved once at install() via dlsym (not async-signal-safe);
+/// stays nullptr on non-glibc libcs — the field is then simply absent from the
+/// crash file.
+static char** s_abort_msg_ptr = nullptr;
 
 // =============================================================================
 // Async-signal-safe helpers
@@ -568,6 +586,30 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "fault_code_name:");
         safe_write(fd, get_fault_code_name(sig, info->si_code));
         safe_write(fd, "\n");
+    }
+
+    // SIGABRT-only: glibc abort reason from __abort_msg (resolved at install).
+    // Distinguishes "free(): invalid pointer" / "double free or corruption" /
+    // "munmap_chunk(): invalid pointer" / assertion failures — without this
+    // every SIGABRT looked identical from the issue body (see issue #960).
+    if (sig == SIGABRT && s_abort_msg_ptr != nullptr) {
+        const char* msg = *s_abort_msg_ptr;
+        if (msg != nullptr) {
+            // Bounded copy + newline strip so the value stays a single
+            // line "key:value\n" in the crash file format.
+            char abort_msg_buf[256];
+            size_t n = 0;
+            for (; n + 1 < sizeof(abort_msg_buf) && msg[n] != '\0'; ++n) {
+                char c = msg[n];
+                abort_msg_buf[n] = (c == '\n' || c == '\r') ? ' ' : c;
+            }
+            abort_msg_buf[n] = '\0';
+            if (n > 0) {
+                safe_write(fd, "abort_msg:");
+                safe_write(fd, abort_msg_buf);
+                safe_write(fd, "\n");
+            }
+        }
     }
 
     // Write register state from ucontext
@@ -1407,6 +1449,19 @@ void crash_handler::install(const std::string& crash_file_path) {
     }
     spdlog::debug("[CrashHandler] Text segment: 0x{:x} - 0x{:x}", s_text_start, s_text_end);
 
+    // Resolve glibc's __abort_msg for SIGABRT diagnostic capture. dlsym is NOT
+    // async-signal-safe, so this runs once at install time and the handler just
+    // reads the cached pointer. Symbol is GLIBC_PRIVATE-versioned, but dlsym
+    // resolves it by name at runtime (the technique apport/coredumpctl/sentry
+    // use). Stays null on musl/uclibc/Apple — field is then omitted.
+#ifdef HAVE_DLSYM
+    s_abort_msg_ptr = static_cast<char**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+    if (s_abort_msg_ptr != nullptr) {
+        spdlog::debug("[CrashHandler] __abort_msg resolved — glibc abort reasons "
+                      "will be captured in crash file");
+    }
+#endif
+
     // Install signal handlers via sigaction (not signal())
     struct sigaction sa;
     std::memset(&sa, 0, sizeof(sa));
@@ -1443,6 +1498,11 @@ void crash_handler::uninstall() {
 
     s_installed = 0;
     s_crash_path[0] = '\0';
+    // Clear the first-writer-wins guard so a subsequent install()+write cycle
+    // (test fixtures, soft-restart sequences) can lay down a fresh crash file.
+    // In production this matters only for the soft-restart path; in tests it
+    // prevents back-to-back write_exception_record cases from no-op'ing.
+    __atomic_store_n(&s_crash_file_written, 0, __ATOMIC_SEQ_CST);
     spdlog::debug("[CrashHandler] Uninstalled signal handlers");
 }
 
@@ -1620,6 +1680,8 @@ nlohmann::json crash_handler::read_crash_file(const std::string& crash_file_path
                 result["bt_source"] = value;
             } else if (key == "exception") {
                 result["exception"] = value;
+            } else if (key == "abort_msg") {
+                result["abort_msg"] = value;
             } else if (key == "bt") {
                 backtrace_arr.push_back(value);
             } else if (key == "map") {

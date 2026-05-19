@@ -1253,6 +1253,9 @@ void TelemetryManager::check_previous_crash() {
         hist_entry.signal = crash_data.value("signal", 0);
         hist_entry.app_version = crash_data.value("app_version", "");
         hist_entry.uptime_sec = crash_data.value("uptime_sec", 0);
+        hist_entry.fault_addr = crash_data.value("fault_addr", "");
+        hist_entry.fault_code_name = crash_data.value("fault_code_name", "");
+        hist_entry.abort_msg = crash_data.value("abort_msg", "");
         hist_entry.sent_via = "telemetry";
         hist_entry.fingerprint = fp;
         helix::CrashHistory::instance().add_entry(hist_entry);
