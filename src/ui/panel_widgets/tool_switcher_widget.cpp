@@ -177,6 +177,11 @@ void ToolSwitcherWidget::rebuild_pills() {
         pill_buttons_.push_back(btn);
     }
 
+    // Scroll the active pill into view when the container overflows.
+    if (active >= 0 && active < static_cast<int>(pill_buttons_.size())) {
+        lv_obj_scroll_to_view(pill_buttons_[active], LV_ANIM_OFF);
+    }
+
     spdlog::debug("[ToolSwitcher] Built {} pill buttons, active={}", tools.size(), active);
 }
 
