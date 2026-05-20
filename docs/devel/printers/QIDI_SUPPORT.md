@@ -25,6 +25,16 @@ QIDI uses two fundamentally different display architectures:
 - **TJC HMI (serial)** -- A standalone microcontroller-driven display connected to the mainboard via serial UART. These are flashed with `.tft` firmware files via microSD card. HelixScreen **cannot** drive these displays. FreeDi targets this display type.
 - **Linux framebuffer** -- A display driven directly by the Linux SoC via fbdev or DRM. HelixScreen **can** run on these.
 
+### Why TJC HMI is structurally incompatible (not a missing feature)
+
+The TJC panel on Plus 4 and the 3-series is part of QIDI's **MKS PI smart-panel** stack: the panel runs its own firmware and *is* the UI. The Klipper host pushes UI state and pre-rendered thumbnails to it over serial UART using TJC commands. Thumbnails go through `libColPic.so` — a closed-source ARM aarch64 encoder shipped at `/home/mks/libColPic.so` on stock QIDI firmware — which packs RGB565 buffers into a custom RLE+palette `.tjc` blob the panel can decode.
+
+HelixScreen renders LVGL directly to a Linux framebuffer / DRM / SDL surface; it has no architecture for pushing UI to a remote serial HMI. Even if we added a TJC backend, the panel firmware would still be the actual UI — HelixScreen would be reduced to a thumbnail-encoder shim, not a touchscreen UI replacement. The two architectures don't meet halfway.
+
+A community pure-Python reimplementation of `libColPic.so` exists (byte-for-byte verified, 30/30 cases against the original, May 2026) and is useful to anyone driving the stock panel from host-side tooling (FreeDi, community firmware). It is **not** a path to running HelixScreen on the stock display.
+
+The only way to run HelixScreen on-device on a Plus 4 or 3-series printer is to replace the MKS panel with a Linux-driven display (HDMI/DSI/SDL framebuffer). Remote-control mode is unaffected.
+
 ## Models
 
 QIDI uses two generations of mainboard:
@@ -51,6 +61,28 @@ No QIDI-side install is needed. Run HelixScreen on a Raspberry Pi, repurposed An
 This works on **stock firmware** (Q2, Plus 4, Max 4 all run standard Moonraker) and on **community stacks** like [FreeDi](https://github.com/Phil1988/FreeDi), [FreeQIDI](https://github.com/Phil1988/FreeQIDI), or [53Aries/Q2-Firmware](https://github.com/53Aries/Q2-Firmware) -- anything that exposes Moonraker on port 7125.
 
 For the older 3-series (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro), FreeDi is the easy path to a clean Klipper + Moonraker + Mainsail stack. FreeDi's own `FreeDiLCD` keeps the printer's local TJC display alive; HelixScreen runs separately on your touchscreen device and controls the printer over the network.
+
+## Adding a HelixScreen Touchscreen to a TJC-Display QIDI
+
+If your QIDI is Plus 4, X-Max 3, X-Plus 3, X-Smart 3, or Q1 Pro — all ship with the MKS PI smart-panel (TJC HMI) — there are two paths to running HelixScreen on-printer.
+
+**Path A (recommended): add a separate touchscreen device.** Leave the stock panel where it is (or unplug it and ignore it). Mount a small Linux-driven touchscreen alongside the printer; it runs HelixScreen and talks to the printer's Moonraker over WiFi on port 7125. Same end-state UI, an hour of setup, no chassis work.
+
+**Path B (hard, niche): swap the internal panel.** Pull the TJC panel, wire an SBC and a DSI/HDMI display into the original cutout, share power off the printer's 5V rail. Several FreeDi-community builds have done this. Multi-evening hardware project (case modification, EMI shielding from steppers, cable routing) for the same software outcome as Path A. Worth it only if preserving the original aesthetic matters more than your time.
+
+### Path A hardware (ranked by ease)
+
+1. **Android tablet you already own** — HelixScreen ships an Android APK. Sideload it, point at the printer's IP, mount the tablet with whatever bracket you like. Zero hardware purchase. Best path if a spare tablet is sitting in a drawer.
+2. **BTT Pad 7 (or similar CB1/CB2-based standalone)** — purpose-built 7" touchscreen with an aarch64 SBC built in. Runs the standard Pi build of HelixScreen. ~$100–150. Power over USB-C, mount on a screen arm, done.
+3. **Raspberry Pi 4 (or 5) + official 7" DSI touchscreen** — the reference setup. Pi 4 with 2 GB is plenty; Pi 5 if you want headroom. HelixScreen's DRM backend works out of the box on Bookworm. ~$120–180. Lots of community enclosures on Printables.
+4. **Raspberry Pi Zero 2 W + small HDMI/SPI touchscreen** — cheapest path, fits in tight enclosures. 512 MB RAM covers HelixScreen but leaves no headroom for plugins or timelapse. ~$50.
+5. **Repurpose a SonicPad, AD5M, or other supported device** — anything in the hardware-support table works. Point it at the QIDI and run.
+
+### Setup
+
+The screen-side device runs the standard one-line installer (see [`../../user/INSTALL.md`](../../user/INSTALL.md)). The printer side needs no changes — stock QIDI firmware already exposes Moonraker on port 7125. Auto-detection picks up the Plus 4 / 3-series model via hostname or QIDI-specific macros and applies the correct preset.
+
+If you want HelixScreen to autostart on the screen-side device, follow the platform-specific setup in `INSTALL.md` (typically a systemd service on a Pi).
 
 ## On-Device Installation
 

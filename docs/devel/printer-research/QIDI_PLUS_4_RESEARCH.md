@@ -8,6 +8,38 @@
 
 ---
 
+## 0. Stock Plus 4 display architecture (why HelixScreen on-device install is blocked)
+
+The stock Plus 4 ships with an **MKS PI smart-panel** — the same architecture used across the 3-series (X-Max 3, X-Plus 3, X-Smart 3, Q1 Pro). It is a standalone microcontroller-driven HMI (TJC / Nextion clone) wired to the mainboard over serial UART, **not** a Linux framebuffer. The panel runs its own firmware and *is* the UI; the Klipper host pushes UI state and pre-rendered thumbnails into it via TJC commands.
+
+### Thumbnail pipeline
+
+Thumbnails are encoded via `/home/mks/libColPic.so` — a 12 KB closed-source ARM aarch64 binary exporting one symbol, `ColPic_EncodeStr`. The function packs an RGB565 pixel buffer into a custom RLE+palette format and base-6 ASCII-encodes the result into a `.tjc` blob the panel decodes. Seven stages, fully documented:
+
+1. Palette construction with hard cap (`ADList0`, default 1024 entries; early-exits silently once full)
+2. Frequency sort, reverse insertion-order tie-break
+3. Overflow handler (dead code in practice — gate never satisfied)
+4. 32-byte header: version, width, height, magic `0x05DDC33C`, palette/data byte counts
+5. Little-endian uint16 palette table
+6. Pixel-data RLE with `(idx >> 5)` escape bytes for palette high-bits
+7. Base-6 ASCII pack (3 → 4 bytes, `0x5C` substituted as `0x7E` to escape backslash)
+
+A community pure-Python reimplementation exists (byte-for-byte verified, 30/30 cases against the original, May 2026 by `Sib6019`). Files capture the full disassembly mapping and dead-code analysis. **Useful for FreeDi/community-firmware contributors** writing tooling that pushes to the stock panel from the host side. **Not useful for HelixScreen integration** — see below.
+
+### Why HelixScreen can't drive this panel
+
+HelixScreen is an LVGL renderer that targets Linux framebuffer / DRM / SDL surfaces. There is no architecture in the codebase for pushing UI to a remote serial HMI, and adding one would not turn HelixScreen into a touchscreen UI replacement: the panel firmware is the UI; HelixScreen would be reduced to a thumbnail-encoder helper.
+
+The on-device install path requires replacing the MKS panel with a Linux-driven HDMI/DSI touchscreen (the same hardware swap the 3-series needs). Remote-control mode — HelixScreen running on a separate Pi/tablet/etc. talking to Moonraker on port 7125 — works on stock Plus 4 firmware without any modification.
+
+### Implications for future work
+
+- **Do not propose** "TJC backend for HelixScreen" or "drive the stock panel via libColPic" — both are architecturally dead ends.
+- If we ever want a printer-mounted display on a stock Plus 4, the only viable path is replacing the panel or augmenting the printer with a separate Pi-driven display.
+- The colpic RE work belongs in the FreeDi / community-firmware ecosystem, not here.
+
+---
+
 ## 1. Host & Firmware Fingerprint
 
 | Key | Value |
