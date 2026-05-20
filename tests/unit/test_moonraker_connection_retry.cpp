@@ -72,7 +72,7 @@ class MoonrakerConnectionRetryFixture {
     std::unique_ptr<MoonrakerClient> client_;
 };
 
-TEST_CASE("Moonraker connection retries work correctly", "[connection][eventloop]") {
+TEST_CASE("Moonraker connection retries work correctly", "[connection][eventloop][slow]") {
     SECTION("First connection attempt respects timeout") {
         MoonrakerConnectionRetryFixture fixture;
         auto start = steady_clock::now();

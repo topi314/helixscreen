@@ -206,7 +206,7 @@ class SafeShutdownBackend : private hv::EventLoopThread {
 // ============================================================================
 
 TEST_CASE("Slow init timeout triggers use-after-free in unsafe backend",
-          "[network][backend][shutdown][issue-8][eventloop]") {
+          "[network][backend][shutdown][issue-8][eventloop][slow]") {
     SECTION("Resource accessed after free when init times out") {
         // This reproduces the exact bug from GitHub issue #8:
         // 1. Start init with a short timeout (init takes 5s, timeout is 500ms)
@@ -234,7 +234,7 @@ TEST_CASE("Slow init timeout triggers use-after-free in unsafe backend",
 }
 
 TEST_CASE("Safe shutdown backend waits for thread before cleanup",
-          "[network][backend][shutdown][issue-8][eventloop]") {
+          "[network][backend][shutdown][issue-8][eventloop][slow]") {
     SECTION("No use-after-free with shutdown signal") {
         SafeShutdownBackend backend;
         bool completed = backend.start_with_timeout(500);
@@ -250,7 +250,7 @@ TEST_CASE("Safe shutdown backend waits for thread before cleanup",
 }
 
 TEST_CASE("Safe shutdown backend responds to cancellation quickly",
-          "[network][backend][shutdown][issue-8][eventloop]") {
+          "[network][backend][shutdown][issue-8][eventloop][slow]") {
     SECTION("Shutdown flag causes init to abort early") {
         auto start = std::chrono::steady_clock::now();
 
@@ -274,7 +274,7 @@ TEST_CASE("Safe shutdown backend responds to cancellation quickly",
 }
 
 TEST_CASE("Safe shutdown never accesses freed resources",
-          "[network][backend][shutdown][issue-8][eventloop]") {
+          "[network][backend][shutdown][issue-8][eventloop][slow]") {
     SECTION("Repeated start/timeout/destroy cycles are safe") {
         // Stress test: rapidly create, timeout, destroy
         for (int i = 0; i < 5; i++) {

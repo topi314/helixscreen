@@ -48,7 +48,7 @@ struct UnconnectedClient {
 } // namespace
 
 TEST_CASE("send_jsonrpc 5-arg refuses send when not connected and fires error_cb",
-          "[moonraker][client][regression][eventloop]") {
+          "[moonraker][client][regression][eventloop][slow]") {
     UnconnectedClient u;
 
     auto error_fired = std::make_shared<std::atomic<bool>>(false);
@@ -71,21 +71,21 @@ TEST_CASE("send_jsonrpc 5-arg refuses send when not connected and fires error_cb
 }
 
 TEST_CASE("send_jsonrpc 1-arg returns -1 when not connected",
-          "[moonraker][client][regression][eventloop]") {
+          "[moonraker][client][regression][eventloop][slow]") {
     UnconnectedClient u;
     int result = u.client_->send_jsonrpc("printer.info");
     REQUIRE(result < 0);
 }
 
 TEST_CASE("send_jsonrpc 2-arg returns -1 when not connected",
-          "[moonraker][client][regression][eventloop]") {
+          "[moonraker][client][regression][eventloop][slow]") {
     UnconnectedClient u;
     int result = u.client_->send_jsonrpc("printer.objects.query", json{{"objects", {{"toolhead", nullptr}}}});
     REQUIRE(result < 0);
 }
 
 TEST_CASE("send_jsonrpc with null error_cb refuses cleanly when not connected",
-          "[moonraker][client][regression][eventloop]") {
+          "[moonraker][client][regression][eventloop][slow]") {
     UnconnectedClient u;
     // 4-arg overload — no error callback at all. Must not crash.
     auto id = u.client_->send_jsonrpc(
