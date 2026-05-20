@@ -305,7 +305,7 @@ clean_helix_state_dirs() {
 }
 
 # Print post-install commands for the user
-# Reads: INIT_SYSTEM, SERVICE_NAME, INIT_SCRIPT_DEST
+# Reads: INIT_SYSTEM, SERVICE_NAME, INIT_SCRIPT_DEST, INSTALL_DIR
 print_post_install_commands() {
     echo "Useful commands:"
     if [ "$INIT_SYSTEM" = "systemd" ]; then
@@ -313,8 +313,12 @@ print_post_install_commands() {
         echo "  journalctl -u ${SERVICE_NAME} -f    # View logs"
         echo "  systemctl restart ${SERVICE_NAME}   # Restart"
     else
+        # helixscreen.init writes to /var/log/helixscreen/launcher.log when /var/log
+        # is persistent, else ${INSTALL_DIR}/logs/launcher.log — show whichever exists.
+        local log_path="/var/log/helixscreen/launcher.log"
+        [ -f "$log_path" ] || log_path="${INSTALL_DIR}/logs/launcher.log"
         echo "  ${INIT_SCRIPT_DEST} status   # Check status"
-        echo "  cat /tmp/helixscreen.log            # View logs"
+        echo "  tail -f ${log_path}   # View logs"
         echo "  ${INIT_SCRIPT_DEST} restart  # Restart"
     fi
 }
@@ -974,7 +978,11 @@ set_install_paths() {
         KLIPPER_GROUP="root"
         KLIPPER_HOME="/home/lava"
         INIT_SYSTEM="sysv"
-        INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+        # U1 does NOT install /etc/init.d/S99helixscreen. install_service_snapmaker_u1
+        # patches the stock /etc/init.d/S99screen to delegate to helixscreen.init for
+        # start|stop|restart only (no `status`). Point INIT_SCRIPT_DEST at the real,
+        # full-featured init script so post-install commands and stop_service work.
+        INIT_SCRIPT_DEST="${INSTALL_DIR}/config/helixscreen.init"
         log_info "Platform: Snapmaker U1"
         log_info "Install directory: ${INSTALL_DIR}"
     else

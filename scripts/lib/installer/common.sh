@@ -283,7 +283,7 @@ clean_helix_state_dirs() {
 }
 
 # Print post-install commands for the user
-# Reads: INIT_SYSTEM, SERVICE_NAME, INIT_SCRIPT_DEST
+# Reads: INIT_SYSTEM, SERVICE_NAME, INIT_SCRIPT_DEST, INSTALL_DIR
 print_post_install_commands() {
     echo "Useful commands:"
     if [ "$INIT_SYSTEM" = "systemd" ]; then
@@ -291,8 +291,12 @@ print_post_install_commands() {
         echo "  journalctl -u ${SERVICE_NAME} -f    # View logs"
         echo "  systemctl restart ${SERVICE_NAME}   # Restart"
     else
+        # helixscreen.init writes to /var/log/helixscreen/launcher.log when /var/log
+        # is persistent, else ${INSTALL_DIR}/logs/launcher.log — show whichever exists.
+        local log_path="/var/log/helixscreen/launcher.log"
+        [ -f "$log_path" ] || log_path="${INSTALL_DIR}/logs/launcher.log"
         echo "  ${INIT_SCRIPT_DEST} status   # Check status"
-        echo "  cat /tmp/helixscreen.log            # View logs"
+        echo "  tail -f ${log_path}   # View logs"
         echo "  ${INIT_SCRIPT_DEST} restart  # Restart"
     fi
 }
