@@ -1,5 +1,6 @@
 package org.helixscreen.app;
 
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Handler;
@@ -65,6 +66,13 @@ public class HelixActivity extends SDLActivity {
      */
     private static volatile boolean sNavBarAlwaysVisible = false;
 
+    /**
+     * True when the active app theme is light (= system bar icons should be
+     * dark for legibility). Updated from {@link #setWindowBackgroundColor}
+     * by computing luminance of the screen_bg color.
+     */
+    private static volatile boolean sLightAppearance = false;
+
     private final Handler mHideHandler = new Handler(Looper.getMainLooper());
     private final Runnable mHideRunnable = new Runnable() {
         @Override
@@ -124,7 +132,9 @@ public class HelixActivity extends SDLActivity {
         WindowInsetsController controller = window.getInsetsController();
         if (controller == null) return;
 
-        // Edge-to-edge: app draws behind system bars (replaces LAYOUT_* flags)
+        // targetSdk 35+ enforces edge-to-edge — setDecorFitsSystemWindows()
+        // is a no-op. Inset handling for the pinned-navbar case happens in
+        // installNavbarInsetListener() which pads the content view directly.
         window.setDecorFitsSystemWindows(false);
 
         // Bars stay visible until explicitly hidden (matches legacy non-sticky
@@ -143,8 +153,20 @@ public class HelixActivity extends SDLActivity {
             controller.hide(WindowInsets.Type.systemBars());
         }
 
-        // Transparent dark bars — disable Android's default contrast scrim
-        // (API 29+ adds a white scrim behind the nav bar when enforced)
+        // Icon color follows the app's own light/dark theme. Without this,
+        // some OEMs (Samsung One UI) default to a light navbar with dark
+        // icons and a forced white contrast scrim even when we ask for
+        // transparent bars.
+        int lightMask = WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                      | WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS;
+        controller.setSystemBarsAppearance(
+                sLightAppearance ? lightMask : 0, lightMask);
+
+        // Transparent bars — disable Android's default contrast scrim
+        // (API 29+ adds a white scrim behind the nav bar when enforced).
+        // NOTE: in 3-button nav mode Samsung One UI ignores both of these
+        // and forces a scrim that follows the SYSTEM light/dark theme.
+        // Gesture nav mode honors the request.
         window.setNavigationBarColor(Color.TRANSPARENT);
         window.setStatusBarColor(Color.TRANSPARENT);
         window.setNavigationBarContrastEnforced(false);
@@ -161,6 +183,11 @@ public class HelixActivity extends SDLActivity {
                   | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                   | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                   | View.SYSTEM_UI_FLAG_FULLSCREEN;
+
+        if (sLightAppearance) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                   | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
 
         if (!mNavBarVisible && !sNavBarAlwaysVisible) {
             flags |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -242,6 +269,65 @@ public class HelixActivity extends SDLActivity {
     // =========================================================================
 
     @Override
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            installNavbarInsetListener();
+        }
+    }
+
+    /**
+     * Listen for system-driven navbar visibility changes — Samsung One UI
+     * 3-button mode shows the bar on app entry, gesture-nav reveals it on
+     * bottom swipe, etc. Our own touch handler doesn't see these because
+     * the system consumes the gesture. Without this hook, mNavBarVisible
+     * stays out of sync and the 3-second auto-hide timer is never scheduled.
+     */
+    private void installNavbarInsetListener() {
+        getWindow().getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
+            boolean navVisibleNow =
+                    insets.isVisible(WindowInsets.Type.navigationBars());
+            if (navVisibleNow != mNavBarVisible) {
+                mNavBarVisible = navVisibleNow;
+                if (navVisibleNow && !sNavBarAlwaysVisible) {
+                    scheduleAutoHide();
+                } else {
+                    mHideHandler.removeCallbacks(mHideRunnable);
+                }
+            }
+
+            // Self-correct: if the user wants the bar pinned but something
+            // hid it (SDL's COMMAND_CHANGE_WINDOW_STYLE re-asserts immersive
+            // after a fold/unlock resume race), re-assert on the next tick.
+            if (sNavBarAlwaysVisible && !navVisibleNow) {
+                v.post(() -> {
+                    WindowInsetsController c = getWindow().getInsetsController();
+                    if (c != null) c.show(WindowInsets.Type.navigationBars());
+                });
+            }
+
+            // When the user pinned the nav bar, inset the SDL surface so LVGL
+            // doesn't render behind it (otherwise the bar overlays widgets,
+            // especially on Fold 7 inner display where the bar can sit on the
+            // side in landscape). With targetSdk 35 + edge-to-edge enforced,
+            // setDecorFitsSystemWindows(true) is a no-op — we have to pad the
+            // content view manually from the navbar insets.
+            View content = findViewById(android.R.id.content);
+            if (content != null) {
+                if (sNavBarAlwaysVisible && navVisibleNow) {
+                    android.graphics.Insets navIns =
+                            insets.getInsets(WindowInsets.Type.navigationBars());
+                    content.setPadding(navIns.left, navIns.top,
+                                       navIns.right, navIns.bottom);
+                } else {
+                    content.setPadding(0, 0, 0, 0);
+                }
+            }
+            return v.onApplyWindowInsets(insets);
+        });
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
@@ -265,6 +351,19 @@ public class HelixActivity extends SDLActivity {
         mHideHandler.removeCallbacks(mHideRunnable);
         getWindow().getDecorView().removeCallbacks(mApplySystemUiRunnable);
         super.onPause();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Fold/unfold and other config changes listed in AndroidManifest's
+        // android:configChanges do NOT trigger onResume — the activity stays
+        // in the resumed state. Without this re-apply, Android resets the
+        // system-bar visibility to its defaults and the user's "Keep
+        // Navigation Bar" preference appears to revert. (#951)
+        View decor = getWindow().getDecorView();
+        decor.removeCallbacks(mApplySystemUiRunnable);
+        decor.post(mApplySystemUiRunnable);
     }
 
     /**
@@ -337,11 +436,23 @@ public class HelixActivity extends SDLActivity {
     public static void setWindowBackgroundColor(final int argb) {
         final SDLActivity activity = (SDLActivity) SDLActivity.getContext();
         if (activity == null) return;
+
+        // ITU-R BT.709 relative luminance — decides whether system-bar icons
+        // should be dark (light bg) or light (dark bg).
+        int r = (argb >> 16) & 0xFF;
+        int g = (argb >> 8) & 0xFF;
+        int b = argb & 0xFF;
+        double lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+        sLightAppearance = lum > 0.5;
+
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 activity.getWindow().getDecorView()
                         .setBackgroundColor(argb);
+                if (activity instanceof HelixActivity) {
+                    ((HelixActivity) activity).applySystemUi();
+                }
             }
         });
     }
