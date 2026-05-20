@@ -60,6 +60,34 @@ class PrinterDiscovery {
         // motor components (drive/selector), not lanes.
         std::vector<std::string> afc_stepper_names;
 
+        // Highest-confidence chamber match wins regardless of iteration order,
+        // so a "chamber"-named heater always beats a "box"-named one when a
+        // printer has both (e.g. QIDI Q2: real chamber heater + Qidi-Box dryer).
+        int best_chamber_heater_conf = 0;
+        int best_chamber_sensor_conf = 0;
+
+        // Promote the current object to the best chamber heater/sensor if its
+        // keyword confidence exceeds the running best.
+        auto try_set_chamber_heater = [&](const std::string& full_name,
+                                          const std::string& object_name) {
+            int conf = chamber_keyword_confidence(object_name);
+            if (conf > best_chamber_heater_conf) {
+                has_chamber_heater_ = true;
+                chamber_heater_name_ = full_name;
+                chamber_heater_object_name_ = object_name;
+                best_chamber_heater_conf = conf;
+            }
+        };
+        auto try_set_chamber_sensor = [&](const std::string& full_name,
+                                          const std::string& object_name) {
+            int conf = chamber_keyword_confidence(object_name);
+            if (conf > best_chamber_sensor_conf) {
+                has_chamber_sensor_ = true;
+                chamber_sensor_name_ = full_name;
+                best_chamber_sensor_conf = conf;
+            }
+        };
+
         for (const auto& obj : objects) {
             // Skip non-string elements
             if (!obj.is_string()) {
@@ -96,35 +124,24 @@ class PrinterDiscovery {
             else if (name.rfind("heater_generic ", 0) == 0) {
                 heaters_.push_back(name);
                 std::string heater_name = name.substr(15); // Remove "heater_generic " prefix
-                if (is_chamber_keyword(heater_name)) {
-                    has_chamber_heater_ = true;
-                    chamber_heater_name_ = name;
-                    chamber_heater_object_name_ = heater_name;
-                }
+                try_set_chamber_heater(name, heater_name);
             }
             // ================================================================
             // Sensors: temperature_sensor, temperature_fan (dual-purpose)
             // ================================================================
             else if (name.rfind("temperature_sensor ", 0) == 0) {
                 sensors_.push_back(name);
-                // Match chamber-equivalent names. Elegoo COSMOS uses "box",
-                // Snapmaker uses "cavity", many mods use "enclosure".
                 std::string sensor_name = name.substr(19); // Remove "temperature_sensor " prefix
-                if (is_chamber_keyword(sensor_name)) {
-                    has_chamber_sensor_ = true;
-                    chamber_sensor_name_ = name;
-                }
+                try_set_chamber_sensor(name, sensor_name);
             }
-            // Temperature-controlled fans (also act as sensors)
+            // Temperature-controlled fans (also act as sensors). A chamber-named
+            // temperature_fan is the heater equivalent — it actively drives air
+            // temperature, unlike a passive temperature_sensor.
             else if (name.rfind("temperature_fan ", 0) == 0) {
                 sensors_.push_back(name);
                 fans_.push_back(name); // Also add to fans for control
                 std::string fan_name = name.substr(16); // Remove "temperature_fan " prefix
-                if (is_chamber_keyword(fan_name)) {
-                    has_chamber_heater_ = true;
-                    chamber_heater_name_ = name;
-                    chamber_heater_object_name_ = fan_name;
-                }
+                try_set_chamber_heater(name, fan_name);
             }
             // TMC stepper drivers with built-in temperature (tmc2240, tmc5160)
             else if (name.rfind("tmc2240 ", 0) == 0 || name.rfind("tmc5160 ", 0) == 0) {
@@ -1113,16 +1130,57 @@ class PrinterDiscovery {
         return result;
     }
 
-    // Chamber/enclosure keyword match for sensor, fan, and heater object names.
-    // Vendors diverge: Creality uses "chamber", Snapmaker uses "cavity", Elegoo
-    // COSMOS uses "box", modders often use "enclosure". Substring match (not
-    // whole-word) matches compound names like "chamber_temp", "cavity_fan".
-    static bool is_chamber_keyword(const std::string& object_name) {
+    // Chamber/enclosure keyword scoring for sensor, fan, and heater object
+    // names. Vendors diverge: Creality uses "chamber", Snapmaker uses "cavity",
+    // Elegoo COSMOS uses literal "box", modders often use "enclosure".
+    //
+    // Returns 0 for no match, higher for stronger evidence. The discovery loop
+    // keeps the highest-scoring match so iteration order does not decide.
+    //
+    // CHAMBER / ENCLOSURE / CAVITY match as substrings — these names are
+    // unambiguous, and compound forms ("chamber_temp", "ENCLOSURE_top") are
+    // intended as the printer chamber.
+    //
+    // BOX matches only as a standalone token — split on `_` and whitespace —
+    // so AMS-style names like "box1_heater" / "Box1_STM32" (QIDI Box filament
+    // dryer) are not mistaken for the printer chamber. The COSMOS case
+    // ("temperature_sensor box") and compound forms ("box_fan") still match.
+    static int chamber_keyword_confidence(const std::string& object_name) {
         std::string upper = to_upper(object_name);
-        return upper.find("CHAMBER") != std::string::npos ||
-               upper.find("CAVITY") != std::string::npos ||
-               upper.find("ENCLOSURE") != std::string::npos ||
-               upper.find("BOX") != std::string::npos;
+
+        if (upper.find("CHAMBER") != std::string::npos)
+            return 100;
+        if (upper.find("ENCLOSURE") != std::string::npos)
+            return 90;
+        if (upper.find("CAVITY") != std::string::npos)
+            return 85;
+        if (has_standalone_token(upper, "BOX"))
+            return 60;
+
+        return 0;
+    }
+
+    // Returns true iff `token` appears in `haystack` as a complete token,
+    // where tokens are separated by `_` or whitespace. Both inputs are
+    // compared case-sensitively; callers upper-case beforehand.
+    static bool has_standalone_token(const std::string& haystack, const std::string& token) {
+        auto is_separator = [](char c) {
+            return c == '_' || std::isspace(static_cast<unsigned char>(c));
+        };
+        size_t i = 0;
+        while (i < haystack.size()) {
+            while (i < haystack.size() && is_separator(haystack[i])) {
+                ++i;
+            }
+            size_t start = i;
+            while (i < haystack.size() && !is_separator(haystack[i])) {
+                ++i;
+            }
+            if (i - start == token.size() && haystack.compare(start, token.size(), token) == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Helper: natural sort — splits on trailing digits so "lane2" < "lane10"

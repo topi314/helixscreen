@@ -343,26 +343,33 @@ void PrinterTemperatureState::update_from_status(const nlohmann::json& status) {
         }
     }
 
-    // Update chamber temperature from heater or sensor
-    // Prefer heater (has both temp + target), fall back to sensor (temp only)
-    if (!chamber_heater_name_.empty() && status.contains(chamber_heater_name_)) {
-        const auto& chamber = status[chamber_heater_name_];
+    // Chamber temperature comes from the heater when one is configured (it has
+    // both current temp and target), otherwise from the sensor (temp only).
+    // The sensor is NOT a fallback when a heater is configured — on printers
+    // that have both (e.g. QIDI Q2: heater_generic chamber + thermal-protection
+    // thermistor), the "sensor" often tracks the bed or another nearby heat
+    // source and would pollute chamber_temp_ when partial subscription updates
+    // omit the heater object.
+    if (!chamber_heater_name_.empty()) {
+        if (status.contains(chamber_heater_name_)) {
+            const auto& chamber = status[chamber_heater_name_];
 
-        if (chamber.contains("temperature") && chamber["temperature"].is_number()) {
-            int temp_centi = helix::units::json_to_centidegrees(chamber, "temperature");
-            if (lv_subject_get_int(&chamber_temp_) != temp_centi) {
-                lv_subject_set_int(&chamber_temp_, temp_centi);
-                spdlog::trace("[PrinterTemperatureState] Chamber temp (heater): {}.{}C",
-                              temp_centi / 10, temp_centi % 10);
+            if (chamber.contains("temperature") && chamber["temperature"].is_number()) {
+                int temp_centi = helix::units::json_to_centidegrees(chamber, "temperature");
+                if (lv_subject_get_int(&chamber_temp_) != temp_centi) {
+                    lv_subject_set_int(&chamber_temp_, temp_centi);
+                    spdlog::trace("[PrinterTemperatureState] Chamber temp (heater): {}.{}C",
+                                  temp_centi / 10, temp_centi % 10);
+                }
             }
-        }
 
-        if (chamber.contains("target") && chamber["target"].is_number()) {
-            int target_centi = helix::units::json_to_centidegrees(chamber, "target");
-            if (lv_subject_get_int(&chamber_target_) != target_centi) {
-                lv_subject_set_int(&chamber_target_, target_centi);
-                spdlog::trace("[PrinterTemperatureState] Chamber target: {}.{}C", target_centi / 10,
-                              target_centi % 10);
+            if (chamber.contains("target") && chamber["target"].is_number()) {
+                int target_centi = helix::units::json_to_centidegrees(chamber, "target");
+                if (lv_subject_get_int(&chamber_target_) != target_centi) {
+                    lv_subject_set_int(&chamber_target_, target_centi);
+                    spdlog::trace("[PrinterTemperatureState] Chamber target: {}.{}C",
+                                  target_centi / 10, target_centi % 10);
+                }
             }
         }
     } else if (!chamber_sensor_name_.empty() && status.contains(chamber_sensor_name_)) {

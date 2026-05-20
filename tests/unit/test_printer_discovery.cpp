@@ -1177,6 +1177,92 @@ TEST_CASE("PrinterDiscovery detects chamber heater and sensor", "[printer_discov
 }
 
 // ============================================================================
+// Chamber-keyword confidence: stronger keyword wins over weaker one regardless
+// of iteration order. Regression coverage for #947 (QIDI Q2).
+// ============================================================================
+
+TEST_CASE("PrinterDiscovery chamber-keyword scoring prefers 'chamber' over 'box'",
+          "[printer_discovery][chamber][issue947]") {
+    PrinterDiscovery hw;
+
+    SECTION("QIDI Q2: chamber heater wins over Qidi-Box filament dryer (chamber first)") {
+        // Order matches the Q2's klippy stats: box1_* appears before chamber.
+        // Without confidence scoring (last-wins), chamber would win here by
+        // luck — this section just nails down that ordering.
+        json objects = {"heater_generic box1_heater",        "temperature_sensor box1_env",
+                        "temperature_sensor box1_heater_temp_a",
+                        "temperature_sensor box1_heater_temp_b",
+                        "temperature_sensor Box1_STM32",     "heater_bed",
+                        "heater_generic chamber",
+                        "temperature_sensor Chamber_Thermal_Protection_Sensor", "extruder"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.chamber_heater_name() == "heater_generic chamber");
+        REQUIRE(hw.chamber_heater_object_name() == "chamber");
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor Chamber_Thermal_Protection_Sensor");
+    }
+
+    SECTION("QIDI Q2: chamber heater still wins when box1_* objects come LAST") {
+        // The bug case: if Moonraker returned objects in a different order
+        // (e.g. alphabetical with capitals last), the old last-wins discovery
+        // would mis-resolve to a box1_* object. Scoring must prevent that.
+        json objects = {"heater_generic chamber",
+                        "temperature_sensor Chamber_Thermal_Protection_Sensor",
+                        "heater_generic box1_heater",        "temperature_sensor box1_env",
+                        "temperature_sensor box1_heater_temp_a",
+                        "temperature_sensor box1_heater_temp_b",
+                        "temperature_sensor Box1_STM32"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.chamber_heater_name() == "heater_generic chamber");
+        REQUIRE(hw.chamber_heater_object_name() == "chamber");
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor Chamber_Thermal_Protection_Sensor");
+    }
+
+    SECTION("box1_* alone (no chamber) does NOT register as chamber") {
+        // Digit-suffixed AMS names must not be treated as the printer chamber.
+        json objects = {"heater_generic box1_heater",         "temperature_sensor box1_env",
+                        "temperature_sensor box1_heater_temp_a", "temperature_sensor Box1_STM32"};
+        hw.parse_objects(objects);
+
+        REQUIRE_FALSE(hw.has_chamber_heater());
+        REQUIRE_FALSE(hw.has_chamber_sensor());
+    }
+
+    SECTION("Elegoo COSMOS literal 'box' still detected (token, not substring)") {
+        json objects = {"temperature_sensor box"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_sensor());
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor box");
+    }
+
+    SECTION("'box_fan' (standalone token) still detected") {
+        json objects = {"temperature_fan box_fan"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_heater());
+        REQUIRE(hw.chamber_heater_name() == "temperature_fan box_fan");
+    }
+
+    SECTION("enclosure beats standalone box when both present") {
+        json objects = {"temperature_sensor box", "temperature_sensor enclosure"};
+        hw.parse_objects(objects);
+
+        // enclosure (conf 90) > standalone box (conf 60)
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor enclosure");
+    }
+
+    SECTION("chamber beats enclosure when both present") {
+        json objects = {"temperature_sensor enclosure", "temperature_sensor chamber"};
+        hw.parse_objects(objects);
+
+        // chamber (conf 100) > enclosure (conf 90)
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor chamber");
+    }
+}
+
+// ============================================================================
 // Clear/Reset Tests
 // ============================================================================
 

@@ -101,6 +101,43 @@ TEST_CASE("PrinterTemperatureState ignores chamber when sensor not configured",
     REQUIRE(lv_subject_get_int(temp_state.get_chamber_temp_subject()) == 0);
 }
 
+// 5b. Regression for #947 (QIDI Q2): when both a chamber heater AND a chamber
+// sensor are configured, partial Moonraker subscription updates that only
+// include the sensor (because the sensor's temperature ticked but the heater's
+// didn't) MUST NOT overwrite chamber_temp_ with the sensor's reading. On the
+// Q2 the "chamber sensor" auto-discovered is actually a thermal-protection
+// thermistor that climbs as the bed heats up — so without this guard, the
+// chamber temp display flashes between the real chamber temp (heater) and
+// the bed-influenced sensor reading.
+TEST_CASE("PrinterTemperatureState does not let sensor pollute chamber when heater configured",
+          "[temperature][chamber][issue947]") {
+    LVGLTestFixture fixture;
+
+    PrinterTemperatureState temp_state;
+    temp_state.init_subjects(false);
+    temp_state.set_chamber_heater_name("heater_generic chamber");
+    temp_state.set_chamber_sensor_name("temperature_sensor Chamber_Thermal_Protection_Sensor");
+
+    // First update: heater reports 27.2°C / target 65°C
+    nlohmann::json heater_update = {
+        {"heater_generic chamber", {{"temperature", 27.2}, {"target", 65.0}}}};
+    temp_state.update_from_status(heater_update);
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_temp_subject()) == 272);
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_target_subject()) == 650);
+
+    // Second update: only the thermal-protection sensor ticks (it tracks bed
+    // proximity, climbing to ~70°C while the bed heats). The chamber heater
+    // object is omitted from this partial update.
+    nlohmann::json sensor_only_update = {
+        {"temperature_sensor Chamber_Thermal_Protection_Sensor", {{"temperature", 70.0}}}};
+    temp_state.update_from_status(sensor_only_update);
+
+    // chamber_temp_ must NOT pick up the 70°C sensor reading — when a chamber
+    // heater is configured, it is the only valid source for chamber_temp_.
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_temp_subject()) == 272);
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_target_subject()) == 650);
+}
+
 // 6. Chamber assignment settings default to "auto"
 TEST_CASE("Chamber assignment settings default to auto", "[settings][chamber]") {
     LVGLTestFixture fixture;
