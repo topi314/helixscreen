@@ -3173,3 +3173,74 @@ TEST_CASE("Config: v15→v16 migration disables Flying Toasters on constrained t
         std::filesystem::remove_all(temp_dir);
     }
 }
+
+TEST_CASE("Config: v16→v17 migration renames retired Voron printer_image IDs",
+          "[core][config][migration][v17]") {
+    SECTION("voron-24r2 and voron-0-2 rewritten; unrelated values left alone") {
+        std::string temp_dir = "/tmp/helix_test_v16_to_v17_rename_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v16_config = {
+            {"config_version", 16},
+            {"active_printer_id", "voron24"},
+            {"printers",
+             {{"voron24", {{"printer_image", "shipped:voron-24r2"}}},
+              {"voron0", {{"printer_image", "shipped:voron-0-2"}}},
+              {"sw", {{"printer_image", "shipped:voron-switchwire"}}},
+              {"custom", {{"printer_image", "custom:my-printer"}}},
+              {"auto", {{"printer_image", ""}}},
+              {"none", {{"heaters", {{"bed", "heater_bed"}}}}}}}};
+
+        {
+            std::ofstream o(temp_path);
+            o << v16_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+
+        REQUIRE(test_config.get<std::string>("/printers/voron24/printer_image") ==
+                "shipped:voron-v2");
+        REQUIRE(test_config.get<std::string>("/printers/voron0/printer_image") ==
+                "shipped:voron-v0");
+        REQUIRE(test_config.get<std::string>("/printers/sw/printer_image") ==
+                "shipped:voron-switchwire");
+        REQUIRE(test_config.get<std::string>("/printers/custom/printer_image") ==
+                "custom:my-printer");
+        REQUIRE(test_config.get<std::string>("/printers/auto/printer_image", "missing") == "");
+        REQUIRE_FALSE(test_config.exists("/printers/none/printer_image"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("Already-v17 config: migration does not run") {
+        std::string temp_dir = "/tmp/helix_test_v16_to_v17_already_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v17_config = {{"config_version", 17},
+                           {"active_printer_id", "voron24"},
+                           {"printers", {{"voron24", {{"printer_image", "shipped:voron-24r2"}}}}}};
+
+        {
+            std::ofstream o(temp_path);
+            o << v17_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        // Already-v17: stale value is preserved verbatim, migration gate (version<17) skipped.
+        REQUIRE(test_config.get<std::string>("/printers/voron24/printer_image") ==
+                "shipped:voron-24r2");
+
+        std::filesystem::remove_all(temp_dir);
+    }
+}

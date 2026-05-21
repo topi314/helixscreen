@@ -738,6 +738,39 @@ static void migrate_v15_to_v16(json& config) {
 #endif
 }
 
+/// v16 → v17: Rename retired Voron printer image IDs (#964). The 0.2 and 2.4r2 PNGs
+/// were replaced by voron-v0 / voron-v2 on disk; auto-detect users are covered by
+/// the printer_database.json update, but anyone who manually picked the old image
+/// in the Printer Image overlay has "shipped:voron-24r2" or "shipped:voron-0-2"
+/// frozen in their per-printer printer_image setting and would render the
+/// generic-CoreXY fallback after upgrade.
+static void migrate_v16_to_v17(json& config) {
+    static const std::vector<std::pair<std::string, std::string>> renames = {
+        {"shipped:voron-24r2", "shipped:voron-v2"},
+        {"shipped:voron-0-2", "shipped:voron-v0"},
+    };
+
+    if (!config.contains("printers") || !config["printers"].is_object())
+        return;
+
+    for (auto& [printer_id, printer] : config["printers"].items()) {
+        if (!printer.is_object())
+            continue;
+        if (!printer.contains("printer_image") || !printer["printer_image"].is_string())
+            continue;
+        std::string current = printer["printer_image"].get<std::string>();
+        for (const auto& [from, to] : renames) {
+            if (current == from) {
+                printer["printer_image"] = to;
+                spdlog::info("[Config] Migration v17: renamed printer_image '{}' -> '{}' "
+                             "for printer '{}'",
+                             from, to, printer_id);
+                break;
+            }
+        }
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config, const std::string& config_path = "") {
     int version = 0;
@@ -777,6 +810,8 @@ static void run_versioned_migrations(json& config, const std::string& config_pat
         migrate_v14_to_v15(config);
     if (version < 16)
         migrate_v15_to_v16(config);
+    if (version < 17)
+        migrate_v16_to_v17(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
