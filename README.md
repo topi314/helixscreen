@@ -121,7 +121,7 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 | Raspberry Pi 3/4 (32-bit) | armhf | Tested |
 | BTT Pad / CB1 / CB2 / Manta | aarch64 | Tested |
 | Creality K1 / K1C / K1 Max | MIPS32 | Tested |
-| Creality K2 Max / K2 Plus | ARM (musl) | Tested |
+| Creality K2 Max / K2 Plus / K2 SE | ARM (musl) | Tested |
 | Creality Sonic Pad | armhf | Tested |
 | Flashforge AD5M / AD5M Pro | armv7-a | Tested |
 | Flashforge AD5X | MIPS32 | Tested |

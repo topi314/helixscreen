@@ -14,7 +14,7 @@ All K2 models use Allwinner ARM Cortex-A7 dual-core processors running Tina Linu
 | K2 Pro | 300 mm cubed | 4.3" 480x800 | Yes (60C) | Optional | Untested |
 | K2 Plus | 350 mm cubed | 4.3" 480x800 | Yes (60C) | Optional | Untested |
 | K2 Max | 350 mm cubed | 4.3" 480x1600 | Yes | Yes (combo) | **Hardware confirmed** |
-| K2 SE | 220x215x245 mm | Unknown | No | Unknown | Untested |
+| K2 SE | 220x215x245 mm | Unknown | No | Unknown | User-confirmed install (wget) |
 
 ## Hardware (Confirmed on K2 Max — 2026-03-23)
 
