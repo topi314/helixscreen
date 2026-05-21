@@ -20,7 +20,7 @@ namespace helix {
  * (bundled with the app) and custom user-imported images.
  *
  * Image IDs use a namespace prefix:
- *   - "shipped:voron-24r2"  — bundled printer image
+ *   - "shipped:voron-v2"    — bundled printer image
  *   - "custom:my-printer"   — user-imported image
  *   - ""                    — auto-detect from printer type (default)
  */
@@ -56,8 +56,8 @@ class PrinterImageManager {
     // --- Browsing ---
 
     struct ImageInfo {
-        std::string id;           // "shipped:voron-24r2" or "custom:my-printer"
-        std::string display_name; // "Voron 2.4r2" or "my-printer"
+        std::string id;           // "shipped:voron-v2" or "custom:my-printer"
+        std::string display_name; // "Voron 2.4" or "my-printer"
         std::string preview_path; // LVGL path for thumbnail preview
     };
 

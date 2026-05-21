@@ -132,8 +132,8 @@ TEST_CASE("get_prerendered_printer_path generates correct paths", "[assets][prin
     }
 
     SECTION("Different screen sizes generate different paths") {
-        std::string path_small = get_prerendered_printer_path("voron-24r2", 480);
-        std::string path_large = get_prerendered_printer_path("voron-24r2", 800);
+        std::string path_small = get_prerendered_printer_path("voron-v2", 480);
+        std::string path_large = get_prerendered_printer_path("voron-v2", 800);
 
         // Both should be valid paths
         REQUIRE(path_small.substr(0, 2) == "A:");
@@ -141,13 +141,13 @@ TEST_CASE("get_prerendered_printer_path generates correct paths", "[assets][prin
 
         // Paths may differ (unless both falling back to PNG)
         // The key is both are valid
-        REQUIRE(path_small.find("voron-24r2") != std::string::npos);
-        REQUIRE(path_large.find("voron-24r2") != std::string::npos);
+        REQUIRE(path_small.find("voron-v2") != std::string::npos);
+        REQUIRE(path_large.find("voron-v2") != std::string::npos);
     }
 
     SECTION("Various printer names work correctly") {
         std::vector<std::string> printers = {
-            "creality-k1",    "creality-ender-3", "voron-24r2", "flashforge-adventurer-5m",
+            "creality-k1",    "creality-ender-3", "voron-v2", "flashforge-adventurer-5m",
             "anycubic-kobra",
         };
 

@@ -18,7 +18,7 @@
  * (config/printer_database.json). Falls back to generic CoreXY image when a printer
  * image is not found or the file doesn't exist on disk.
  *
- * Image paths are stored in the database as just filenames (e.g., "voron-24r2.png").
+ * Image paths are stored in the database as just filenames (e.g., "voron-v2.png").
  * This header adds the full LVGL path prefix "A:assets/images/printers/".
  */
 
@@ -78,10 +78,10 @@ inline bool image_file_exists(const std::string& lvgl_path) {
 /**
  * @brief Get pre-rendered image path for a filename
  *
- * Converts a PNG filename (e.g., "voron-24r2.png") to its pre-rendered
- * binary equivalent (e.g., "voron-24r2-300.bin").
+ * Converts a PNG filename (e.g., "voron-v2.png") to its pre-rendered
+ * binary equivalent (e.g., "voron-v2-300.bin").
  *
- * @param image_filename Original filename from database (e.g., "voron-24r2.png")
+ * @param image_filename Original filename from database (e.g., "voron-v2.png")
  * @return Full LVGL path to pre-rendered image, or empty string if not found
  */
 inline std::string get_prerendered_path(const std::string& image_filename) {

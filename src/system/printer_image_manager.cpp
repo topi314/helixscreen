@@ -101,7 +101,7 @@ std::string PrinterImageManager::get_active_image_path(int screen_width) {
     int target_size = get_printer_image_size(screen_width);
 
     if (id.rfind("shipped:", 0) == 0) {
-        // Shipped image: "shipped:voron-24r2" -> look up prerendered path
+        // Shipped image: "shipped:voron-v2" -> look up prerendered path
         std::string name = id.substr(8);
         return get_prerendered_printer_path(name, screen_width);
     }

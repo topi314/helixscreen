@@ -110,7 +110,7 @@ When multiple printers are configured, the config file uses a versioned schema (
       "moonraker_host": "192.168.1.100",
       "moonraker_port": 7125,
       "wizard_completed": true,
-      "printer_image": "shipped:voron-24r2",
+      "printer_image": "shipped:voron-v2",
       ...per-printer settings...
     },
     "ender-3": {
@@ -380,7 +380,7 @@ Can also be overridden via `HELIX_GCODE_MODE` env var (`3D` or `2D`).
 **Default:** `""` (auto-detect)
 **Description:** Printer image displayed on the Home Panel and in the Printer Manager. The value determines which image is used:
 - `""` (empty string or absent) — **Auto-detect**: HelixScreen selects an image based on the printer type reported by Klipper
-- `"shipped:voron-24r2"` — Use a specific shipped image by name (see `assets/images/printers/` for available images)
+- `"shipped:voron-v2"` — Use a specific shipped image by name (see `assets/images/printers/` for available images)
 - `"custom:my-printer"` — Use a custom image that was imported from `config/custom_images/`
 
 Custom images are PNG or JPEG files placed in `config/custom_images/`. They are automatically converted to optimized LVGL binary format (300px and 150px variants) when the Printer Image picker overlay is opened. Maximum file size is 5MB, maximum resolution is 2048x2048 pixels.

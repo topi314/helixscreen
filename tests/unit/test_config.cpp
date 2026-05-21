@@ -1793,7 +1793,7 @@ TEST_CASE("Config: v3→v4 migration moves printer_image to per-printer path",
         {"config_version", 3},
         {"printer",
          {{"name", "My Printer"}, {"moonraker_host", "192.168.1.100"}, {"moonraker_port", 7125}}},
-        {"display", {{"printer_image", "shipped:voron-24r2"}, {"rotate", 0}}}};
+        {"display", {{"printer_image", "shipped:voron-v2"}, {"rotate", 0}}}};
 
     {
         std::ofstream o(temp_path);
@@ -1807,7 +1807,7 @@ TEST_CASE("Config: v3→v4 migration moves printer_image to per-printer path",
     REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
 
     // printer_image should be at per-printer path, not under /display
-    REQUIRE(test_config.get<std::string>(test_config.df() + PRINTER_IMAGE) == "shipped:voron-24r2");
+    REQUIRE(test_config.get<std::string>(test_config.df() + PRINTER_IMAGE) == "shipped:voron-v2");
 
     // /display/printer_image should no longer exist
     auto display = test_config.get<json>("/display", json::object());

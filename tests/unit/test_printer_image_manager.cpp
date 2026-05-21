@@ -225,7 +225,7 @@ TEST_CASE("PrinterImageManager get_shipped_images returns list", "[printer_image
         // Should contain a known printer
         bool found_voron = false;
         for (const auto& img : shipped) {
-            if (img.id == "shipped:voron-24r2") {
+            if (img.id == "shipped:voron-v2") {
                 found_voron = true;
                 break;
             }

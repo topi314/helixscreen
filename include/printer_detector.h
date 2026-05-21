@@ -110,7 +110,7 @@ class PrinterDetector {
      * @brief Get image filename for a printer type
      *
      * Looks up the image field from the printer database JSON.
-     * Returns just the filename (e.g., "voron-24r2.png"), not the full path.
+     * Returns just the filename (e.g., "voron-v2.png"), not the full path.
      *
      * @param printer_name Printer name (e.g., "Voron 2.4", "FlashForge Adventurer 5M")
      * @return Image filename if found, empty string if not found
@@ -121,7 +121,7 @@ class PrinterDetector {
      * @brief Get image filename for a printer by ID
      *
      * Looks up the image field from the printer database JSON using the printer ID.
-     * Returns just the filename (e.g., "voron-24r2.png"), not the full path.
+     * Returns just the filename (e.g., "voron-v2.png"), not the full path.
      *
      * @param printer_id Printer ID (e.g., "voron_2_4", "flashforge_adventurer_5m")
      * @return Image filename if found, empty string if not found

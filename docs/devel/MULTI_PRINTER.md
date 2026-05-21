@@ -116,7 +116,7 @@ Both subjects must be non-zero for the badge to appear.
       "hardware": { "optional": [], "expected": [], "last_snapshot": {} },
       "filament": { ... },
       "panel_widgets": { ... },
-      "printer_image": "shipped:voron-24r2"
+      "printer_image": "shipped:voron-v2"
     },
     "ender-3-pro": {
       "printer_name": "Ender 3 Pro",

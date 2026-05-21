@@ -539,7 +539,7 @@
       "id": "voron_2_4",
       "name": "Voron 2.4",
       "manufacturer": "Voron",
-      "image": "voron-24r2.png",
+      "image": "voron-v2.png",
       "heuristics": [
         {
           "type": "object_exists",
@@ -620,7 +620,7 @@
       "id": "voron_0_1",
       "name": "Voron 0.2",
       "manufacturer": "Voron",
-      "image": "voron-0-2.png",
+      "image": "voron-v0.png",
       "heuristics": [
         {
           "type": "kinematics_match",

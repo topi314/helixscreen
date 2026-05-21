@@ -64,7 +64,7 @@ namespace helix {
  * Selects the appropriate pre-rendered size based on screen width.
  * Falls back to original PNG if pre-rendered version doesn't exist.
  *
- * @param printer_name Printer name (e.g., "creality-k1", "voron-24r2")
+ * @param printer_name Printer name (e.g., "creality-k1", "voron-v2")
  * @param screen_width Display width in pixels (used to pick 300px vs 150px)
  * @return LVGL path (A:...) to the image
  */
