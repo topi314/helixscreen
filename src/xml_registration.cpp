@@ -297,6 +297,7 @@ void register_xml_components() {
     // Shared progress arc widget — diameter-driven stroke thickness, see
     // include/ui_progress_arc.h for the C++ companion (attach_progress_arc).
     register_xml("components/helix_progress_arc.xml");
+    register_xml("components/perf_metric_row.xml");
     register_xml("header_bar.xml");
     register_xml("overlay_backdrop.xml");
     register_xml("overlay_panel.xml");
@@ -585,6 +586,7 @@ void register_xml_components() {
     register_xml("wifi_network_item.xml");
     register_xml("telemetry_data_overlay.xml");
     register_xml("about_settings_overlay.xml");
+    register_xml("performance_overlay.xml");
     register_xml("material_temps_overlay.xml");
 
     // Printer manager overlay (launched from home screen printer image)

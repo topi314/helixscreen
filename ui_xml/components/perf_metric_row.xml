@@ -23,7 +23,7 @@
     <lv_bar bind_value="$bind_value" min_value="0" max_value="100"
             flex_grow="1" height="8"/>
     <helix_sparkline source="$sparkline_source" width="60" height="16"
-                     style_line_color="#accent"/>
+                     style_line_color="#primary"/>
     <text_muted bind_text="$bind_text" width="80" style_text_align="right"/>
   </view>
 </component>
