@@ -201,12 +201,16 @@ void PerformanceState::update_mcu_subjects(const std::vector<McuStat>& mcus) {
             const std::string load_name = "perf_mcu_" + safe + "_load_pct";
             const std::string retr_name = "perf_mcu_" + safe + "_retrans";
             const std::string pres_name = "perf_mcu_" + safe + "_present";
+            const std::string text_name = "perf_mcu_" + safe + "_text";
             lv_subject_init_int(&subs->load_pct, 0);
             lv_subject_init_int(&subs->retrans, 0);
             lv_subject_init_int(&subs->present, 0);
+            lv_subject_init_string(&subs->text, subs->buf_text, nullptr,
+                                   sizeof(subs->buf_text), "\xe2\x80\x94");
             helix::xml::register_subject_in_current_scope(load_name.c_str(), &subs->load_pct);
             helix::xml::register_subject_in_current_scope(retr_name.c_str(), &subs->retrans);
             helix::xml::register_subject_in_current_scope(pres_name.c_str(), &subs->present);
+            helix::xml::register_subject_in_current_scope(text_name.c_str(), &subs->text);
             mcu_subjects_.emplace(safe, std::move(subs));
         }
     }
@@ -225,6 +229,18 @@ void PerformanceState::update_mcu_subjects(const std::vector<McuStat>& mcus) {
             lv_subject_set_int(&subs->retrans, static_cast<int>(*m.retransmits));
         }
         lv_subject_set_int(&subs->present, m.load.has_value() ? 1 : 0);
+
+        // Format per-MCU text: "22% · 14 retx" or "14%"
+        const int load_pct_val = lv_subject_get_int(&subs->load_pct);
+        const int retrans_val  = lv_subject_get_int(&subs->retrans);
+        if (retrans_val > 0) {
+            snprintf(subs->buf_text, sizeof(subs->buf_text), "%d%% \xc2\xb7 %d retx",
+                     load_pct_val, retrans_val);
+        } else {
+            snprintf(subs->buf_text, sizeof(subs->buf_text), "%d%%", load_pct_val);
+        }
+        lv_subject_copy_string(&subs->text, subs->buf_text);
+
         seen[safe] = true;
     }
     for (auto& [safe, subs] : mcu_subjects_) {

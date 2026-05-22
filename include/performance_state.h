@@ -85,11 +85,14 @@ class PerformanceState {
         lv_subject_t load_pct{};
         lv_subject_t retrans{};
         lv_subject_t present{};
+        lv_subject_t text{};
+        char buf_text[64]{};
 
         ~McuSubjects() {
             lv_subject_deinit(&load_pct);
             lv_subject_deinit(&retrans);
             lv_subject_deinit(&present);
+            lv_subject_deinit(&text);
         }
     };
     std::unordered_map<std::string, std::unique_ptr<McuSubjects>> mcu_subjects_;

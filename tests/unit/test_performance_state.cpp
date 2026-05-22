@@ -224,3 +224,35 @@ TEST_CASE_METHOD(PerfStateFixture,
     REQUIRE(std::string(cpu_text) == "37% \xc2\xb7 61.4\xc2\xb0""C");
     REQUIRE(std::string(mem_text) == "812 MB free");
 }
+
+TEST_CASE_METHOD(PerfStateFixture,
+                 "PerformanceState formats per-MCU text subject",
+                 "[performance]") {
+    using helix::perf::PerfSample;
+    using helix::perf::McuStat;
+    PerfSample s;
+    McuStat a; a.name = "mcu sb"; a.load = 0.22f; a.retransmits = 14;
+    s.mcus = {a};
+    PerformanceState::instance().push_sample_for_testing(s);
+    helix::ui::UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+
+    const char* text = lv_subject_get_string(
+        lv_xml_get_subject(nullptr, "perf_mcu_mcu_sb_text"));
+    REQUIRE(std::string(text) == "22% \xc2\xb7 14 retx");
+}
+
+TEST_CASE_METHOD(PerfStateFixture,
+                 "PerformanceState formats per-MCU text with no retransmits",
+                 "[performance]") {
+    using helix::perf::PerfSample;
+    using helix::perf::McuStat;
+    PerfSample s;
+    McuStat a; a.name = "mcu"; a.load = 0.14f; a.retransmits = 0;
+    s.mcus = {a};
+    PerformanceState::instance().push_sample_for_testing(s);
+    helix::ui::UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+
+    const char* text = lv_subject_get_string(
+        lv_xml_get_subject(nullptr, "perf_mcu_mcu_text"));
+    REQUIRE(std::string(text) == "14%");
+}

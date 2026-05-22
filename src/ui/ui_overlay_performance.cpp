@@ -70,14 +70,14 @@ void UiOverlayPerformance::rebuild_mcu_rows() {
         }
 
         const std::string bind_value   = "perf_mcu_" + safe + "_load_pct";
+        const std::string bind_text    = "perf_mcu_" + safe + "_text";
         const std::string bind_present = "perf_mcu_" + safe + "_present";
         const std::string spark_src    = "mcu_" + safe + "_load_pct";
 
-        // bind_text mirrors bind_value until Task 14 creates per-MCU text subjects
         const char* attrs[] = {
             "label",            name.c_str(),
             "bind_value",       bind_value.c_str(),
-            "bind_text",        bind_value.c_str(),
+            "bind_text",        bind_text.c_str(),
             "bind_present",     bind_present.c_str(),
             "sparkline_source", spark_src.c_str(),
             nullptr,            nullptr
