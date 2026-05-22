@@ -4,7 +4,6 @@
 
 #include "observer_factory.h"
 #include "performance_state.h"
-#include "theme_manager.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
@@ -89,7 +88,9 @@ void HelixSparkline::on_draw(lv_event_t* e) {
 
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
-    dsc.color = theme_manager_get_color("accent");
+    // Read from the obj's style so XML callers can set style_line_color and
+    // bind_style can swap it for threshold colors (e.g. green/amber/red).
+    dsc.color = lv_obj_get_style_line_color(self->obj_, LV_PART_MAIN);
     dsc.width = 1;
     dsc.opa   = LV_OPA_COVER;
 
@@ -131,17 +132,12 @@ void* sparkline_xml_create(lv_xml_parser_state_t* state, const char** attrs) {
     return HelixSparkline::create(parent, source ? source : "");
 }
 
-void sparkline_xml_apply(lv_xml_parser_state_t* state, const char** attrs) {
-    // Delegate all common lv_obj properties (size, align, style_*, etc.) to
-    // the standard obj parser so XML attributes like style_line_color work.
-    lv_xml_obj_apply(state, attrs);
-    // No sparkline-specific apply attrs beyond "source" (handled at create time).
-}
-
 } // namespace
 
 void register_helix_sparkline_widget() {
-    lv_xml_register_widget("helix_sparkline", sparkline_xml_create, sparkline_xml_apply);
+    // Pass lv_xml_obj_apply directly — no sparkline-specific apply logic
+    // (matches notification_badge / ui_card convention).
+    lv_xml_register_widget("helix_sparkline", sparkline_xml_create, lv_xml_obj_apply);
     spdlog::trace("[HelixSparkline] Widget registered with XML system");
 }
 
