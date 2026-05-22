@@ -163,8 +163,11 @@
 #include "memory_monitor.h"
 #include "memory_profiling.h"
 #include "memory_utils.h"
+#include "mock_performance_source.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "moonraker_performance_source.h"
+#include "performance_state.h"
 #include "plugin_manager.h"
 #include "printer_discovery.h"
 #include "printer_state.h"
@@ -1578,6 +1581,19 @@ bool Application::init_panel_subjects() {
     m_temp_history_manager = std::make_unique<TemperatureHistoryManager>(get_printer_state());
     set_temperature_history_manager(m_temp_history_manager.get());
     spdlog::debug("[Application] TemperatureHistoryManager created");
+
+    // Initialize PerformanceState subjects and wire the data source.
+    // Must happen after MoonrakerAPI is up (m_moonraker->api() is valid here)
+    // and before XML panels are created so subjects exist when bindings resolve.
+    helix::perf::PerformanceState::instance().init_subjects();
+    if (get_runtime_config()->should_mock_moonraker()) {
+        helix::perf::PerformanceState::instance().set_source(
+            std::make_unique<helix::perf::MockPerformanceSource>());
+    } else {
+        helix::perf::PerformanceState::instance().set_source(
+            std::make_unique<helix::perf::MoonrakerPerformanceSource>(m_moonraker->api()));
+    }
+    spdlog::debug("[Application] PerformanceState initialized");
 
     spdlog::debug("[Application] Panel subjects initialized");
     helix::MemoryMonitor::log_now("after_panel_subjects_init");
