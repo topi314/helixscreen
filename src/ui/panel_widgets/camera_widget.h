@@ -84,6 +84,18 @@ class CameraWidget : public PanelWidget {
     nlohmann::json config_;
 };
 
+/**
+ * @brief Open the camera fullscreen overlay independently of any CameraWidget.
+ *
+ * Creates a standalone CameraStream + camera_fullscreen overlay and pushes it
+ * onto NavigationManager. Used by entry points outside the home panel (e.g.
+ * Settings → Hardware & Devices → Camera). No-ops if no webcam is configured
+ * or if a fullscreen view is already open.
+ *
+ * @param parent_screen Active screen the overlay is attached to.
+ */
+void open_standalone_camera_fullscreen(lv_obj_t* parent_screen);
+
 } // namespace helix
 
 #endif // HELIX_HAS_CAMERA

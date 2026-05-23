@@ -19,6 +19,14 @@
 #include "moonraker_api.h"
 #include "static_panel_registry.h"
 
+#if HELIX_HAS_CAMERA
+// Defined in src/ui/panel_widgets/camera_widget.cpp; that directory is not on
+// the include path, so forward-declare rather than including the header.
+namespace helix {
+void open_standalone_camera_fullscreen(lv_obj_t* parent_screen);
+}
+#endif
+
 #include <spdlog/spdlog.h>
 
 #include <memory>
@@ -71,6 +79,7 @@ void HardwareSettingsOverlay::init_subjects() {
 void HardwareSettingsOverlay::register_callbacks() {
     register_xml_callbacks({
         {"on_printers_clicked", on_printers_clicked},
+        {"on_camera_view_clicked", on_camera_view_clicked},
         {"on_ams_settings_clicked", on_ams_settings_clicked},
         {"on_fans_settings_clicked", on_fans_settings_clicked},
         {"on_filament_sensors_clicked", on_filament_sensors_clicked},
@@ -152,6 +161,16 @@ void HardwareSettingsOverlay::on_printers_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HardwareSettingsOverlay] on_printers_clicked");
     auto& overlay = helix::ui::get_printer_list_overlay();
     overlay.show(get_hardware_settings_overlay().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void HardwareSettingsOverlay::on_camera_view_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[HardwareSettingsOverlay] on_camera_view_clicked");
+#if HELIX_HAS_CAMERA
+    helix::open_standalone_camera_fullscreen(get_hardware_settings_overlay().parent_screen_);
+#else
+    spdlog::debug("[HardwareSettingsOverlay] Camera support disabled in this build");
+#endif
     LVGL_SAFE_EVENT_CB_END();
 }
 

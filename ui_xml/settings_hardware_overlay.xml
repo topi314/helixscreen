@@ -27,6 +27,16 @@
                           description="Manage configured printers"
                           description_tag="Manage configured printers" callback="on_printers_clicked"/>
       <!-- ================================================================== -->
+      <!-- CAMERA (hidden when no enabled webcam configured in Moonraker) -->
+      <!-- ================================================================== -->
+      <lv_obj name="container_camera" width="100%" style_pad_all="0" scrollable="false">
+        <bind_flag_if_eq subject="printer_has_webcam" flag="hidden" ref_value="0"/>
+        <setting_action_row name="row_camera"
+                            label="Camera" label_tag="Camera" icon="video"
+                            description="View live camera feed"
+                            description_tag="View live camera feed" callback="on_camera_view_clicked"/>
+      </lv_obj>
+      <!-- ================================================================== -->
       <!-- MULTI-FILAMENT MANAGEMENT (hidden if no AMS detected) -->
       <!-- ================================================================== -->
       <lv_obj name="container_ams_settings" width="100%" style_pad_all="0" scrollable="false">
