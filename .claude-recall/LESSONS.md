@@ -110,8 +110,8 @@
 > 4. `Read /tmp/test.log`.
 > Failures: shell `&`, `timeout X cmd &`, retrying, assuming auto-nav. One bg task, tee to log, user interacts, you read.
 
-### [L061] [**---|***--] AD5M test printer environment
-- **Uses**: 6 | **Velocity**: 1.140625 | **Learned**: 2026-02-07 | **Last**: 2026-05-19 | **Category**: system
+### [L061] [**---|****-] AD5M test printer environment
+- **Uses**: 7 | **Velocity**: 2.140625 | **Learned**: 2026-02-07 | **Last**: 2026-05-23 | **Category**: system
 > AD5M (192.168.1.67, root@). armv7l Linux 5.4.61 (BusyBox). Gotchas: (1) wget no HTTPS, no curl. (2) No sftp-server — `scp -O`. (3) Logs go to BOTH `/tmp/helixscreen.log` AND syslog (`/var/log/messages`); syslog is current session, file may be stale. Default level WARN. (4) `/etc/ssl/certs/` empty — breaks all outbound HTTPS (libhv, wget); ship `ca-certificates.crt`. (5) No `openssl` CLI. (6) No inotify. (7) No WiFi (wpa_supplicant present, no interfaces — but see project_ad5m_wifi_actually_works.md). (8) OpenSSL 1.1 at `/usr/lib/libssl.so.1.1`. (9) Binary at `/opt/helixscreen/`, config `/opt/helixscreen/config/helixconfig.json`. (10) `ldd` may return empty for static ARM binaries.
 
 ### [L062] [***--|***--] AD5M build and deploy targets
