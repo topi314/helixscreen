@@ -229,3 +229,11 @@
 > `nlohmann::json j;` is **JSON null**, not `{}`. `.value("k", def)` throws `type_error::306` on null. Bites upgrade paths: loader does `if (item.contains("config")) widget_config = item["config"];` — if absent, stays null → consumer `.value()` blows up (`5ac58e051` → `c3835003f`).
 > Fix source: init with `json::object()`. Fix consumer: `j.is_object() && j.value("k", def)`. Do both.
 
+### [L088] [-----|-----] Test-only methods belong in TestAccess friend classes
+- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-05-22 | **Last**: 2026-05-22 | **Category**: pattern
+> tests/shell/test_code_lint.bats forbids _for_testing suffix methods in include/*.h or src/*.cpp. Pattern: declare 'friend class FooTestAccess;' on the production class, define FooTestAccess in tests/test_helpers/foo_test_access.h with static methods that access private members (e.g., 'static void apply_sample(PerformanceState& ps, const PerfSample& s) { ps.apply_sample(s); }'). Mocks (*_mock.h) are exempt — whole file is test infra. Template: tests/test_helpers/update_queue_test_access.h.
+
+### [L089] [-----|-----] Regen XML linter schema after adding C++ widget
+- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-05-22 | **Last**: 2026-05-22 | **Category**: gotcha
+> After registering a new widget via lv_xml_register_widget() in src/ui/*.cpp (custom widgets like helix_sparkline, ui_card, helix_3d_viewer), run 'make regen-xml-schema' and commit tools/xml-linter/schema/schema.json. The linter auto-discovers from C++ source at schema-generation time but reads the *committed* schema in CI — forgetting this fails the XML Lint workflow with 'unknown-widget'. Analogous to L064 (translation artifacts).
+
