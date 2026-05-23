@@ -2563,15 +2563,24 @@ TEST_CASE("AD5X IFS set_slot_info(persist=true) survives a matching firmware par
     CHECK(info.color_rgb == 0xFF5500u);    // matches both user + firmware
 }
 
-TEST_CASE("AD5X IFS external color edit (firmware diverges from user) is detected",
+TEST_CASE("AD5X IFS user-edited slot survives firmware FFMInfo revert (#965 regression)",
           "[ams][ad5x_ifs][filament_slot_override][slow]") {
-    // Companion to the test above: when firmware reports a value that doesn't
-    // match the in-memory override (Mainsail console / native LCD / a
-    // CHANGE_ZCOLOR macro from outside Helix), the auto-mirror detects it as
-    // an external edit and updates the override to match firmware-truth.
-    // This is the explicit OverwriteAlways behavior used by IFS — necessary
-    // for OrcaSlicer's MoonrakerPrinterAgent to track external changes.
-    Ad5xIfsTmpCacheDir tmp("ifs_external_edit_detected");
+    // #965: AD5X firmware re-emits the previously-loaded material into
+    // Adventurer5M.json shortly after print completion (and on some
+    // restart paths). Pre-fix, the OverwriteAlways auto-mirror would clobber
+    // the user's material choice through this exact code path:
+    //   set_slot_info(persist=true) writes PLA to the override
+    //   → firmware post-print bug rewrites material back to HIPS in the JSON
+    //   → parse_adventurer_json reads HIPS into materials_[]
+    //   → check_external_color_change fires (color also drifted)
+    //   → mirror runs OverwriteAlways → override.material flipped from PLA to
+    //     HIPS, save_async persists the wrong value to Moonraker DB.
+    //
+    // Post-fix: set_slot_info(persist=true) tags user_locked_material=true,
+    // so the mirror's material branch is skipped even when color changes.
+    // Color may still propagate (treated as firmware-authoritative drift) —
+    // the regression we're guarding against is material data loss.
+    Ad5xIfsTmpCacheDir tmp("ifs_postprint_revert_965");
     MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
     helix::PrinterState state;
     state.init_subjects(false);
@@ -2582,35 +2591,87 @@ TEST_CASE("AD5X IFS external color edit (firmware diverges from user) is detecte
     FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
     Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
 
+    // User sets the slot to PLA via HelixScreen UI.
     SlotInfo edit;
     edit.brand = "Polymaker";
     edit.material = "PLA";
     edit.color_rgb = 0xFF5500;
     backend.set_slot_info(0, edit, /*persist=*/true);
-
-    // Establish the user's color as the baseline (set_slot_info does this).
     REQUIRE(Ad5xIfsTestAccess::last_firmware_color(backend, 0) == 0xFF5500u);
 
-    // Now an external editor pushes pure black. Firmware-truth diverges from
-    // user-truth. The mirror catches it and rewrites the override.
+    {
+        auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+        REQUIRE(staged.has_value());
+        CHECK(staged->user_locked_color);
+        CHECK(staged->user_locked_material);
+    }
+
+    // First parse — establishes color baseline at FF5500.
     Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
-        "FFMInfo": {"ffmColor1": "#000000", "ffmType1": "PETG"}
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+
+    // Now simulate the firmware post-print revert: material reverts to HIPS
+    // and color drifts (the actual #965 reporter's scenario had a color
+    // change too). With the lock in place, the user's PLA must survive even
+    // though every condition that previously triggered the clobber is met.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#000000", "ffmType1": "HIPS"}
     })");
 
     auto info = backend.get_slot_info(0);
-    // Brand survives (override-only field, mirror doesn't touch it).
-    CHECK(info.brand == "Polymaker");
-    // Color + material now reflect firmware truth. Pure black (the bug we
-    // fixed) is correctly detected as a real value and propagated.
-    CHECK(info.color_rgb == 0x000000u);
-    CHECK(info.material == "PETG");
+    CHECK(info.brand == "Polymaker"); // override-only field always preserved
+    CHECK(info.material == "PLA");    // #965: must NOT have been clobbered to HIPS
+    // Color: locked too, so user's choice survives. Without the lock, the
+    // mirror would have flipped it to 0x000000.
+    CHECK(info.color_rgb == 0xFF5500u);
 
     auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
     REQUIRE(staged.has_value());
-    CHECK(staged->color_set == true);
-    CHECK(staged->color_rgb == 0x000000u);
-    CHECK(staged->material == "PETG");
-    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->material == "PLA");
+    CHECK(staged->color_rgb == 0xFF5500u);
+
+    // Verify the Moonraker DB record was NOT overwritten with the firmware-
+    // reverted values (the persistence step of the original bug).
+    auto db = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!db.is_null());
+    CHECK(db.value("material", "") == "PLA");
+    CHECK(db.value("color", "") == "#FF5500");
+}
+
+TEST_CASE("AD5X IFS auto-mirror still tracks firmware for slots with no user lock",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Companion to the #965 regression: bootstrap (no override, or override
+    // with locks=false) MUST still pick up genuine external edits so
+    // OrcaSlicer's MoonrakerPrinterAgent stays in sync with the printer.
+    // Only user-locked slots are sticky; everything else tracks firmware.
+    Ad5xIfsTmpCacheDir tmp("ifs_bootstrap_tracks_firmware");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // First parse: firmware reports orange PLA — bootstrap fills the
+    // override via the mirror (locks stay false because this came from
+    // auto-mirror, not set_slot_info).
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+
+    // Second parse with different color: external edit (Mainsail / LCD)
+    // — auto-mirror tracks it because no user lock is in effect.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#0055FF", "ffmType1": "PETG"}
+    })");
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.color_rgb == 0x0055FFu);
+    CHECK(info.material == "PETG");
 }
 
 TEST_CASE("AD5X IFS set_slot_info(persist=true) with no store still updates in-memory map",

@@ -1712,3 +1712,172 @@ TEST_CASE("mirror_firmware_to_lane_data: null store updates in-memory only",
     CHECK(overrides[0].color_rgb == 0x123456u);
     CHECK(overrides[0].material == "PLA");
 }
+
+TEST_CASE("mirror_firmware_to_lane_data OverwriteAlways: user-locked material is not overwritten "
+          "(#965 regression)",
+          "[mirror_firmware]") {
+    // #965: AD5X firmware re-emits prior FFMInfo material after print completes,
+    // causing parse_adventurer_json to feed mismatched material into the
+    // mirror. The OverwriteAlways policy was blindly clobbering the user's
+    // material override. With user_locked_material the field is protected.
+    std::unordered_map<int, FilamentSlotOverride> overrides;
+    auto& ovr = overrides[0];
+    ovr.color_rgb = 0xFF0000;
+    ovr.color_set = true;
+    ovr.material = "TPU";
+    ovr.user_locked_color = true;
+    ovr.user_locked_material = true;
+
+    // Firmware suddenly reports a different material with same color (post-print
+    // FFMInfo revert) — the mirror must NOT overwrite the user's choice.
+    bool changed = helix::ams::mirror_firmware_to_lane_data(
+        /*store=*/nullptr, overrides, 0, 0xFF0000, "HIPS", true,
+        helix::ams::MirrorPolicy::OverwriteAlways, "[test]");
+    CHECK_FALSE(changed);
+    CHECK(overrides[0].material == "TPU");
+    CHECK(overrides[0].color_rgb == 0xFF0000u);
+
+    // Firmware reports a different color too — color is also locked, so still
+    // a no-op. Both fields hold against firmware re-emission.
+    changed = helix::ams::mirror_firmware_to_lane_data(
+        /*store=*/nullptr, overrides, 0, 0x0000FF, "HIPS", true,
+        helix::ams::MirrorPolicy::OverwriteAlways, "[test]");
+    CHECK_FALSE(changed);
+    CHECK(overrides[0].color_rgb == 0xFF0000u);
+    CHECK(overrides[0].material == "TPU");
+}
+
+TEST_CASE("mirror_firmware_to_lane_data OverwriteAlways: partial lock — color locked, material free",
+          "[mirror_firmware]") {
+    // User edited color but left material blank ("auto from firmware"); the
+    // mirror should still fill material from firmware truth, but never touch
+    // the locked color.
+    std::unordered_map<int, FilamentSlotOverride> overrides;
+    auto& ovr = overrides[0];
+    ovr.color_rgb = 0xABCDEF;
+    ovr.color_set = true;
+    ovr.user_locked_color = true;
+    // material empty, user_locked_material false
+
+    bool changed = helix::ams::mirror_firmware_to_lane_data(
+        /*store=*/nullptr, overrides, 0, 0x123456, "PLA", true,
+        helix::ams::MirrorPolicy::OverwriteAlways, "[test]");
+    CHECK(changed);
+    CHECK(overrides[0].color_rgb == 0xABCDEFu); // locked — untouched
+    CHECK(overrides[0].material == "PLA");      // unlocked — bootstrap filled
+}
+
+TEST_CASE("mirror_firmware_to_lane_data OverwriteAlways: auto-mirrored entry still tracks firmware",
+          "[mirror_firmware]") {
+    // Bootstrap case: empty override → first mirror call fills color/material
+    // and leaves locks false. A subsequent external edit should still
+    // propagate — otherwise OrcaSlicer's lane_data goes stale.
+    std::unordered_map<int, FilamentSlotOverride> overrides;
+
+    // First call: bootstrap from empty override.
+    CHECK(helix::ams::mirror_firmware_to_lane_data(
+        /*store=*/nullptr, overrides, 0, 0xFF0000, "PLA", true,
+        helix::ams::MirrorPolicy::OverwriteAlways, "[test]"));
+    CHECK(overrides[0].color_rgb == 0xFF0000u);
+    CHECK(overrides[0].material == "PLA");
+    CHECK_FALSE(overrides[0].user_locked_color);
+    CHECK_FALSE(overrides[0].user_locked_material);
+
+    // Second call: external edit changes color — locks are false, so mirror
+    // tracks the new firmware truth.
+    CHECK(helix::ams::mirror_firmware_to_lane_data(
+        /*store=*/nullptr, overrides, 0, 0x00FF00, "PETG", true,
+        helix::ams::MirrorPolicy::OverwriteAlways, "[test]"));
+    CHECK(overrides[0].color_rgb == 0x00FF00u);
+    CHECK(overrides[0].material == "PETG");
+}
+
+TEST_CASE("load_blocking: legacy lane_data record (no helix_locked_*) loads as user-locked "
+          "(#965 pessimistic default)",
+          "[filament_slot_override][slow]") {
+    // Pre-fix records (v0.99.60–.67) don't carry helix_locked_* fields. Many
+    // of those entries came from user edits — auto-mirror would silently
+    // clobber them on the next firmware change after upgrade. Treat legacy
+    // records with values as user-locked so existing data survives.
+    TmpCacheDir tmp("legacy_lane_data_lock_default");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_set_db_value("lane_data", "lane1",
+                          nlohmann::json{{"lane", "0"},
+                                         {"color", "#AABBCC"},
+                                         {"material", "PLA"},
+                                         {"vendor", "Polymaker"}});
+    api.mock_set_db_value("lane_data", "lane2",
+                          nlohmann::json{{"lane", "1"},
+                                         {"color", "#112233"},
+                                         {"vendor", "eSun"}});
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto loaded = store.load_blocking();
+    REQUIRE(loaded.size() == 2);
+
+    // Slot 0: both color and material present → both locked.
+    const auto& s0 = loaded.at(0);
+    CHECK(s0.color_rgb == 0xAABBCCu);
+    CHECK(s0.material == "PLA");
+    CHECK(s0.user_locked_color);
+    CHECK(s0.user_locked_material);
+
+    // Slot 1: only color set, no material → color locked, material unlocked
+    // (material is fair game for bootstrap fill).
+    const auto& s1 = loaded.at(1);
+    CHECK(s1.color_rgb == 0x112233u);
+    CHECK(s1.material.empty());
+    CHECK(s1.user_locked_color);
+    CHECK_FALSE(s1.user_locked_material);
+}
+
+TEST_CASE("save + load round-trip preserves explicit lock state",
+          "[filament_slot_override][slow]") {
+    // Auto-mirror records (locks=false) must reload as locks=false so
+    // subsequent firmware changes still propagate. The explicit-emission rule
+    // in to_lane_data_record distinguishes "explicit false" from "missing".
+    TmpCacheDir tmp("lock_state_roundtrip");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    // Slot 0: simulate auto-mirror — both fields set, both locks false.
+    FilamentSlotOverride auto_mirrored;
+    auto_mirrored.color_rgb = 0xAABBCC;
+    auto_mirrored.color_set = true;
+    auto_mirrored.material = "PLA";
+    auto_mirrored.user_locked_color = false;
+    auto_mirrored.user_locked_material = false;
+
+    bool done0 = false;
+    store.save_async(0, auto_mirrored, [&](bool, std::string) { done0 = true; });
+    REQUIRE(done0);
+
+    // Slot 1: user edit — both locked.
+    FilamentSlotOverride user_edit;
+    user_edit.color_rgb = 0x112233;
+    user_edit.color_set = true;
+    user_edit.material = "PETG";
+    user_edit.user_locked_color = true;
+    user_edit.user_locked_material = true;
+
+    bool done1 = false;
+    store.save_async(1, user_edit, [&](bool, std::string) { done1 = true; });
+    REQUIRE(done1);
+
+    auto loaded = store.load_blocking();
+    REQUIRE(loaded.size() == 2);
+    CHECK_FALSE(loaded.at(0).user_locked_color);
+    CHECK_FALSE(loaded.at(0).user_locked_material);
+    CHECK(loaded.at(1).user_locked_color);
+    CHECK(loaded.at(1).user_locked_material);
+}

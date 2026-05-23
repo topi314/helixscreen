@@ -946,6 +946,12 @@ AmsError AmsBackendCfs::set_slot_info(int slot_index, const SlotInfo& info, bool
             ovr.color_set = true; // a user-edit always records a color, even pure black (#000000)
             ovr.color_name = info.color_name;
             ovr.material = info.material;
+            // User-lock: CFS uses FillUnsetOnly so the locks are
+            // belt-and-suspenders here, but they keep the on-disk schema
+            // consistent across backends and protect against a future
+            // policy change. See #965 for the motivating bug.
+            ovr.user_locked_color = true;
+            ovr.user_locked_material = !info.material.empty();
             // SlotInfo carries the user's edit OR the bound Spoolman spool's
             // filament profile; the material-DB fallback for fields left at 0
             // is applied at emit time inside resolved_temps(). Centralized in

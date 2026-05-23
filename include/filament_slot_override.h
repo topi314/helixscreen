@@ -38,6 +38,26 @@ struct FilamentSlotOverride {
     bool color_set = false;
     std::string color_name;
     std::string material;
+    // User-lock flags — set true when a user explicitly edits a field via
+    // set_slot_info(persist=true). The OverwriteAlways auto-mirror policy
+    // skips fields whose lock is true so a subsequent firmware report (post-
+    // print state restoration, internal CHANGE_ZCOLOR, etc.) cannot silently
+    // overwrite the user's choice (#965 — AD5X firmware re-emitted prior
+    // material in Adventurer5M.json after print completion, clobbering the
+    // user's edit through the mirror).
+    //
+    // Auto-mirror writes (bootstrap on fresh install, swap detection) leave
+    // these false so subsequent firmware changes still propagate. clear_slot
+    // _override erases the whole entry, so locks reset to false naturally on
+    // re-bootstrap.
+    //
+    // Persistence: emitted as `helix_locked_color` / `helix_locked_material`
+    // in the lane_data record so locks survive across restarts. Legacy
+    // records (pre-fix) load with locks defaulted to TRUE when the field has
+    // a value — pessimistic preservation of existing user data we can't
+    // attribute to either auto-mirror or user edit.
+    bool user_locked_color = false;
+    bool user_locked_material = false;
     // Recommended print temperatures, written into the lane_data record so
     // OrcaSlicer 2.3.2+ can sync them onto the filament preset. Source order
     // (highest to lowest priority): explicit user entry > Spoolman spool's

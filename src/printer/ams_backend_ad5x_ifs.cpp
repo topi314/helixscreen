@@ -744,11 +744,18 @@ bool AmsBackendAd5xIfs::sync_override_to_firmware_locked(int slot_index,
     // observation. Pass slot_has_filament=true unconditionally; the helper's
     // own guards then enforce firmware_color != 0.
     //
-    // OverwriteAlways policy is correct for IFS only — set_slot_info pushes
-    // user color back to firmware via Adventurer5M.json, so user-truth and
-    // firmware-truth converge after any write. The mirror is a no-op in
-    // steady state and catches external edits (Mainsail console, native LCD,
-    // CHANGE_ZCOLOR) when they happen.
+    // OverwriteAlways policy on IFS: set_slot_info pushes user color back to
+    // firmware via Adventurer5M.json, so in the steady state user-truth and
+    // firmware-truth converge. The mirror bootstraps an empty override on
+    // hardware swap and catches genuine external edits (Mainsail console,
+    // native LCD, CHANGE_ZCOLOR).
+    //
+    // User-lock guard (#965): set_slot_info(persist=true) tags the override
+    // user_locked_color / user_locked_material; the helper skips those
+    // fields. Without the guard, an AD5X firmware post-print FFMInfo revert
+    // (re-emits prior material into Adventurer5M.json) was clobbering the
+    // user's material choice through this call site. To re-enable auto-track
+    // on a previously-edited slot the user calls clear_slot_override.
     bool changed = helix::ams::mirror_firmware_to_lane_data(
         override_store_.get(), overrides_, slot_index, firmware_color, firmware_material,
         /*slot_has_filament=*/true, helix::ams::MirrorPolicy::OverwriteAlways, backend_log_tag());
@@ -1196,6 +1203,15 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
             // materials_ copy; reuse it so the on-disk record carries the
             // firmware-valid value instead of the raw user-typed string.
             ovr.material = normalized_material;
+            // User-lock signals: persist=true is a user edit, so tag both
+            // fields user-locked. Material is only locked when the user
+            // actually provided one — an explicit empty material is the user
+            // saying "no material set", which the bootstrap mirror is allowed
+            // to fill from a subsequent firmware report. See #965 for why
+            // these locks exist (post-print firmware revert clobbered user
+            // material via the OverwriteAlways auto-mirror).
+            ovr.user_locked_color = true;
+            ovr.user_locked_material = !normalized_material.empty();
             // SlotInfo carries the user's edit OR the bound Spoolman spool's
             // filament profile; the material-DB fallback for fields left at 0
             // is applied at emit time inside resolved_temps(). Centralized in

@@ -519,6 +519,12 @@ AmsError AmsBackendSnapmaker::set_slot_info(int slot_index, const SlotInfo& info
             ovr.color_set = true; // a user-edit always records a color, even pure black (#000000)
             ovr.color_name = info.color_name;
             ovr.material = info.material;
+            // User-lock: persist=true edits are sticky against the
+            // OverwriteAlways auto-mirror (#965). Material is only locked
+            // when the user provided one; an explicit empty material means
+            // "let bootstrap fill it on next firmware report."
+            ovr.user_locked_color = true;
+            ovr.user_locked_material = !info.material.empty();
             // SlotInfo carries the user's edit OR the bound Spoolman spool's
             // filament profile; the material-DB fallback for fields left at 0
             // is applied at emit time inside resolved_temps(). Centralized in

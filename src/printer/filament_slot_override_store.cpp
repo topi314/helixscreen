@@ -66,6 +66,13 @@ nlohmann::json to_lane_data_record(int slot_index, const FilamentSlotOverride& o
         j["color"] = buf;
     }
     if (!o.material.empty()) j["material"] = o.material;
+    // helix_locked_* are HelixScreen-internal markers. Always emit both (even
+    // when false) so a future re-load can distinguish "explicit auto-mirror,
+    // safe to track" from "missing key, fall back to pessimistic default."
+    // OrcaSlicer's MoonrakerPrinterAgent ignores unknown fields, so the two
+    // extra booleans per slot cost nothing on its side.
+    j["helix_locked_color"] = o.user_locked_color;
+    j["helix_locked_material"] = o.user_locked_material;
     if (!o.brand.empty()) j["vendor"] = o.brand;
     if (o.spoolman_id > 0) j["spool_id"] = o.spoolman_id;
     if (o.updated_at.time_since_epoch().count() > 0) {
@@ -124,6 +131,14 @@ from_lane_data_record(const nlohmann::json& j) {
         }
     }
     o.material = j.value("material", "");
+    // Pessimistic legacy-default: pre-fix records have no helix_locked_* key.
+    // Assume the field IS user-locked when it carries a value — protects
+    // existing overrides from auto-mirror clobber after upgrade. New records
+    // (post-fix) carry the explicit flag and round-trip exactly. See struct
+    // doc + #965 for rationale.
+    o.user_locked_color = j.value("helix_locked_color", o.color_set);
+    o.user_locked_material =
+        j.value("helix_locked_material", !o.material.empty());
     o.brand = j.value("vendor", "");
     o.spoolman_id = j.value("spool_id", 0);
     o.bed_temp = j.value("bed_temp", 0);
@@ -324,6 +339,8 @@ nlohmann::json to_json(const FilamentSlotOverride& o) {
         {"color_set", o.color_set},
         {"color_name", o.color_name},
         {"material", o.material},
+        {"user_locked_color", o.user_locked_color},
+        {"user_locked_material", o.user_locked_material},
         {"bed_temp", o.bed_temp},
         {"nozzle_temp", o.nozzle_temp},
         {"updated_at", format_iso8601(o.updated_at)},
@@ -345,6 +362,10 @@ FilamentSlotOverride from_json(const nlohmann::json& j) {
     o.color_set = j.value("color_set", o.color_rgb != 0u);
     o.color_name = j.value("color_name", "");
     o.material = j.value("material", "");
+    // Pessimistic legacy-default — see from_lane_data_record + #965.
+    o.user_locked_color = j.value("user_locked_color", o.color_set);
+    o.user_locked_material =
+        j.value("user_locked_material", !o.material.empty());
     o.bed_temp = j.value("bed_temp", 0);
     o.nozzle_temp = j.value("nozzle_temp", 0);
     if (j.contains("updated_at") && j["updated_at"].is_string()) {
@@ -850,16 +871,27 @@ bool mirror_firmware_to_lane_data(FilamentSlotOverrideStore* store,
 
     switch (policy) {
         case MirrorPolicy::OverwriteAlways: {
-            // IFS: user edits round-trip through firmware (Adventurer5M.json),
-            // so firmware-truth and user-truth converge after a write. Safe to
-            // overwrite — and necessary to catch external edits (Mainsail
-            // console, native LCD, CHANGE_ZCOLOR macro).
-            if (!ovr.color_set || ovr.color_rgb != firmware_color) {
+            // IFS / Snapmaker-extended: user edits CAN reach firmware (IFS:
+            // direct Adventurer5M.json write; Snapmaker paxx12: POST endpoint).
+            // In steady state firmware-truth and user-truth converge, so this
+            // policy bootstraps an empty override AND catches genuine external
+            // edits (Mainsail console, native LCD, etc.).
+            //
+            // BUT user-locked fields are NEVER overwritten — set_slot_info
+            // (persist=true) tags the fields it wrote, and that tag survives
+            // restart via lane_data. Without this guard, a stale firmware
+            // re-emission (AD5X post-print FFMInfo revert, #965) would clobber
+            // the user's choice. Auto-mirror writes leave the locks false so
+            // subsequent firmware changes still propagate; users restore the
+            // auto-track behavior on a previously-locked slot by calling
+            // clear_slot_override.
+            if (!ovr.user_locked_color &&
+                (!ovr.color_set || ovr.color_rgb != firmware_color)) {
                 ovr.color_rgb = firmware_color;
                 ovr.color_set = true;
                 changed = true;
             }
-            if (ovr.material != firmware_material) {
+            if (!ovr.user_locked_material && ovr.material != firmware_material) {
                 ovr.material = firmware_material;
                 changed = true;
             }
