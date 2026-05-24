@@ -83,7 +83,27 @@ class CfsErrorDecoder {
                                     const nlohmann::json& values);
 };
 
-/// CFS (Creality Filament System) backend — K2 series printers with RS-485 CFS units
+/// Macro dialect emitted by the CFS backend.
+///
+/// K2 stock firmware exposes the CR_BOX_* primitives (CR_BOX_PRE_OPT,
+/// CR_BOX_EXTRUDE, CR_BOX_WASTE, CR_BOX_FLUSH, CR_BOX_END_OPT, CR_BOX_CUT,
+/// CR_BOX_RETRUDE) plus the BOX_* envelope (BOX_SAVE_FAN, BOX_MODE_WAIT,
+/// BOX_GO_TO_EXTRUDE_POS, BOX_NOZZLE_CLEAN, BOX_MOVE_TO_SAFE_POS,
+/// BOX_RESTORE_FAN). Selected when the printer is detected as a non-K1
+/// Creality with a `box` Klipper object.
+///
+/// K1 official CFS upgrade firmware (≥ v2.3.5.33) exposes a different,
+/// non-prefixed set: BOX_EXTRUDE_MATERIAL, BOX_MATERIAL_FLUSH,
+/// BOX_NOZZLE_CLEAN, BOX_CUT_MATERIAL, BOX_RETRUDE_MATERIAL,
+/// BOX_GO_TO_EXTRUDE_POS, BOX_MOVE_TO_SAFE_POS. The K2-only fan-save and
+/// mode-wait helpers are absent. Selected when PrinterDetector reports a
+/// K1-series printer. Issue #968.
+enum class CfsMacroVariant {
+    K2,
+    K1,
+};
+
+/// CFS (Creality Filament System) backend — K1 + K2 series printers with RS-485 CFS units
 class AmsBackendCfs : public AmsSubscriptionBackend {
   public:
     AmsBackendCfs(MoonrakerAPI* api, helix::MoonrakerClient* client);
@@ -146,9 +166,11 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     static AmsSystemInfo parse_box_status(const nlohmann::json& box_json);
 
     // GCode helpers (public for testing)
-    static std::string load_gcode(int global_slot_index);
-    static std::string unload_gcode();
-    static std::string swap_gcode(int global_slot_index);
+    static std::string load_gcode(int global_slot_index,
+                                  CfsMacroVariant variant = CfsMacroVariant::K2);
+    static std::string unload_gcode(CfsMacroVariant variant = CfsMacroVariant::K2);
+    static std::string swap_gcode(int global_slot_index,
+                                  CfsMacroVariant variant = CfsMacroVariant::K2);
     static std::string reset_gcode();
     static std::string recover_gcode();
 
@@ -185,6 +207,12 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
 
     std::string current_tnn_;
     bool motor_ready_ = true;
+
+    // K1 vs K2 macro dialect, latched in ctor from PrinterDetector. Most
+    // callers route through dispatch_action_script and pull the macro string
+    // from the static helpers (load_gcode/unload_gcode/swap_gcode), so this
+    // is read on the script-build side, not in hot paths.
+    CfsMacroVariant macro_variant_ = CfsMacroVariant::K2;
 
     // Callback lifetime management
     helix::AsyncLifetimeGuard lifetime_;

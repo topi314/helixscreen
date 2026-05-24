@@ -951,6 +951,101 @@
       ]
     },
     {
+      "id": "creality_k1_cfs",
+      "name": "Creality K1 (with CFS)",
+      "manufacturer": "Creality",
+      "toolhead_style": "creality_k1",
+      "image": "creality-k1.png",
+      "probe_type": "prtouch_v2",
+      "preset": "k1",
+      "print_start_profile": "creality_k1",
+      "pre_print_options": {
+        "macro_name": "START_PRINT",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
+            "enable_value": "0",
+            "skip_value": "1",
+            "default_value": "0"
+          }
+        ]
+      },
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "chamber_temp",
+          "confidence": 70,
+          "reason": "Chamber temperature sensor (enclosed printer)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "chamber_fan",
+          "confidence": 75,
+          "reason": "Chamber fan (Creality K1 signature)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "temperature_fan chamber_fan",
+          "confidence": 80,
+          "reason": "Temperature-controlled chamber fan"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "^box$",
+          "confidence": 95,
+          "reason": "CFS filament system detected (K1 official upgrade)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 200,
+          "max_x": 230,
+          "min_y": 200,
+          "max_y": 230,
+          "confidence": 50,
+          "reason": "Build volume ~220mm (K1 size; CFS upgrade shrinks Y ~5mm)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "creality",
+          "confidence": 60,
+          "reason": "Hostname contains 'creality'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "k1",
+          "confidence": 80,
+          "reason": "Hostname contains 'k1'"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "STM32H723",
+          "confidence": 35,
+          "reason": "STM32H723 MCU (Creality K1 series board)"
+        }
+      ]
+    },
+    {
       "id": "creality_k1_max",
       "name": "Creality K1 Max",
       "manufacturer": "Creality",
@@ -1014,6 +1109,108 @@
           "max_y": 320,
           "confidence": 70,
           "reason": "Build volume ~300mm (K1 Max size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "creality",
+          "confidence": 60,
+          "reason": "Hostname contains 'creality'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "k1-max",
+          "confidence": 90,
+          "reason": "Hostname contains 'k1-max'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "k1max",
+          "confidence": 90,
+          "reason": "Hostname contains 'k1max'"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "STM32H723",
+          "confidence": 35,
+          "reason": "STM32H723 MCU (Creality K1 series board)"
+        }
+      ]
+    },
+    {
+      "id": "creality_k1_max_cfs",
+      "name": "Creality K1 Max (with CFS)",
+      "manufacturer": "Creality",
+      "toolhead_style": "creality_k1",
+      "image": "creality-k1-max.png",
+      "probe_type": "prtouch_v2",
+      "preset": "k1",
+      "print_start_profile": "creality_k1",
+      "pre_print_options": {
+        "macro_name": "START_PRINT",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
+            "enable_value": "0",
+            "skip_value": "1",
+            "default_value": "0"
+          }
+        ]
+      },
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "chamber_temp",
+          "confidence": 70,
+          "reason": "Chamber temperature sensor (enclosed printer)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "chamber_fan",
+          "confidence": 75,
+          "reason": "Chamber fan (Creality K1 signature)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "camera",
+          "confidence": 60,
+          "reason": "Built-in camera (K1 Max has AI camera)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "^box$",
+          "confidence": 95,
+          "reason": "CFS filament system detected (K1 official upgrade)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 280,
+          "max_x": 320,
+          "min_y": 280,
+          "max_y": 320,
+          "confidence": 70,
+          "reason": "Build volume ~300mm (K1 Max size; CFS upgrade shrinks Y)"
         },
         {
           "type": "hostname_match",
@@ -1237,6 +1434,84 @@
           "pattern": "chamber_fan",
           "confidence": 75,
           "reason": "Chamber fan (Creality K1 series signature)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "creality",
+          "confidence": 60,
+          "reason": "Hostname contains 'creality'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "k1c",
+          "confidence": 95,
+          "reason": "Hostname contains 'k1c'"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "STM32H723",
+          "confidence": 35,
+          "reason": "STM32H723 MCU (Creality K1 series board)"
+        }
+      ]
+    },
+    {
+      "id": "creality_k1c_cfs",
+      "name": "Creality K1C (with CFS)",
+      "manufacturer": "Creality",
+      "toolhead_style": "creality_k1",
+      "image": "creality-k1c.png",
+      "probe_type": "prtouch_v2",
+      "preset": "k1c",
+      "print_start_profile": "creality_k1",
+      "pre_print_options": {
+        "macro_name": "START_PRINT",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
+            "enable_value": "0",
+            "skip_value": "1",
+            "default_value": "0"
+          }
+        ]
+      },
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "chamber_temp",
+          "confidence": 70,
+          "reason": "Chamber temperature sensor (enclosed printer)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "chamber_fan",
+          "confidence": 75,
+          "reason": "Chamber fan (Creality K1 series signature)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "^box$",
+          "confidence": 95,
+          "reason": "CFS filament system detected (K1 official upgrade ≥ v2.3.5.33)"
         },
         {
           "type": "hostname_match",

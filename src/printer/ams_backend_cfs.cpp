@@ -7,6 +7,7 @@
 #include "filament_slot_override_store.h"
 #include "moonraker_error.h"
 #include "post_op_cooldown_manager.h"
+#include "printer_detector.h"
 
 #include "hv/json.hpp"
 
@@ -286,7 +287,15 @@ AmsBackendCfs::AmsBackendCfs(MoonrakerAPI* api, helix::MoonrakerClient* client)
     system_info_.tip_method = TipMethod::CUT;
     system_info_.supports_purge = true;
 
-    spdlog::debug("[AMS CFS] Backend created");
+    // Latch K1 vs K2 macro dialect once. PrinterDetector results are based on
+    // the resolved printer database entry, which is settled by the time the
+    // AMS backend is constructed (printer discovery → detector → backend
+    // create). #968.
+    macro_variant_ = PrinterDetector::is_creality_k1() ? CfsMacroVariant::K1
+                                                       : CfsMacroVariant::K2;
+
+    spdlog::info("[AMS CFS] Backend created — macro variant: {}",
+                 macro_variant_ == CfsMacroVariant::K1 ? "K1 (BOX_*)" : "K2 (CR_BOX_*)");
 }
 
 void AmsBackendCfs::on_started() {
@@ -825,7 +834,7 @@ PathSegment AmsBackendCfs::infer_error_segment() const {
 AmsError AmsBackendCfs::load_filament(int slot_index) {
     auto err = check_preconditions();
     if (err.result != AmsResult::SUCCESS) return err;
-    auto gcode = load_gcode(slot_index);
+    auto gcode = load_gcode(slot_index, macro_variant_);
     if (gcode.empty()) {
         return AmsErrorHelper::invalid_slot(slot_index, 15);
     }
@@ -848,7 +857,7 @@ AmsError AmsBackendCfs::unload_filament(int) {
         begin_phase_tracking();
         apply_synthesized_action_locked();
     }
-    return dispatch_action_script(unload_gcode());
+    return dispatch_action_script(unload_gcode(macro_variant_));
 }
 
 AmsError AmsBackendCfs::select_slot(int) {
@@ -866,7 +875,8 @@ AmsError AmsBackendCfs::change_tool(int tool) {
     }
 
     // Validate gcode before mutating state
-    std::string gcode = needs_unload ? swap_gcode(tool) : load_gcode(tool);
+    std::string gcode = needs_unload ? swap_gcode(tool, macro_variant_)
+                                     : load_gcode(tool, macro_variant_);
     if (gcode.empty()) {
         return AmsErrorHelper::invalid_slot(tool, 15);
     }
@@ -1140,7 +1150,7 @@ namespace {
 /// of fresh filament — wipe required (observed K2 Plus 2026-05-23: T1
 /// load drip-trailed across the bed). Unload ends with the nozzle empty
 /// post-cut — wipe omitted to avoid pushing dribble back into the hotend.
-std::string wrap_with_park(const std::string& body, bool wipe_after) {
+std::string wrap_with_park_k2(const std::string& body, bool wipe_after) {
     std::string post_body = "\n";
     if (wipe_after) {
         post_body += "BOX_NOZZLE_CLEAN\n";
@@ -1155,47 +1165,113 @@ std::string wrap_with_park(const std::string& body, bool wipe_after) {
            body + post_body;
 }
 
+/// Wrap a BOX_* operation with the K1 macro envelope (#968).
+///
+/// Simpler than K2 — the K1 official CFS upgrade firmware does not expose
+/// BOX_SAVE_FAN / BOX_RESTORE_FAN / BOX_MODE_WAIT (verified absent in the
+/// public K1-Max box.cfg dump at DieDutchman/K1-Max-KAMP-CFS-Fix, and from
+/// the #968 reporter's gcode/help output where `BOX_GO_TO_EXTRUDE_POS` and
+/// `BOX_MOVE_TO_SAFE_POS` were the only envelope helpers that succeeded).
+///
+/// Sequence:
+///   1. SAVE_GCODE_STATE        — preserve coordinate mode + feedrate
+///   2. BOX_GO_TO_EXTRUDE_POS   — toolhead over waste port
+///   3. <body>                  — BOX_EXTRUDE_MATERIAL / BOX_CUT_MATERIAL / etc.
+///   4. BOX_NOZZLE_CLEAN        — (load/swap only) wipe before parking
+///   5. BOX_MOVE_TO_SAFE_POS    — park
+///   6. RESTORE_GCODE_STATE
+std::string wrap_with_park_k1(const std::string& body, bool wipe_after) {
+    std::string post_body = "\n";
+    if (wipe_after) {
+        post_body += "BOX_NOZZLE_CLEAN\n";
+    }
+    post_body += "BOX_MOVE_TO_SAFE_POS\n"
+                 "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+    return "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+           "BOX_GO_TO_EXTRUDE_POS\n" +
+           body + post_body;
+}
+
+std::string wrap_with_park(CfsMacroVariant variant, const std::string& body,
+                           bool wipe_after) {
+    return variant == CfsMacroVariant::K1 ? wrap_with_park_k1(body, wipe_after)
+                                          : wrap_with_park_k2(body, wipe_after);
+}
+
 } // namespace
 
-std::string AmsBackendCfs::load_gcode(int idx) {
+std::string AmsBackendCfs::load_gcode(int idx, CfsMacroVariant variant) {
     std::string tnn = CfsMaterialDb::slot_to_tnn(idx);
     if (tnn.empty()) {
         spdlog::error("[AMS CFS] Invalid slot index for load: {}", idx);
         return "";
+    }
+    if (variant == CfsMacroVariant::K1) {
+        // K1 official CFS upgrade firmware (≥ v2.3.5.33) — see header docs.
+        // Body: extrude from cassette → flush new material.
+        // Envelope wipe handles BOX_NOZZLE_CLEAN; no PRE_OPT/END_OPT counterparts.
+        return wrap_with_park(variant,
+                              "BOX_EXTRUDE_MATERIAL TNN=" + tnn +
+                                  "\nBOX_MATERIAL_FLUSH TNN=" + tnn,
+                              /*wipe_after=*/true);
     }
     // Use CR_BOX_* commands directly — M8200 macro's Jinja2 `params.I|int` is broken
     // on Creality's Klipper fork (always evaluates to 0, loading T1A regardless of I= value).
     // CR_BOX_PRE_OPT is required before extrude — sets CFS to material-change mode.
     // CR_BOX_WASTE must follow CR_BOX_EXTRUDE (purges transition material).
     // wipe_after=true: nozzle is full of fresh filament; wipe before parking.
-    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=" + tnn +
+    return wrap_with_park(variant,
+                          "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=" + tnn +
                               "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT",
                           /*wipe_after=*/true);
 }
 
-std::string AmsBackendCfs::unload_gcode() {
+std::string AmsBackendCfs::unload_gcode(CfsMacroVariant variant) {
+    if (variant == CfsMacroVariant::K1) {
+        // K1: BOX_CUT_MATERIAL handles the cut; BOX_RETRUDE_MATERIAL is the
+        // no-TNN retract primitive (operates on the currently-loaded slot
+        // tracked by the box driver) — same one BOX_QUIT_MATERIAL uses in
+        // box.cfg. A separate BOX_RETRUDE_MATERIAL_WITH_TNN macro exists for
+        // slot-targeted retracts, but we don't use it: when unloading there
+        // is no caller-known target slot, only the current one.
+        return wrap_with_park(variant,
+                              "BOX_CUT_MATERIAL\nBOX_RETRUDE_MATERIAL",
+                              /*wipe_after=*/false);
+    }
     // Unload ends with CR_BOX_RETRUDE — the nozzle is empty (cut + retracted),
     // so no wipe needed. Skipping the wipe also avoids the wipe macro pushing
     // anything back into the hotend during a "filament-out" state.
     // BOX_MODE_WAIT before CR_BOX_RETRUDE mirrors the stock
     // BOX_QUIT_MATERIAL_RETRUDE_MATERIAL sequence (state-machine settle
     // after the cut).
-    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_CUT\nBOX_MODE_WAIT\n"
+    return wrap_with_park(variant,
+                          "CR_BOX_PRE_OPT\nCR_BOX_CUT\nBOX_MODE_WAIT\n"
                           "CR_BOX_RETRUDE\nCR_BOX_END_OPT",
                           /*wipe_after=*/false);
 }
 
-std::string AmsBackendCfs::swap_gcode(int idx) {
+std::string AmsBackendCfs::swap_gcode(int idx, CfsMacroVariant variant) {
     std::string tnn = CfsMaterialDb::slot_to_tnn(idx);
     if (tnn.empty()) {
         spdlog::error("[AMS CFS] Invalid slot index for swap: {}", idx);
         return "";
     }
+    if (variant == CfsMacroVariant::K1) {
+        // K1: unload (cut + retract) then load new slot. No BOX_MODE_WAIT
+        // available on K1 firmware; cut + retract chain back-to-back as the
+        // BOX_QUIT_MATERIAL macro does in box.cfg.
+        return wrap_with_park(variant,
+                              "BOX_CUT_MATERIAL\nBOX_RETRUDE_MATERIAL\n"
+                              "BOX_EXTRUDE_MATERIAL TNN=" + tnn +
+                                  "\nBOX_MATERIAL_FLUSH TNN=" + tnn,
+                              /*wipe_after=*/true);
+    }
     // Full swap: unload current (cut+retract) then load new slot, all in one
     // session. BOX_MODE_WAIT interposed after CR_BOX_CUT (let the cutter
     // recover) and before CR_BOX_EXTRUDE (new slot's state-machine handoff).
     // Ends with flush of the NEW filament so wipe is required, same as load.
-    return wrap_with_park("CR_BOX_PRE_OPT\nCR_BOX_CUT\nBOX_MODE_WAIT\n"
+    return wrap_with_park(variant,
+                          "CR_BOX_PRE_OPT\nCR_BOX_CUT\nBOX_MODE_WAIT\n"
                           "CR_BOX_RETRUDE\nBOX_MODE_WAIT\n"
                           "CR_BOX_EXTRUDE TNN=" + tnn +
                           "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn +

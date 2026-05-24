@@ -2,11 +2,13 @@
 
 #include "ams_backend_cfs.h"
 #include "ams_types.h"
+#include "config.h"
 #include "filament_database.h"
 #include "filament_slot_override.h"
 #include "filament_slot_override_store.h"
 #include "moonraker_api_mock.h"
 #include "moonraker_client_mock.h"
+#include "printer_discovery.h"
 #include "printer_state.h"
 
 #include <filesystem>
@@ -66,6 +68,9 @@ class CfsTestAccess {
         if (it == b.last_rfid_uid_.end())
             return std::nullopt;
         return it->second;
+    }
+    static helix::printer::CfsMacroVariant macro_variant(const AmsBackendCfs& b) {
+        return b.macro_variant_;
     }
 };
 
@@ -554,6 +559,214 @@ TEST_CASE("CFS GCode helpers", "[ams][cfs]") {
     SECTION("recover gcode") {
         REQUIRE(AmsBackendCfs::recover_gcode() == "BOX_ERROR_RESUME_PROCESS");
     }
+}
+
+TEST_CASE("CFS K1 macro variant (#968)", "[ams][cfs]") {
+    // K1 official CFS upgrade firmware uses plain BOX_* macros — no CR_ prefix,
+    // no fan-save/mode-wait helpers. Reporter's K1C gcode/help shows
+    // BOX_GO_TO_EXTRUDE_POS and BOX_MOVE_TO_SAFE_POS succeed but every
+    // CR_BOX_* command returns key61 "Unknown command".
+    using V = helix::printer::CfsMacroVariant;
+
+    SECTION("K1 load gcode uses BOX_* primitives with TNN, simpler envelope") {
+        const std::string expected_a =
+            "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+            "BOX_GO_TO_EXTRUDE_POS\n"
+            "BOX_EXTRUDE_MATERIAL TNN=T1A\n"
+            "BOX_MATERIAL_FLUSH TNN=T1A\n"
+            "BOX_NOZZLE_CLEAN\n"
+            "BOX_MOVE_TO_SAFE_POS\n"
+            "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+        REQUIRE(AmsBackendCfs::load_gcode(0, V::K1) == expected_a);
+
+        // No CR_BOX_* primitives on K1.
+        const std::string g = AmsBackendCfs::load_gcode(1, V::K1);
+        REQUIRE(g.find("CR_BOX_") == std::string::npos);
+        REQUIRE(g.find("TNN=T1B") != std::string::npos);
+
+        // K1 firmware lacks fan-save and mode-wait — must not be emitted.
+        REQUIRE(g.find("BOX_SAVE_FAN") == std::string::npos);
+        REQUIRE(g.find("BOX_RESTORE_FAN") == std::string::npos);
+        REQUIRE(g.find("BOX_MODE_WAIT") == std::string::npos);
+
+        // Envelope helpers that K1 DOES support.
+        REQUIRE(g.find("BOX_GO_TO_EXTRUDE_POS") != std::string::npos);
+        REQUIRE(g.find("BOX_MOVE_TO_SAFE_POS") != std::string::npos);
+        REQUIRE(g.find("BOX_NOZZLE_CLEAN") != std::string::npos);
+    }
+
+    SECTION("K1 load TNN covers full unit/slot range") {
+        // K1 firmware (per K1-Max box.cfg) uses the same TNN encoding as K2.
+        // Spot-check first slot of each unit + last slot to lock in the
+        // CfsMaterialDb::slot_to_tnn translation under the K1 path.
+        struct Case { int idx; const char* tnn; };
+        for (const auto& c : {Case{0, "T1A"}, Case{1, "T1B"}, Case{3, "T1D"},
+                              Case{4, "T2A"}, Case{8, "T3A"}, Case{12, "T4A"},
+                              Case{15, "T4D"}}) {
+            const std::string g = AmsBackendCfs::load_gcode(c.idx, V::K1);
+            const std::string needle = std::string("TNN=") + c.tnn;
+            INFO("idx=" << c.idx << " expected " << needle);
+            REQUIRE(g.find(needle) != std::string::npos);
+        }
+        // Out-of-range stays empty (same contract as K2).
+        REQUIRE(AmsBackendCfs::load_gcode(-1, V::K1).empty());
+        REQUIRE(AmsBackendCfs::load_gcode(16, V::K1).empty());
+    }
+
+    SECTION("K1 unload gcode exact match") {
+        const std::string expected =
+            "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+            "BOX_GO_TO_EXTRUDE_POS\n"
+            "BOX_CUT_MATERIAL\n"
+            "BOX_RETRUDE_MATERIAL\n"
+            "BOX_MOVE_TO_SAFE_POS\n"
+            "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+        REQUIRE(AmsBackendCfs::unload_gcode(V::K1) == expected);
+        // Sanity: no K2-only macros leaked in.
+        const std::string g = AmsBackendCfs::unload_gcode(V::K1);
+        REQUIRE(g.find("CR_BOX_") == std::string::npos);
+        REQUIRE(g.find("BOX_MODE_WAIT") == std::string::npos);
+        REQUIRE(g.find("BOX_SAVE_FAN") == std::string::npos);
+        // Nozzle empty post-cut → no wipe.
+        REQUIRE(g.find("BOX_NOZZLE_CLEAN") == std::string::npos);
+    }
+
+    SECTION("K1 swap gcode exact match for slot 5 (T2B)") {
+        const std::string expected =
+            "SAVE_GCODE_STATE NAME=helix_cfs_load\n"
+            "BOX_GO_TO_EXTRUDE_POS\n"
+            "BOX_CUT_MATERIAL\n"
+            "BOX_RETRUDE_MATERIAL\n"
+            "BOX_EXTRUDE_MATERIAL TNN=T2B\n"
+            "BOX_MATERIAL_FLUSH TNN=T2B\n"
+            "BOX_NOZZLE_CLEAN\n"
+            "BOX_MOVE_TO_SAFE_POS\n"
+            "RESTORE_GCODE_STATE NAME=helix_cfs_load";
+        REQUIRE(AmsBackendCfs::swap_gcode(5, V::K1) == expected);
+    }
+
+    SECTION("K1 swap spot checks across slot range") {
+        for (int idx : {0, 1, 3, 5, 11, 15}) {
+            const std::string g = AmsBackendCfs::swap_gcode(idx, V::K1);
+            REQUIRE(g.find("CR_BOX_") == std::string::npos);
+            REQUIRE(g.find("BOX_CUT_MATERIAL") != std::string::npos);
+            REQUIRE(g.find("BOX_RETRUDE_MATERIAL") != std::string::npos);
+            REQUIRE(g.find("BOX_EXTRUDE_MATERIAL TNN=") != std::string::npos);
+            REQUIRE(g.find("BOX_MATERIAL_FLUSH TNN=") != std::string::npos);
+            // Swap ends with flush of new slot — wipe before parking.
+            REQUIRE(g.find("BOX_NOZZLE_CLEAN") != std::string::npos);
+            REQUIRE(g.find("BOX_MOVE_TO_SAFE_POS") != std::string::npos);
+        }
+        REQUIRE(AmsBackendCfs::swap_gcode(-1, V::K1).empty());
+        REQUIRE(AmsBackendCfs::swap_gcode(16, V::K1).empty());
+    }
+
+    SECTION("K1 envelope omits all K2-only helpers across all three operations") {
+        // Regression guard: any future refactor that accidentally re-introduces
+        // BOX_SAVE_FAN/RESTORE_FAN/BOX_MODE_WAIT for the K1 path would send
+        // the printer back into key61 territory (#968).
+        for (const std::string& g :
+             {AmsBackendCfs::load_gcode(0, V::K1),
+              AmsBackendCfs::unload_gcode(V::K1),
+              AmsBackendCfs::swap_gcode(0, V::K1)}) {
+            REQUIRE(g.find("BOX_SAVE_FAN") == std::string::npos);
+            REQUIRE(g.find("BOX_RESTORE_FAN") == std::string::npos);
+            REQUIRE(g.find("BOX_MODE_WAIT") == std::string::npos);
+            REQUIRE(g.find("CR_BOX_") == std::string::npos);
+            // Envelope helpers the K1 firmware DOES expose are present.
+            REQUIRE(g.find("BOX_GO_TO_EXTRUDE_POS") != std::string::npos);
+            REQUIRE(g.find("BOX_MOVE_TO_SAFE_POS") != std::string::npos);
+            REQUIRE(g.find("SAVE_GCODE_STATE NAME=helix_cfs_load") != std::string::npos);
+            REQUIRE(g.find("RESTORE_GCODE_STATE NAME=helix_cfs_load") != std::string::npos);
+        }
+    }
+
+    SECTION("K2 default preserved when variant omitted") {
+        // Existing call sites without variant arg must still emit K2 macros.
+        REQUIRE(AmsBackendCfs::load_gcode(0).find("CR_BOX_EXTRUDE") != std::string::npos);
+        REQUIRE(AmsBackendCfs::unload_gcode().find("CR_BOX_CUT") != std::string::npos);
+        REQUIRE(AmsBackendCfs::swap_gcode(0).find("CR_BOX_EXTRUDE") != std::string::npos);
+    }
+}
+
+TEST_CASE("CFS backend ctor latches macro variant from PrinterDetector (#968)",
+          "[ams][cfs]") {
+    // The constructor reads PrinterDetector::is_creality_k1() once and caches
+    // the result. Verify both routes resolve correctly.
+    auto* config = Config::get_instance();
+    REQUIRE(config != nullptr);
+    const std::string type_path = config->df() + "type";
+    const std::string saved = config->get<std::string>(type_path, "");
+
+    SECTION("K1C printer type → K1 dialect") {
+        config->set<std::string>(type_path, "Creality K1C");
+        AmsBackendCfs backend(nullptr, nullptr);
+        REQUIRE(CfsTestAccess::macro_variant(backend) ==
+                helix::printer::CfsMacroVariant::K1);
+    }
+
+    SECTION("K1 Max printer type → K1 dialect") {
+        config->set<std::string>(type_path, "Creality K1 Max");
+        AmsBackendCfs backend(nullptr, nullptr);
+        REQUIRE(CfsTestAccess::macro_variant(backend) ==
+                helix::printer::CfsMacroVariant::K1);
+    }
+
+    SECTION("K2 Plus printer type → K2 dialect") {
+        config->set<std::string>(type_path, "Creality K2 Plus");
+        AmsBackendCfs backend(nullptr, nullptr);
+        REQUIRE(CfsTestAccess::macro_variant(backend) ==
+                helix::printer::CfsMacroVariant::K2);
+    }
+
+    SECTION("Unset printer type → K2 dialect (safe default)") {
+        config->set<std::string>(type_path, "");
+        AmsBackendCfs backend(nullptr, nullptr);
+        REQUIRE(CfsTestAccess::macro_variant(backend) ==
+                helix::printer::CfsMacroVariant::K2);
+    }
+
+    // Restore prior config so we don't bleed into adjacent tests.
+    config->set<std::string>(type_path, saved);
+}
+
+TEST_CASE("PrinterDiscovery enables CFS for K1 box object (#968 gate)",
+          "[ams][cfs][discovery]") {
+    // Before 6ebe7417b: K1 + `box` → no CFS, warn log.
+    // After the #968 fix flip: K1 + `box` → CFS enabled, K1 dialect chosen
+    // downstream by AmsBackendCfs ctor.
+    auto* config = Config::get_instance();
+    REQUIRE(config != nullptr);
+    const std::string type_path = config->df() + "type";
+    const std::string saved = config->get<std::string>(type_path, "");
+
+    SECTION("K1C + box object enables CFS") {
+        config->set<std::string>(type_path, "Creality K1C");
+        helix::PrinterDiscovery discovery;
+        nlohmann::json objects = {"configfile", "box", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+        REQUIRE(discovery.has_mmu());
+        REQUIRE(discovery.get_mmu_type() == AmsType::CFS);
+    }
+
+    SECTION("K2 Plus + box object enables CFS (regression check)") {
+        config->set<std::string>(type_path, "Creality K2 Plus");
+        helix::PrinterDiscovery discovery;
+        nlohmann::json objects = {"configfile", "box", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+        REQUIRE(discovery.has_mmu());
+        REQUIRE(discovery.get_mmu_type() == AmsType::CFS);
+    }
+
+    SECTION("No box object → no CFS regardless of printer type") {
+        config->set<std::string>(type_path, "Creality K1C");
+        helix::PrinterDiscovery discovery;
+        nlohmann::json objects = {"configfile", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+        REQUIRE_FALSE(discovery.has_mmu());
+    }
+
+    config->set<std::string>(type_path, saved);
 }
 
 TEST_CASE("Material comfort ranges", "[filament]") {
