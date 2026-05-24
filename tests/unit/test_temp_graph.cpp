@@ -927,7 +927,19 @@ TEST_CASE_METHOD(TempGraphTestFixture,
         if (g->series_meta[i].chart_series) {
             REQUIRE(g->series_meta[i].target_centi_buf != nullptr);
             REQUIRE(g->series_meta[i].target_head == 0);
-            // First 100 entries are accessible and zeroed.
+
+            // The buffer pointer MUST have changed — set_point_count must free
+            // the old allocation and create a fresh one. Without this assertion
+            // the test trivially passes even on a no-op implementation, since
+            // the default 1200-element buffer is also zero-initialized.
+            if (g->series_meta[i].id == id_a) {
+                REQUIRE(g->series_meta[i].target_centi_buf != orig_a);
+            }
+            if (g->series_meta[i].id == id_b) {
+                REQUIRE(g->series_meta[i].target_centi_buf != orig_b);
+            }
+
+            // First `count` entries are accessible and zeroed.
             for (int j = 0; j < 100; j++) {
                 REQUIRE(g->series_meta[i].target_centi_buf[j] == 0);
             }
