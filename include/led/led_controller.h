@@ -459,6 +459,14 @@ class LedController {
         return &led_config_version_;
     }
 
+    /// Boolean subject (0/1) reflecting whether at least one strip is selected and
+    /// therefore controllable. Drives visibility of action-style UI (Print Status
+    /// light toggle, Home LED widgets). Registered globally as "led_controllable"
+    /// for direct XML binding.
+    lv_subject_t* get_led_controllable_subject() {
+        return &led_controllable_;
+    }
+
     /// Cached last-used color including white channel
     struct LastColor {
         uint32_t rgb = 0xFFFFFF; // RGB as 0xRRGGBB (color picker compatibility)
@@ -539,7 +547,12 @@ class LedController {
     [[nodiscard]] ScaledColor compute_scaled_last_color(int brightness_pct) const;
 
     lv_subject_t led_config_version_{}; // Bumped on discover/config changes
+    lv_subject_t led_controllable_{};   // 0/1 mirror of !selected_strips_.empty()
     bool version_subject_initialized_ = false;
+
+    /// Push the current selected_strips_ emptiness into led_controllable_.
+    /// Cheap no-op if the value is unchanged. Safe before subject init (skips).
+    void publish_controllable_state();
 
     // Default color presets
     static constexpr uint32_t DEFAULT_COLOR_PRESETS[] = {0xFFFFFF, 0xFFD700, 0xFF6B35, 0x4FC3F7,

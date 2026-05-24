@@ -150,11 +150,13 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     // Initialize standard macros
     StandardMacros::instance().init(hardware);
 
-    // Initialize LED controller and discover LED backends
+    // Initialize LED controller and discover LED backends.
+    // Application::init_core_subjects ran init(nullptr, nullptr) earlier so the
+    // led_controllable subject was registered before XML instantiation; this call
+    // re-runs init() to rebind the real api/client (init() always overwrites
+    // api_/client_ + backend api pointers, and the subject path is idempotent).
     auto& led_ctrl = helix::led::LedController::instance();
-    if (!led_ctrl.is_initialized()) {
-        led_ctrl.init(api, client);
-    }
+    led_ctrl.init(api, client);
     led_ctrl.discover_from_hardware(hardware);
     led_ctrl.discover_wled_strips();
 

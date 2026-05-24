@@ -1153,6 +1153,107 @@ TEST_CASE("LedController: all strips stale triggers auto-select", "[led][control
     ctrl.deinit();
 }
 
+TEST_CASE("LedController: auto-select picks output_pin LED when no native present",
+          "[led][controller]") {
+    // Regression for K2 Plus / K1C: their only LED is `[output_pin LED]`. Auto-select
+    // used to only fire for native strips, leaving the print-status light toggle to
+    // bail out with "No light configured". Auto-select must also cover output_pin.
+    auto* cfg = Config::get_instance();
+    if (cfg) {
+        cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+        cfg->save();
+    }
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    helix::PrinterDiscovery discovery;
+    nlohmann::json objects = nlohmann::json::array({"output_pin LED", "extruder"});
+    discovery.parse_objects(objects);
+    ctrl.discover_from_hardware(discovery);
+
+    REQUIRE(ctrl.selected_strips().size() == 1);
+    REQUIRE(ctrl.selected_strips()[0] == "output_pin LED");
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: auto-select picks all selectable strips across backends",
+          "[led][controller]") {
+    auto* cfg = Config::get_instance();
+    if (cfg) {
+        cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+        cfg->save();
+    }
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    helix::PrinterDiscovery discovery;
+    nlohmann::json objects = nlohmann::json::array(
+        {"neopixel chamber_light", "output_pin case_light", "extruder"});
+    discovery.parse_objects(objects);
+    ctrl.discover_from_hardware(discovery);
+
+    // Both backends should be represented in the auto-selection
+    auto& selected = ctrl.selected_strips();
+    REQUIRE(selected.size() == 2);
+    bool has_neopixel = false;
+    bool has_output_pin = false;
+    for (const auto& id : selected) {
+        if (id == "neopixel chamber_light")
+            has_neopixel = true;
+        if (id == "output_pin case_light")
+            has_output_pin = true;
+    }
+    REQUIRE(has_neopixel);
+    REQUIRE(has_output_pin);
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: led_controllable subject reflects selected_strips emptiness",
+          "[led][controller][led_controllable]") {
+    auto* cfg = Config::get_instance();
+    if (cfg) {
+        cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+        cfg->save();
+    }
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    auto* subj = ctrl.get_led_controllable_subject();
+    REQUIRE(subj != nullptr);
+
+    // Fresh init with cleared config: nothing selected → 0
+    REQUIRE(ctrl.selected_strips().empty());
+    REQUIRE(lv_subject_get_int(subj) == 0);
+
+    // Manually populating selected_strips flips the subject to 1
+    ctrl.set_selected_strips({"neopixel chamber_light"});
+    REQUIRE(lv_subject_get_int(subj) == 1);
+
+    // Clearing flips it back to 0
+    ctrl.set_selected_strips({});
+    REQUIRE(lv_subject_get_int(subj) == 0);
+
+    // Auto-select via discovery also flips it to 1 (regression for K2 Plus / K1C:
+    // output_pin-only printers must show the light toggle as controllable)
+    helix::PrinterDiscovery discovery;
+    nlohmann::json objects = nlohmann::json::array({"output_pin LED", "extruder"});
+    discovery.parse_objects(objects);
+    ctrl.discover_from_hardware(discovery);
+
+    REQUIRE_FALSE(ctrl.selected_strips().empty());
+    REQUIRE(lv_subject_get_int(subj) == 1);
+
+    ctrl.deinit();
+}
+
 // ============================================================================
 // Mock-API fixture for tests that verify actual color values sent
 // ============================================================================

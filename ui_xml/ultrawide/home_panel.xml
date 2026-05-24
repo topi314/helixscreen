@@ -250,13 +250,13 @@
         </ui_button>
 
         <divider_vertical name="divider2" height="80%">
-          <bind_flag_if_eq subject="printer_has_led" flag="hidden" ref_value="0"/>
+          <bind_flag_if_eq subject="led_controllable" flag="hidden" ref_value="0"/>
         </divider_vertical>
 
         <!-- Light -->
         <ui_button name="light_button"
                    height="100%" variant="ghost" flex_grow="1" style_border_width="0" focusable="false">
-          <bind_flag_if_eq subject="printer_has_led" flag="hidden" ref_value="0"/>
+          <bind_flag_if_eq subject="led_controllable" flag="hidden" ref_value="0"/>
           <bind_state_if_not_eq subject="printer_connection_state" state="disabled" ref_value="2"/>
           <icon name="light_icon" src="lightbulb_outline" size="#icon_size" align="center" variant="muted"/>
           <event_cb trigger="clicked" callback="light_toggle_cb"/>

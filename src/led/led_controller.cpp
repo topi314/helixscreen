@@ -7,6 +7,7 @@
 #include "app_globals.h"
 #include "color_utils.h"
 #include "config.h"
+#include "helix/xml/scoped_subject_registry.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "moonraker_error.h"
@@ -71,13 +72,17 @@ void LedController::init(MoonrakerAPI* api, MoonrakerClient* client) {
     macro_.set_api(api);
     output_pin_.set_api(api);
 
-    // Initialize version subject for UI binding (idempotent)
+    // Initialize subjects for UI binding (idempotent).
+    // led_controllable is registered globally so XML can bind it by name.
     if (!version_subject_initialized_) {
         lv_subject_init_int(&led_config_version_, 0);
+        lv_subject_init_int(&led_controllable_, 0);
+        helix::xml::register_subject_in_current_scope("led_controllable", &led_controllable_);
         version_subject_initialized_ = true;
         StaticSubjectRegistry::instance().register_deinit("LedController", [this]() {
             if (version_subject_initialized_) {
                 lv_subject_deinit(&led_config_version_);
+                lv_subject_deinit(&led_controllable_);
                 version_subject_initialized_ = false;
             }
         });
@@ -85,6 +90,7 @@ void LedController::init(MoonrakerAPI* api, MoonrakerClient* client) {
 
     initialized_ = true;
     load_config();
+    publish_controllable_state();
     spdlog::info("[LedController] Initialized");
 }
 
@@ -314,15 +320,20 @@ void LedController::discover_from_hardware(const helix::PrinterDiscovery& hardwa
         }
     }
 
-    // Auto-select all native strips if nothing is selected yet
-    // This ensures LEDs work out-of-the-box on first run (mock or real)
-    if (selected_strips_.empty() && native_.is_available()) {
-        for (const auto& strip : native_.strips()) {
-            selected_strips_.push_back(strip.id);
+    // Auto-select all discoverable strips if nothing is selected yet.
+    // Covers native (neopixel/dotstar/led), WLED, output_pin, and macro backends so
+    // printers whose only LED is e.g. `[output_pin LED]` (K2 Plus, K1C) get a working
+    // light toggle out-of-the-box without forcing the user into Settings.
+    if (selected_strips_.empty()) {
+        auto picks = all_selectable_strips();
+        if (!picks.empty()) {
+            for (const auto& strip : picks) {
+                selected_strips_.push_back(strip.id);
+            }
+            save_config();
+            spdlog::info("[LedController] Auto-selected {} strip(s) (first run)",
+                         selected_strips_.size());
         }
-        save_config();
-        spdlog::info("[LedController] Auto-selected {} native strip(s) (first run)",
-                     selected_strips_.size());
     }
 
     // Bump version to notify UI widgets to rebind
@@ -331,6 +342,7 @@ void LedController::discover_from_hardware(const helix::PrinterDiscovery& hardwa
         spdlog::debug("[LedController] LED config version bumped to {}",
                       lv_subject_get_int(&led_config_version_));
     }
+    publish_controllable_state();
 }
 
 void LedController::discover_wled_strips() {
@@ -2273,6 +2285,19 @@ void LedController::set_selected_strips(const std::vector<std::string>& strips) 
     // Bump version to notify UI widgets to rebind
     if (version_subject_initialized_) {
         lv_subject_set_int(&led_config_version_, lv_subject_get_int(&led_config_version_) + 1);
+    }
+    publish_controllable_state();
+}
+
+void LedController::publish_controllable_state() {
+    if (!version_subject_initialized_) {
+        return;
+    }
+    int desired = selected_strips_.empty() ? 0 : 1;
+    if (lv_subject_get_int(&led_controllable_) != desired) {
+        lv_subject_set_int(&led_controllable_, desired);
+        spdlog::debug("[LedController] led_controllable={} ({} strip(s) selected)", desired,
+                      selected_strips_.size());
     }
 }
 

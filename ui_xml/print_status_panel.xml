@@ -347,7 +347,7 @@
                        height="#button_height_lg" flex_grow="1" text="Light" translation_tag="Light"
                        bind_icon="light_button_icon" label_hidden_if_bp_eq="1">
               <event_cb trigger="clicked" callback="on_print_status_light"/>
-              <bind_flag_if_eq subject="printer_has_led" flag="hidden" ref_value="0"/>
+              <bind_flag_if_eq subject="led_controllable" flag="hidden" ref_value="0"/>
             </ui_button>
             <!-- Timelapse button: only visible when Moonraker-Timelapse plugin installed -->
             <ui_button name="btn_timelapse"

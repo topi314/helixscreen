@@ -1547,6 +1547,13 @@ bool Application::init_core_subjects() {
     // navigates into an AMS panel, which is where the call used to live.
     helix::ui::init_ams_tool_text_observers();
 
+    // Bring LedController up with no API yet so its `led_controllable` subject
+    // is registered for XML before the home/print-status panels instantiate.
+    // printer_discovery later re-runs init(api, client) to bind the API — init()
+    // always overwrites api_/client_ + rebinds backend pointers, and the subject
+    // init path is idempotent via version_subject_initialized_.
+    helix::led::LedController::instance().init(nullptr, nullptr);
+
     spdlog::debug("[Application] Core subjects initialized");
     helix::MemoryMonitor::log_now("after_core_subjects_init");
     return true;
