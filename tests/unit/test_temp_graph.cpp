@@ -1113,3 +1113,38 @@ TEST_CASE_METHOD(TempGraphTestFixture,
 
     ui_temp_graph_destroy(g);
 }
+
+TEST_CASE_METHOD(TempGraphTestFixture,
+                 "ui_temp_graph: clear_series zeroes target buffer",
+                 "[temp_graph][target_history]") {
+    ui_temp_graph_t* g = ui_temp_graph_create(screen);
+    REQUIRE(g != nullptr);
+
+    int id = ui_temp_graph_add_series(g, "X", lv_color_hex(0xFF0000));
+    REQUIRE(id >= 0);
+
+    auto get_meta = [&]() -> ui_temp_series_meta_t* {
+        for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
+            if (g->series_meta[i].chart_series && g->series_meta[i].id == id)
+                return &g->series_meta[i];
+        }
+        return nullptr;
+    };
+    auto* m = get_meta();
+    m->show_target = true;
+    m->target_temp = 200.0f;
+
+    ui_temp_graph_update_series(g, id, 100.0f);
+    ui_temp_graph_update_series(g, id, 110.0f);
+    REQUIRE(m->target_head == 2);
+    REQUIRE(m->target_centi_buf[0] == 2000);
+
+    ui_temp_graph_clear_series(g, id);
+
+    REQUIRE(m->target_head == 0);
+    for (int i = 0; i < g->point_count; i++) {
+        REQUIRE(m->target_centi_buf[i] == 0);
+    }
+
+    ui_temp_graph_destroy(g);
+}

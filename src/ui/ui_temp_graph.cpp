@@ -1366,6 +1366,7 @@ void ui_temp_graph_set_series_data_with_targets(ui_temp_graph_t* graph, int seri
 }
 
 // Clear all data
+// Clear all data
 void ui_temp_graph_clear(ui_temp_graph_t* graph) {
     if (!graph || !graph->chart)
         return;
@@ -1374,6 +1375,12 @@ void ui_temp_graph_clear(ui_temp_graph_t* graph) {
         ui_temp_series_meta_t* meta = &graph->series_meta[i];
         if (meta->chart_series) {
             lv_chart_set_all_values(graph->chart, meta->chart_series, LV_CHART_POINT_NONE);
+            // Also wipe target history.
+            if (meta->target_centi_buf) {
+                memset(meta->target_centi_buf, 0,
+                       static_cast<size_t>(graph->point_count) * sizeof(int16_t));
+            }
+            meta->target_head = 0;
         }
     }
 
@@ -1394,6 +1401,13 @@ void ui_temp_graph_clear_series(ui_temp_graph_t* graph, int series_id) {
     }
 
     lv_chart_set_all_values(graph->chart, meta->chart_series, LV_CHART_POINT_NONE);
+
+    // Wipe target history too.
+    if (meta->target_centi_buf) {
+        memset(meta->target_centi_buf, 0,
+               static_cast<size_t>(graph->point_count) * sizeof(int16_t));
+    }
+    meta->target_head = 0;
 
     lv_chart_refresh(graph->chart);
 
