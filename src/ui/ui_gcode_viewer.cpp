@@ -13,6 +13,7 @@
 #include "gcode_parser.h"
 #include "gcode_streaming_config.h"
 #include "gcode_streaming_controller.h"
+#include "gcode_viewer_watchdog.h"
 #include "geometry_budget_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "memory_utils.h"
@@ -297,10 +298,17 @@ class GCodeViewerState {
     // observes a moving cached_up_to_layer_ and does nothing.
     // ========================================================================
     static constexpr uint32_t WATCHDOG_INTERVAL_MS = 2000;
+    // Consecutive confirmed-stall ticks tolerated before the watchdog gives up
+    // and surfaces an error. At WATCHDOG_INTERVAL_MS this is ~60s — generous vs.
+    // the 1-2 ticks a real dropped-invalidate needs to recover, but it stops the
+    // multi-hour thrash seen when an EXTERNAL failure (disk full) wedges the
+    // render permanently (bundle YZQ47HQ6: 4000+ kicks over ~2h).
+    static constexpr int WATCHDOG_MAX_STALL_KICKS = 30;
     lv_timer_t* watchdog_timer_{nullptr};
-    int watchdog_last_cached_layer_{-2};   ///< -2 sentinel = never sampled
-    int watchdog_last_target_layer_{-2};   ///< -2 sentinel = never sampled
-    uint32_t watchdog_kicks_{0};           ///< Diagnostic counter
+    int watchdog_last_cached_layer_{-2}; ///< -2 sentinel = never sampled
+    int watchdog_last_target_layer_{-2}; ///< -2 sentinel = never sampled
+    int watchdog_stall_streak_{0};       ///< Consecutive confirmed-stall ticks (resets on progress)
+    uint32_t watchdog_kicks_{0};         ///< Diagnostic counter (cumulative)
     uint32_t watchdog_last_kick_log_ms_{0}; ///< Rate-limit kick warns to ~one per print phase
 
     /// Content offset (stored to apply when 2D renderer is lazily created)
@@ -457,12 +465,12 @@ build_3d_geometry_in_budget(const helix::gcode::ParsedGCodeFile& file, const cha
     builder.set_budget_tube_sides(budget_config.tube_sides);
     builder.set_budget_limit(budget_config.budget_bytes);
 
-    helix::gcode::SimplificationOptions opts{
-        .tolerance_mm = budget_config.simplification_tolerance,
-        .min_segment_length_mm = 0.05f,
-        .max_direction_change_deg = budget_config.tier >= 3   ? 45.0f
-                                    : budget_config.tier == 2 ? 30.0f
-                                                              : 15.0f};
+    helix::gcode::SimplificationOptions opts{.tolerance_mm = budget_config.simplification_tolerance,
+                                             .min_segment_length_mm = 0.05f,
+                                             .max_direction_change_deg =
+                                                 budget_config.tier >= 3   ? 45.0f
+                                                 : budget_config.tier == 2 ? 30.0f
+                                                                           : 15.0f};
 
     auto geometry = std::make_unique<helix::gcode::RibbonGeometry>(builder.build(file, opts));
 
@@ -1116,17 +1124,20 @@ static void gcode_viewer_watchdog_cb(lv_timer_t* timer) {
     int cached = st->layer_renderer_2d_->get_cached_up_to_layer();
     int target = st->layer_renderer_2d_->get_current_layer();
 
-    // Stall = solid cache is behind the requested target AND it's the same
-    // target+cached pair we observed last tick. Direct cached<target check
-    // (vs. needs_more_frames()) avoids the ghost-build false-positive: ghost
-    // thread running with solid cache complete is a healthy waiting state,
-    // not a stall — kicking invalidate during ghost wait would cause a
-    // redundant solid re-render every 2s on AD5M.
-    bool cache_behind_target = (cached < target);
-    bool same_state = (cached == st->watchdog_last_cached_layer_) &&
-                      (target == st->watchdog_last_target_layer_);
+    // Decide whether to kick (self-heal a dropped invalidate) or give up (the
+    // render is wedged on a persistent external failure — e.g. disk full — that
+    // re-invalidating can't fix). Direct cached<target (vs. needs_more_frames())
+    // avoids the ghost-build false-positive: ghost thread running with solid
+    // cache complete is a healthy waiting state, not a stall. See
+    // gcode_viewer_watchdog.h; logic is unit-tested in test_gcode_viewer_watchdog.
+    const helix::gcode_viewer::WatchdogObservation obs{
+        cached, target, st->watchdog_last_cached_layer_, st->watchdog_last_target_layer_,
+        st->watchdog_stall_streak_};
+    const auto decision =
+        helix::gcode_viewer::watchdog_evaluate(obs, gcode_viewer_state_t::WATCHDOG_MAX_STALL_KICKS);
+    st->watchdog_stall_streak_ = decision.stall_streak;
 
-    if (cache_behind_target && same_state && st->watchdog_last_cached_layer_ != -2) {
+    if (decision.kick) {
         st->watchdog_kicks_++;
 
         // Rate-limit the warn so we don't fill the bundle on a wedged renderer.
@@ -1136,16 +1147,27 @@ static void gcode_viewer_watchdog_cb(lv_timer_t* timer) {
         bool should_log = (st->watchdog_last_kick_log_ms_ == 0) ||
                           (now_ms - st->watchdog_last_kick_log_ms_ >= kKickLogIntervalMs);
         if (should_log) {
-            uint32_t age_ms =
-                st->print_progress_last_change_ms_ == 0
-                    ? 0
-                    : (now_ms - st->print_progress_last_change_ms_);
+            uint32_t age_ms = st->print_progress_last_change_ms_ == 0
+                                  ? 0
+                                  : (now_ms - st->print_progress_last_change_ms_);
             spdlog::warn("[GCode Viewer] watchdog: cache stalled (cached={} target={} "
                          "progress_layer={} progress_age_ms={} kicks={}), forcing invalidate",
                          cached, target, st->print_progress_layer_, age_ms, st->watchdog_kicks_);
             st->watchdog_last_kick_log_ms_ = now_ms;
         }
 
+        lv_obj_invalidate(obj);
+    } else if (decision.give_up) {
+        // Self-heal exhausted: stop thrashing and surface the failure. Mirrors
+        // the streaming load-failure path (toast + telemetry + Error state); the
+        // early-return at the top of this callback for non-Loaded state means we
+        // stop kicking on the next tick.
+        spdlog::warn("[GCode Viewer] watchdog: giving up after {} consecutive stalls "
+                     "(cached={} target={} progress_layer={}) — surfacing error",
+                     decision.stall_streak, cached, target, st->print_progress_layer_);
+        st->viewer_state = GcodeViewerState::Error;
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to load G-code preview"));
+        TelemetryManager::instance().record_error("gcode_viewer", "render_stall_giveup", "");
         lv_obj_invalidate(obj);
     }
 
@@ -1254,8 +1276,8 @@ lv_obj_t* ui_gcode_viewer_create(lv_obj_t* parent) {
     // Renderer-stall watchdog — see gcode_viewer_watchdog_cb for rationale.
     // Always-on timer; the callback gates on viewer_state / paused / progress
     // mode so it's a no-op when there's nothing to watch.
-    st->watchdog_timer_ = lv_timer_create(
-        gcode_viewer_watchdog_cb, gcode_viewer_state_t::WATCHDOG_INTERVAL_MS, obj);
+    st->watchdog_timer_ =
+        lv_timer_create(gcode_viewer_watchdog_cb, gcode_viewer_state_t::WATCHDOG_INTERVAL_MS, obj);
 
     spdlog::debug("[GCode Viewer] Widget created");
     return obj;
@@ -1431,8 +1453,7 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                             st->layer_renderer_2d_->set_tool_color_palette(stats.filament_palette);
                             spdlog::info("[GCode Viewer] Streaming 2D using tool palette "
                                          "(size={}, initial_tool={})",
-                                         stats.filament_palette.size(),
-                                         stats.initial_tool_index);
+                                         stats.filament_palette.size(), stats.initial_tool_index);
                         } else {
                             // Single-color print: prefer palette[initial_tool_index] when the
                             // slicer emitted a multi-color metadata line and the gcode actually
@@ -1447,8 +1468,8 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                                 chosen = stats.filament_palette[stats.initial_tool_index];
                             }
                             if (!chosen.empty()) {
-                                lv_color_t color = lv_color_hex(
-                                    std::strtol(chosen.c_str() + 1, nullptr, 16));
+                                lv_color_t color =
+                                    lv_color_hex(std::strtol(chosen.c_str() + 1, nullptr, 16));
                                 st->layer_renderer_2d_->set_extrusion_color(color);
                                 spdlog::info("[GCode Viewer] Using filament color from metadata: "
                                              "{} (tool={}, palette={})",
@@ -1462,8 +1483,7 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                     // available. AMS-known slot colors are typically more accurate than
                     // slicer-emitted palette (which can lag firmware-side filament swaps).
                     if (!st->tool_color_overrides.empty()) {
-                        st->layer_renderer_2d_->set_tool_color_overrides(
-                            st->tool_color_overrides);
+                        st->layer_renderer_2d_->set_tool_color_overrides(st->tool_color_overrides);
                         spdlog::debug("[GCode Viewer] Streaming 2D applied {} AMS color overrides",
                                       st->tool_color_overrides.size());
                     }
@@ -1867,8 +1887,7 @@ void ui_gcode_viewer_clear_all_active() {
     if (snapshot.empty()) {
         return;
     }
-    spdlog::warn("[GCode Viewer] Pressure response: clearing {} active viewer(s)",
-                 snapshot.size());
+    spdlog::warn("[GCode Viewer] Pressure response: clearing {} active viewer(s)", snapshot.size());
     for (lv_obj_t* obj : snapshot) {
         if (obj && lv_obj_is_valid(obj)) {
             ui_gcode_viewer_clear(obj);
@@ -1923,9 +1942,9 @@ void ui_gcode_viewer_force_redraw(lv_obj_t* obj) {
     if (!st)
         return;
 
-    // 3D path: the renderer's cached-blit fast path skips re-rendering when
-    // state is unchanged and draw_buf_ exists. Drop the draw_buf so the next
-    // DRAW_POST takes the full render path (render_to_fbo -> blit_to_lvgl).
+        // 3D path: the renderer's cached-blit fast path skips re-rendering when
+        // state is unchanged and draw_buf_ exists. Drop the draw_buf so the next
+        // DRAW_POST takes the full render path (render_to_fbo -> blit_to_lvgl).
 #ifdef ENABLE_3D_RENDERER
     if (st->renderer_) {
         st->renderer_->clear_cached_frame();
