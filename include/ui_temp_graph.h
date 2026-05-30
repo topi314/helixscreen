@@ -38,9 +38,14 @@
 // Default configuration
 #define UI_TEMP_GRAPH_MAX_SERIES 16      // Maximum concurrent temperature series
 #define UI_TEMP_GRAPH_DISPLAY_MINUTES 20 // Display period in minutes (primary constant)
-#define UI_TEMP_GRAPH_SAMPLE_RATE_HZ 1   // Sample rate (1 sample per second)
+// Chart resolution: one point every SAMPLE_INTERVAL_SEC. A 20-min window holds
+// far more 1 Hz detail than any panel can resolve (plots are ~330-1024px wide),
+// so we store/draw coarser to keep per-frame software-render cost bounded on
+// slow 32-bit boards (#979: 1200 points × N series froze the K2 Plus touch UI).
+// 20 min / 3 s = 400 points.
+#define UI_TEMP_GRAPH_SAMPLE_INTERVAL_SEC 3
 #define UI_TEMP_GRAPH_DEFAULT_POINTS                                                               \
-    (UI_TEMP_GRAPH_DISPLAY_MINUTES * 60 * UI_TEMP_GRAPH_SAMPLE_RATE_HZ)
+    (UI_TEMP_GRAPH_DISPLAY_MINUTES * 60 / UI_TEMP_GRAPH_SAMPLE_INTERVAL_SEC)
 #define UI_TEMP_GRAPH_DISPLAY_MS (UI_TEMP_GRAPH_DISPLAY_MINUTES * 60 * 1000) // Display period in ms
 #define UI_TEMP_GRAPH_DEFAULT_MIN_TEMP 0.0f   // Default Y-axis minimum
 #define UI_TEMP_GRAPH_DEFAULT_MAX_TEMP 100.0f // Default Y-axis maximum
@@ -54,13 +59,13 @@
  * Used by ui_temp_graph_set_features() / ui_temp_graph_get_features().
  */
 enum ui_temp_graph_feature {
-    TEMP_GRAPH_FEATURE_LINES = (1 << 0),         // Temperature data lines (always forced on)
-    TEMP_GRAPH_FEATURE_TARGET_LINES = (1 << 1),  // Target temperature dashed lines (master switch)
-    TEMP_GRAPH_FEATURE_LEGEND = (1 << 2),        // Legend chips (color swatch + series name)
-    TEMP_GRAPH_FEATURE_Y_AXIS = (1 << 3),        // Y-axis temperature labels
-    TEMP_GRAPH_FEATURE_X_AXIS = (1 << 4),        // X-axis time labels
-    TEMP_GRAPH_FEATURE_GRADIENTS = (1 << 5),     // Gradient fills under lines
-    TEMP_GRAPH_FEATURE_READOUTS = (1 << 6),      // Reserved — managed by widget, not by this module
+    TEMP_GRAPH_FEATURE_LINES = (1 << 0),        // Temperature data lines (always forced on)
+    TEMP_GRAPH_FEATURE_TARGET_LINES = (1 << 1), // Target temperature dashed lines (master switch)
+    TEMP_GRAPH_FEATURE_LEGEND = (1 << 2),       // Legend chips (color swatch + series name)
+    TEMP_GRAPH_FEATURE_Y_AXIS = (1 << 3),       // Y-axis temperature labels
+    TEMP_GRAPH_FEATURE_X_AXIS = (1 << 4),       // X-axis time labels
+    TEMP_GRAPH_FEATURE_GRADIENTS = (1 << 5),    // Gradient fills under lines
+    TEMP_GRAPH_FEATURE_READOUTS = (1 << 6), // Reserved — managed by widget, not by this module
     TEMP_GRAPH_FEATURE_TARGET_HISTORY = (1 << 7), // Sub-flag: time-varying dashed trace vs.
                                                   // legacy horizontal line. Requires TARGET_LINES.
 };
@@ -96,8 +101,8 @@ struct ui_temp_series_meta_t {
     //   Must be (re)allocated to graph->point_count entries by add_series /
     //   set_point_count; freed by remove_series / destroy.
     int16_t* target_centi_buf = nullptr;
-    int      target_head = 0;        // Count of valid samples in [0, target_head).
-                                     //   Caps at point_count; shift-left on overflow.
+    int target_head = 0; // Count of valid samples in [0, target_head).
+                         //   Caps at point_count; shift-left on overflow.
 };
 
 /**

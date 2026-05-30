@@ -1272,3 +1272,59 @@ TEST_CASE("coalesce_target_runs: respects a sub-range [first,second)",
     REQUIRE(runs.size() == 1);
     REQUIRE(runs[0] == std::make_pair(1, 4)); // flat run within the segment only
 }
+
+// ============================================================================
+// decimate_indices (#979) — compress a dense (1 Hz) history window down to the
+// chart's point budget by time-bucketing, so a 20-min window fits in ~400
+// points instead of 1200. Returns indices to keep (last sample per bucket,
+// always including the most recent).
+// ============================================================================
+
+#include <cstdint>
+
+// Forward declaration of the function under test (defined in temp_graph_controller.cpp).
+namespace helix::temp_graph_internal {
+std::vector<int> decimate_indices(const std::vector<int64_t>& timestamps_ms, int max_points);
+}
+
+TEST_CASE("decimate_indices: empty / non-positive budget yields nothing",
+          "[temp_graph][decimate]") {
+    REQUIRE(helix::temp_graph_internal::decimate_indices({}, 400).empty());
+    REQUIRE(helix::temp_graph_internal::decimate_indices({1, 2, 3}, 0).empty());
+}
+
+TEST_CASE("decimate_indices: fewer samples than budget keeps all", "[temp_graph][decimate]") {
+    std::vector<int64_t> ts = {0, 1000, 2000, 3000};
+    auto keep = helix::temp_graph_internal::decimate_indices(ts, 400);
+    REQUIRE(keep.size() == 4);
+    REQUIRE(keep == std::vector<int>({0, 1, 2, 3}));
+}
+
+TEST_CASE("decimate_indices: all-equal timestamps keep endpoints only", "[temp_graph][decimate]") {
+    std::vector<int64_t> ts(10, 5000); // span 0
+    auto keep = helix::temp_graph_internal::decimate_indices(ts, 4);
+    REQUIRE(keep.size() == 2);
+    REQUIRE(keep.front() == 0);
+    REQUIRE(keep.back() == 9);
+}
+
+TEST_CASE("decimate_indices: dense window compresses to <= budget, keeps newest",
+          "[temp_graph][decimate]") {
+    // 1200 samples at 1 Hz (20 min) -> at most 400 points, most recent retained.
+    std::vector<int64_t> ts;
+    ts.reserve(1200);
+    for (int i = 0; i < 1200; i++)
+        ts.push_back(static_cast<int64_t>(i) * 1000);
+    auto keep = helix::temp_graph_internal::decimate_indices(ts, 400);
+
+    REQUIRE(!keep.empty());
+    REQUIRE(keep.size() <= 400);
+    REQUIRE(keep.size() >= 390);  // buckets are near-evenly filled
+    REQUIRE(keep.back() == 1199); // newest sample always kept
+    // strictly increasing
+    for (size_t i = 1; i < keep.size(); i++)
+        REQUIRE(keep[i] > keep[i - 1]);
+    // every index in range
+    for (int idx : keep)
+        REQUIRE((idx >= 0 && idx < 1200));
+}

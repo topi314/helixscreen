@@ -16,6 +16,57 @@
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <cstdint>
+#include <vector>
+
+namespace helix::temp_graph_internal {
+
+// Compress a time-ordered (ascending) list of sample timestamps down to at most
+// `max_points` by bucketing the span into `max_points` equal time slices and
+// keeping the last sample in each non-empty slice. The most recent sample is
+// always retained; the result is strictly increasing. Lets a dense 1 Hz history
+// window fill a coarse chart buffer without dropping the older end (#979).
+std::vector<int> decimate_indices(const std::vector<int64_t>& timestamps_ms, int max_points) {
+    std::vector<int> keep;
+    const int n = static_cast<int>(timestamps_ms.size());
+    if (n <= 0 || max_points <= 0)
+        return keep;
+
+    if (n <= max_points) {
+        keep.reserve(n);
+        for (int i = 0; i < n; i++)
+            keep.push_back(i);
+        return keep;
+    }
+
+    const int64_t span = timestamps_ms[n - 1] - timestamps_ms[0];
+    if (span <= 0) {
+        // Degenerate (all samples share a timestamp): keep just the endpoints.
+        keep.push_back(0);
+        if (n - 1 != 0)
+            keep.push_back(n - 1);
+        return keep;
+    }
+
+    auto bucket = [&](int i) -> int64_t {
+        int64_t b = (timestamps_ms[i] - timestamps_ms[0]) * max_points / span;
+        if (b >= max_points)
+            b = max_points - 1;
+        if (b < 0)
+            b = 0;
+        return b;
+    };
+
+    keep.reserve(max_points);
+    for (int i = 0; i < n; i++) {
+        // Last sample of its bucket (and always the very last sample).
+        if (i == n - 1 || bucket(i) != bucket(i + 1))
+            keep.push_back(i);
+    }
+    return keep;
+}
+
+} // namespace helix::temp_graph_internal
 
 namespace helix {
 
@@ -287,12 +338,14 @@ void TempGraphController::setup_observers() {
                     if (si.series_id < 0)
                         return;
 
-                    // Throttle chart updates to 1Hz per series — Klipper pushes
-                    // status at ~4Hz which causes excessive LVGL chart invalidations
+                    // Throttle chart updates to one sample per SAMPLE_INTERVAL_SEC
+                    // per series — Klipper pushes status at ~4Hz, and the chart
+                    // only holds one point per interval, so faster pushes just
+                    // burn LVGL redraws (the K2 Plus freeze, #979).
                     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                       std::chrono::system_clock::now().time_since_epoch())
                                       .count();
-                    if (now_ms - si.last_update_ms < 1000)
+                    if (now_ms - si.last_update_ms < UI_TEMP_GRAPH_SAMPLE_INTERVAL_SEC * 1000)
                         return;
                     si.last_update_ms = now_ms;
 
@@ -382,7 +435,13 @@ void TempGraphController::backfill_history() {
     int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
-    int64_t cutoff_ms = now_ms - static_cast<int64_t>(config_.point_count) * 1000;
+    // Fetch the full display window of history, then decimate to the chart's
+    // point budget. History is stored at Klipper's ~1 Hz rate, but the chart
+    // holds far fewer points (one per SAMPLE_INTERVAL_SEC) — pushing the raw
+    // 1 Hz stream would overflow the shift-mode buffer and show only the most
+    // recent point_count seconds instead of the whole window (#979).
+    int64_t cutoff_ms = now_ms - static_cast<int64_t>(config_.point_count) *
+                                     UI_TEMP_GRAPH_SAMPLE_INTERVAL_SEC * 1000;
 
     for (auto& s : series_) {
         if (s.series_id < 0)
@@ -392,12 +451,22 @@ void TempGraphController::backfill_history() {
         if (samples.empty())
             continue;
 
+        // Decimate to <= point_count by time-bucketing (keeps the newest sample).
+        std::vector<int64_t> sample_ts;
+        sample_ts.reserve(samples.size());
+        for (const auto& sample : samples)
+            sample_ts.push_back(sample.timestamp_ms);
+        auto kept = temp_graph_internal::decimate_indices(sample_ts, config_.point_count);
+        if (kept.empty())
+            continue;
+
         // Build parallel temp / target arrays for one-call replay.
         std::vector<float> temps;
         std::vector<float> targets;
-        temps.reserve(samples.size());
-        targets.reserve(samples.size());
-        for (const auto& sample : samples) {
+        temps.reserve(kept.size());
+        targets.reserve(kept.size());
+        for (int idx : kept) {
+            const auto& sample = samples[idx];
             temps.push_back(centi_to_degrees_f(sample.temp_centi));
             targets.push_back(s.show_target ? centi_to_degrees_f(sample.target_centi) : 0.0f);
         }
@@ -407,18 +476,17 @@ void TempGraphController::backfill_history() {
         // first_value_received=true so the next live update_series_with_time does
         // not wipe the just-populated buffer via lv_chart_set_all_values.
         ui_temp_graph_set_series_data_with_targets(graph_, s.series_id, temps.data(),
-                                                   targets.data(),
-                                                   static_cast<int>(samples.size()));
+                                                   targets.data(), static_cast<int>(kept.size()));
 
         // Populate X-axis timestamp tracking directly. We deliberately do NOT call
         // update_series_with_time here: that would push another sample onto the
         // chart (duplicating the last historical sample) and call push_target_sample
         // which would corrupt the just-replayed target buffer with the staged
         // meta->target_temp at position N. set_axis_timestamps is side-effect-free.
-        const auto& last = samples.back();
-        const auto& first = samples.front();
+        const auto& last = samples[kept.back()];
+        const auto& first = samples[kept.front()];
         ui_temp_graph_set_axis_timestamps(graph_, first.timestamp_ms, last.timestamp_ms,
-                                          static_cast<int>(samples.size()));
+                                          static_cast<int>(kept.size()));
 
         // Stage the latest target for the accent tick + next-sample push.
         if (s.show_target) {
