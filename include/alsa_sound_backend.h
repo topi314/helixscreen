@@ -29,13 +29,25 @@ class ALSASoundBackend : public SoundBackend {
     void silence() override;
     void set_waveform(Waveform w) override;
     void set_filter(const std::string& type, float cutoff) override;
-    bool supports_waveforms() const override { return true; }
-    bool supports_amplitude() const override { return true; }
-    bool supports_filter() const override { return true; }
-    float min_tick_ms() const override { return 1.0f; }
+    bool supports_waveforms() const override {
+        return true;
+    }
+    bool supports_amplitude() const override {
+        return true;
+    }
+    bool supports_filter() const override {
+        return true;
+    }
+    float min_tick_ms() const override {
+        return 1.0f;
+    }
 
-    /// Initialize ALSA PCM device. Returns false if no audio device available.
-    bool initialize();
+    /// Initialize the named ALSA PCM device. Returns false if it can't be opened.
+    bool initialize(const std::string& device);
+
+    bool supports_device_selection() const override {
+        return true;
+    }
 
     /// Stop render thread and close ALSA device.
     void shutdown();
@@ -50,14 +62,20 @@ class ALSASoundBackend : public SoundBackend {
     void set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) override;
     void set_voice_waveform(int slot, Waveform w) override;
     void silence_voice(int slot) override;
-    int voice_count() const override { return MAX_VOICES; }
+    int voice_count() const override {
+        return MAX_VOICES;
+    }
 
     // NoteEvent interface (primary path for synth sounds)
     void publish_note(int slot, const NoteEvent& event) override;
-    bool supports_note_events() const override { return true; }
+    bool supports_note_events() const override {
+        return true;
+    }
 
     // Render source for direct audio generation (tracker PCM playback)
-    bool supports_render_source() const override { return true; }
+    bool supports_render_source() const override {
+        return true;
+    }
     void set_render_source(std::function<void(float*, size_t, int)> fn) override;
     void clear_render_source() override;
 

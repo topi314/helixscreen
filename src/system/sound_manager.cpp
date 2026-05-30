@@ -19,6 +19,7 @@
 #endif
 
 #ifdef HELIX_HAS_ALSA
+#include "alsa_device_enum.h"
 #include "alsa_sound_backend.h"
 #endif
 
@@ -343,12 +344,21 @@ std::shared_ptr<SoundBackend> SoundManager::create_backend() {
 #endif
 
 #ifdef HELIX_HAS_ALSA
-    auto alsa_backend = std::make_shared<ALSASoundBackend>();
-    if (alsa_backend->initialize()) {
-        spdlog::info("[SoundManager] Using ALSA PCM backend");
-        return alsa_backend;
+    {
+        auto alsa_backend = std::make_shared<ALSASoundBackend>();
+        std::string dev = helix::audio::resolve_alsa_device();
+        if (alsa_backend->initialize(dev)) {
+            spdlog::info("[SoundManager] Using ALSA PCM backend ('{}')", dev);
+            return alsa_backend;
+        }
+        // Resilience: a stale saved/env device must not kill audio — retry the
+        // ALSA default before falling through to PWM/M300.
+        if (dev != "default" && alsa_backend->initialize("default")) {
+            spdlog::warn("[SoundManager] ALSA device '{}' failed; using 'default'", dev);
+            return alsa_backend;
+        }
+        spdlog::debug("[SoundManager] ALSA not available, falling back");
     }
-    spdlog::debug("[SoundManager] ALSA not available, falling back");
 #endif
 
     // Try PWM sysfs backend (AD5M buzzer)
@@ -376,7 +386,8 @@ void SoundManager::load_theme(const std::string& name) {
         // If no theme is loaded at all, try default as fallback
         if (current_theme_.sounds.empty() && name != "default") {
             spdlog::info("[SoundManager] Attempting fallback to 'default' theme");
-            auto fallback = SoundThemeParser::load_from_file(helix::find_readable("sounds/default.json"));
+            auto fallback =
+                SoundThemeParser::load_from_file(helix::find_readable("sounds/default.json"));
             if (fallback) {
                 current_theme_ = std::move(*fallback);
                 theme_name_ = "default";

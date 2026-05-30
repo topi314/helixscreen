@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include "note_event.h"
+
 #include <functional>
 #include <string>
-
-#include "note_event.h"
 
 /// Sound priority levels (higher numeric value = more important)
 enum class SoundPriority {
@@ -52,6 +52,11 @@ class SoundBackend {
         return false;
     }
 
+    /// Whether this backend can switch output devices at runtime (ALSA only).
+    virtual bool supports_device_selection() const {
+        return false;
+    }
+
     /// Set the active waveform type (only called if supports_waveforms() is true)
     virtual void set_waveform(Waveform /* w */) {}
 
@@ -62,21 +67,26 @@ class SoundBackend {
 
     /// Set a specific voice slot (0-based). Default: slot 0 maps to set_tone().
     virtual void set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) {
-        if (slot == 0) set_tone(freq_hz, amplitude, duty_cycle);
+        if (slot == 0)
+            set_tone(freq_hz, amplitude, duty_cycle);
     }
 
     /// Set waveform for a specific voice slot. Default: slot 0 maps to set_waveform().
     virtual void set_voice_waveform(int slot, Waveform w) {
-        if (slot == 0) set_waveform(w);
+        if (slot == 0)
+            set_waveform(w);
     }
 
     /// Silence a specific voice slot. Default: slot 0 maps to silence().
     virtual void silence_voice(int slot) {
-        if (slot == 0) silence();
+        if (slot == 0)
+            silence();
     }
 
     /// Number of independent voice slots. Default: 1 (monophonic).
-    virtual int voice_count() const { return 1; }
+    virtual int voice_count() const {
+        return 1;
+    }
 
     /// Publish a complete note event for a voice. PCM backends (SDL, ALSA) use
     /// this for per-sample rendering. Non-PCM backends ignore it.
@@ -85,7 +95,9 @@ class SoundBackend {
     /// Whether this backend uses NoteEvent-based rendering (per-sample envelope,
     /// sweep, LFO in the render thread). When true, the sequencer skips per-tick
     /// set_tone/set_filter/set_waveform calls — the callback handles everything.
-    virtual bool supports_note_events() const { return false; }
+    virtual bool supports_note_events() const {
+        return false;
+    }
 
     /// Minimum tick interval the backend can handle (ms)
     virtual float min_tick_ms() const {
@@ -95,7 +107,9 @@ class SoundBackend {
     /// Whether this backend supports direct audio rendering via set_render_source.
     /// Backends with real audio output (SDL, ALSA) return true.
     /// Frequency-only backends (PWM, M300) return false.
-    virtual bool supports_render_source() const { return false; }
+    virtual bool supports_render_source() const {
+        return false;
+    }
 
     /// Set an external audio render source. When set, the backend's render loop
     /// calls this instead of per-voice waveform generation.

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -17,11 +18,13 @@ ALSASoundBackend::~ALSASoundBackend() {
     shutdown();
 }
 
-bool ALSASoundBackend::initialize() {
-    // Open with NONBLOCK to avoid hanging if device is busy
-    int err = snd_pcm_open(&pcm_, "default", SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
+bool ALSASoundBackend::initialize(const std::string& device) {
+    // Device name is resolved by the caller (SoundManager via
+    // helix::audio::resolve_alsa_device(), precedence env > settings > default).
+    // Open with NONBLOCK to avoid hanging if the device is busy.
+    int err = snd_pcm_open(&pcm_, device.c_str(), SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
     if (err < 0) {
-        spdlog::error("[ALSASound] Cannot open PCM device 'default': {}", snd_strerror(err));
+        spdlog::error("[ALSASound] Cannot open PCM device '{}': {}", device, snd_strerror(err));
         return false;
     }
 
@@ -195,7 +198,8 @@ void ALSASoundBackend::set_waveform(Waveform w) {
 }
 
 void ALSASoundBackend::set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) {
-    if (slot < 0 || slot >= MAX_VOICES) return;
+    if (slot < 0 || slot >= MAX_VOICES)
+        return;
     auto& s = voice_slots_[slot];
     s.event.freq_hz = freq_hz;
     s.event.velocity = amplitude;
@@ -204,18 +208,21 @@ void ALSASoundBackend::set_voice(int slot, float freq_hz, float amplitude, float
 }
 
 void ALSASoundBackend::set_voice_waveform(int slot, Waveform w) {
-    if (slot < 0 || slot >= MAX_VOICES) return;
+    if (slot < 0 || slot >= MAX_VOICES)
+        return;
     voice_slots_[slot].event.wave = w;
 }
 
 void ALSASoundBackend::silence_voice(int slot) {
-    if (slot < 0 || slot >= MAX_VOICES) return;
+    if (slot < 0 || slot >= MAX_VOICES)
+        return;
     voice_slots_[slot].event.velocity = 0;
     voice_slots_[slot].generation.fetch_add(1, std::memory_order_release);
 }
 
 void ALSASoundBackend::publish_note(int slot, const NoteEvent& event) {
-    if (slot < 0 || slot >= MAX_VOICES) return;
+    if (slot < 0 || slot >= MAX_VOICES)
+        return;
     voice_slots_[slot].event = event;
     voice_slots_[slot].generation.fetch_add(1, std::memory_order_release);
 }
@@ -281,8 +288,7 @@ void ALSASoundBackend::render_loop() {
                     float cutoff = filter_cutoff_.load(std::memory_order_relaxed);
                     helix::audio::update_filter_if_needed(filter_, ft, cutoff,
                                                           static_cast<float>(sample_rate_));
-                    helix::audio::apply_filter(filter_, mix_buf_.data(),
-                                               static_cast<int>(frames));
+                    helix::audio::apply_filter(filter_, mix_buf_.data(), static_cast<int>(frames));
                 }
                 has_audio = true;
             }
@@ -301,9 +307,9 @@ void ALSASoundBackend::render_loop() {
                 slot.reset_for_new_note();
                 if (slot.active.filter_type != 0) {
                     auto ft = (slot.active.filter_type == 1) ? helix::audio::FilterType::LOWPASS
-                                                              : helix::audio::FilterType::HIGHPASS;
-                    helix::audio::compute_biquad_coeffs(slot.filter, ft,
-                                                         slot.active.filter_cutoff, sr);
+                                                             : helix::audio::FilterType::HIGHPASS;
+                    helix::audio::compute_biquad_coeffs(slot.filter, ft, slot.active.filter_cutoff,
+                                                        sr);
                 }
             }
 
@@ -365,8 +371,7 @@ snd_pcm_sframes_t ALSASoundBackend::recover_xrun(snd_pcm_sframes_t err) {
         ++xrun_count_;
         auto now = std::chrono::steady_clock::now();
         if (now - last_xrun_log_ >= std::chrono::seconds(5)) {
-            spdlog::debug("[ALSASound] Buffer underrun (count={}), recovering",
-                          xrun_count_);
+            spdlog::debug("[ALSASound] Buffer underrun (count={}), recovering", xrun_count_);
             last_xrun_log_ = now;
         }
         int ret = snd_pcm_prepare(pcm_);
@@ -381,7 +386,8 @@ snd_pcm_sframes_t ALSASoundBackend::recover_xrun(snd_pcm_sframes_t err) {
         spdlog::debug("[ALSASound] Device suspended, resuming");
         int ret;
         while ((ret = snd_pcm_resume(pcm_)) == -EAGAIN) {
-            if (!running_.load(std::memory_order_relaxed)) return err;
+            if (!running_.load(std::memory_order_relaxed))
+                return err;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         if (ret < 0) {
