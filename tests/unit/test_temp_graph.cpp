@@ -812,11 +812,11 @@ TEST_CASE_METHOD(TempGraphTestFixture, "Over-range points stored at full precisi
     REQUIRE(id >= 0);
 
     // Push values: some in range, some over range
-    ui_temp_graph_update_series(graph, id, 50.0f);   // in range
-    ui_temp_graph_update_series(graph, id, 100.0f);  // in range
-    ui_temp_graph_update_series(graph, id, 250.0f);  // over range
-    ui_temp_graph_update_series(graph, id, 300.0f);  // over range
-    ui_temp_graph_update_series(graph, id, 80.0f);   // in range
+    ui_temp_graph_update_series(graph, id, 50.0f);  // in range
+    ui_temp_graph_update_series(graph, id, 100.0f); // in range
+    ui_temp_graph_update_series(graph, id, 250.0f); // over range
+    ui_temp_graph_update_series(graph, id, 300.0f); // over range
+    ui_temp_graph_update_series(graph, id, 80.0f);  // in range
 
     // Verify data is stored at full precision (not clamped at storage time)
     // so that when Y-axis expands, the full values are available for drawing
@@ -831,11 +831,11 @@ TEST_CASE_METHOD(TempGraphTestFixture, "Over-range points stored at full precisi
     }
 
     // Values stored as deci-degrees (x10), over-range values preserved
-    REQUIRE(last_vals[0] == 500);   // 50.0 x 10
-    REQUIRE(last_vals[1] == 1000);  // 100.0 x 10
-    REQUIRE(last_vals[2] == 2500);  // 250.0 x 10 — stored, masked only during draw
-    REQUIRE(last_vals[3] == 3000);  // 300.0 x 10 — stored, masked only during draw
-    REQUIRE(last_vals[4] == 800);   // 80.0 x 10
+    REQUIRE(last_vals[0] == 500);  // 50.0 x 10
+    REQUIRE(last_vals[1] == 1000); // 100.0 x 10
+    REQUIRE(last_vals[2] == 2500); // 250.0 x 10 — stored, masked only during draw
+    REQUIRE(last_vals[3] == 3000); // 300.0 x 10 — stored, masked only during draw
+    REQUIRE(last_vals[4] == 800);  // 80.0 x 10
 
     // After expanding Y range, previously over-range points become visible again
     ui_temp_graph_set_temp_range(graph, 0.0f, 350.0f);
@@ -844,8 +844,8 @@ TEST_CASE_METHOD(TempGraphTestFixture, "Over-range points stored at full precisi
     for (int i = 0; i < 5; i++) {
         last_vals[4 - i] = y_data[(sp + pc - 1 - i) % pc];
     }
-    REQUIRE(last_vals[2] == 2500);  // Now in range, will draw normally
-    REQUIRE(last_vals[3] == 3000);  // Now in range, will draw normally
+    REQUIRE(last_vals[2] == 2500); // Now in range, will draw normally
+    REQUIRE(last_vals[3] == 3000); // Now in range, will draw normally
 
     ui_temp_graph_destroy(graph);
 }
@@ -896,8 +896,7 @@ TEST_CASE_METHOD(TempGraphTestFixture, "ui_temp_graph: target buffer freed on re
     ui_temp_graph_destroy(g);
 }
 
-TEST_CASE_METHOD(TempGraphTestFixture,
-                 "ui_temp_graph: set_point_count reallocs all target buffers",
+TEST_CASE_METHOD(TempGraphTestFixture, "ui_temp_graph: set_point_count reallocs all target buffers",
                  "[temp_graph][target_history]") {
     ui_temp_graph_t* g = ui_temp_graph_create(screen);
     REQUIRE(g != nullptr);
@@ -912,8 +911,10 @@ TEST_CASE_METHOD(TempGraphTestFixture,
     int16_t* orig_b = nullptr;
     for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         if (g->series_meta[i].chart_series) {
-            if (g->series_meta[i].id == id_a) orig_a = g->series_meta[i].target_centi_buf;
-            if (g->series_meta[i].id == id_b) orig_b = g->series_meta[i].target_centi_buf;
+            if (g->series_meta[i].id == id_a)
+                orig_a = g->series_meta[i].target_centi_buf;
+            if (g->series_meta[i].id == id_b)
+                orig_b = g->series_meta[i].target_centi_buf;
         }
     }
     REQUIRE(orig_a != nullptr);
@@ -998,8 +999,7 @@ TEST_CASE_METHOD(TempGraphTestFixture,
     ui_temp_graph_destroy(g);
 }
 
-TEST_CASE_METHOD(TempGraphTestFixture,
-                 "ui_temp_graph: target buffer shifts left when full",
+TEST_CASE_METHOD(TempGraphTestFixture, "ui_temp_graph: target buffer shifts left when full",
                  "[temp_graph][target_history]") {
     ui_temp_graph_t* g = ui_temp_graph_create(screen);
     REQUIRE(g != nullptr);
@@ -1023,19 +1023,24 @@ TEST_CASE_METHOD(TempGraphTestFixture,
     m->show_target = true;
 
     // Push 4 samples with increasing target values.
-    m->target_temp = 10.0f; ui_temp_graph_update_series(g, id, 1.0f);
-    m->target_temp = 20.0f; ui_temp_graph_update_series(g, id, 2.0f);
-    m->target_temp = 30.0f; ui_temp_graph_update_series(g, id, 3.0f);
-    m->target_temp = 40.0f; ui_temp_graph_update_series(g, id, 4.0f);
+    m->target_temp = 10.0f;
+    ui_temp_graph_update_series(g, id, 1.0f);
+    m->target_temp = 20.0f;
+    ui_temp_graph_update_series(g, id, 2.0f);
+    m->target_temp = 30.0f;
+    ui_temp_graph_update_series(g, id, 3.0f);
+    m->target_temp = 40.0f;
+    ui_temp_graph_update_series(g, id, 4.0f);
 
     REQUIRE(m->target_head == 4);
     REQUIRE(m->target_centi_buf[0] == 100);
     REQUIRE(m->target_centi_buf[3] == 400);
 
     // Push 5th → oldest shifts off
-    m->target_temp = 50.0f; ui_temp_graph_update_series(g, id, 5.0f);
+    m->target_temp = 50.0f;
+    ui_temp_graph_update_series(g, id, 5.0f);
 
-    REQUIRE(m->target_head == 4); // capped
+    REQUIRE(m->target_head == 4);           // capped
     REQUIRE(m->target_centi_buf[0] == 200); // was 100, shifted off
     REQUIRE(m->target_centi_buf[1] == 300);
     REQUIRE(m->target_centi_buf[2] == 400);
@@ -1098,8 +1103,8 @@ TEST_CASE_METHOD(TempGraphTestFixture,
         return nullptr;
     };
 
-    const float temps[]   = { 25.0f,  30.0f, 100.0f, 200.0f, 210.0f };
-    const float targets[] = {  0.0f,   0.0f, 220.0f, 220.0f, 220.0f };
+    const float temps[] = {25.0f, 30.0f, 100.0f, 200.0f, 210.0f};
+    const float targets[] = {0.0f, 0.0f, 220.0f, 220.0f, 220.0f};
     ui_temp_graph_set_series_data_with_targets(g, id, temps, targets, 5);
 
     auto* m = get_meta();
@@ -1114,8 +1119,7 @@ TEST_CASE_METHOD(TempGraphTestFixture,
     ui_temp_graph_destroy(g);
 }
 
-TEST_CASE_METHOD(TempGraphTestFixture,
-                 "ui_temp_graph: clear_series zeroes target buffer",
+TEST_CASE_METHOD(TempGraphTestFixture, "ui_temp_graph: clear_series zeroes target buffer",
                  "[temp_graph][target_history]") {
     ui_temp_graph_t* g = ui_temp_graph_create(screen);
     REQUIRE(g != nullptr);
@@ -1175,8 +1179,7 @@ TEST_CASE("segment_target_buf: empty input yields no segments", "[temp_graph][ta
     REQUIRE(segs.empty());
 }
 
-TEST_CASE("segment_target_buf: all zeros yields no segments",
-          "[temp_graph][target_history]") {
+TEST_CASE("segment_target_buf: all zeros yields no segments", "[temp_graph][target_history]") {
     int16_t buf[5] = {0, 0, 0, 0, 0};
     auto segs = helix::temp_graph_internal::segment_target_buf(buf, 5);
     REQUIRE(segs.empty());
@@ -1210,4 +1213,62 @@ TEST_CASE("segment_target_buf: negative values treated as gaps too",
     REQUIRE(segs[0] == std::make_pair(0, 1));
     REQUIRE(segs[1] == std::make_pair(2, 3));
     REQUIRE(segs[2] == std::make_pair(4, 5));
+}
+
+// ============================================================================
+// coalesce_target_runs (#979) — collapse equal-value runs of the target step
+// trace into single line segments so a flat setpoint draws ONE dashed line
+// instead of one sub-pixel line per buffer sample. Each returned pair (a,b)
+// means "draw a line from buffer index a to index b"; the union of these pairs
+// is geometrically identical to connecting every consecutive sample.
+// ============================================================================
+
+// Forward declaration of the function under test (defined in ui_temp_graph.cpp).
+namespace helix::temp_graph_internal {
+std::vector<std::pair<int, int>> coalesce_target_runs(const int16_t* buf, int first, int second);
+}
+
+TEST_CASE("coalesce_target_runs: fewer than two points yields nothing",
+          "[temp_graph][target_history]") {
+    int16_t buf[3] = {250, 250, 250};
+    REQUIRE(helix::temp_graph_internal::coalesce_target_runs(nullptr, 0, 5).empty());
+    REQUIRE(helix::temp_graph_internal::coalesce_target_runs(buf, 1, 2).empty()); // single point
+    REQUIRE(helix::temp_graph_internal::coalesce_target_runs(buf, 2, 2).empty()); // empty range
+}
+
+TEST_CASE("coalesce_target_runs: flat run collapses to one segment",
+          "[temp_graph][target_history]") {
+    int16_t buf[6] = {250, 250, 250, 250, 250, 250};
+    auto runs = helix::temp_graph_internal::coalesce_target_runs(buf, 0, 6);
+    REQUIRE(runs.size() == 1);
+    REQUIRE(runs[0] == std::make_pair(0, 5)); // one line spanning the whole flat run
+}
+
+TEST_CASE("coalesce_target_runs: strictly varying samples are not merged",
+          "[temp_graph][target_history]") {
+    // No two consecutive values equal → identical to point-to-point connectors.
+    int16_t buf[3] = {100, 200, 300};
+    auto runs = helix::temp_graph_internal::coalesce_target_runs(buf, 0, 3);
+    REQUIRE(runs.size() == 2);
+    REQUIRE(runs[0] == std::make_pair(0, 1));
+    REQUIRE(runs[1] == std::make_pair(1, 2));
+}
+
+TEST_CASE("coalesce_target_runs: flat-step-flat keeps the connector, merges the flats",
+          "[temp_graph][target_history]") {
+    // 200,200,200 -> step -> 250,250 : horizontal run, connector, horizontal run.
+    int16_t buf[5] = {200, 200, 200, 250, 250};
+    auto runs = helix::temp_graph_internal::coalesce_target_runs(buf, 0, 5);
+    REQUIRE(runs.size() == 3);
+    REQUIRE(runs[0] == std::make_pair(0, 2)); // flat run 200
+    REQUIRE(runs[1] == std::make_pair(2, 3)); // connector 200 -> 250
+    REQUIRE(runs[2] == std::make_pair(3, 4)); // flat run 250
+}
+
+TEST_CASE("coalesce_target_runs: respects a sub-range [first,second)",
+          "[temp_graph][target_history]") {
+    int16_t buf[6] = {0, 250, 250, 250, 250, 0};
+    auto runs = helix::temp_graph_internal::coalesce_target_runs(buf, 1, 5);
+    REQUIRE(runs.size() == 1);
+    REQUIRE(runs[0] == std::make_pair(1, 4)); // flat run within the segment only
 }
