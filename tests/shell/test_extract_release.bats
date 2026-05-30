@@ -155,6 +155,10 @@ def add(name, data, mode):
     z.writestr(zi, data)
 add("bin/helix-screen", elf, 0o644)          # stored NON-executable on purpose
 add("config/settings.json", b"{}", 0o644)
+# extract_release validates a full release tree (#970): bin/helix-screen +
+# ui_xml/ + assets/ must all be present or it rejects the archive.
+add("ui_xml/main.xml", b"<view/>", 0o644)
+add("assets/placeholder.txt", b"x", 0o644)
 z.close()
 PY
 }
