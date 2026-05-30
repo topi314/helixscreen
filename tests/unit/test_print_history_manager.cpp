@@ -158,7 +158,8 @@ TEST_CASE_METHOD(HistoryManagerTestFixture, "PrintHistoryManager builds filename
 // ============================================================================
 
 TEST_CASE_METHOD(HistoryManagerTestFixture,
-                 "PrintHistoryManager aggregates success count correctly", "[history_manager][slow]") {
+                 "PrintHistoryManager aggregates success count correctly",
+                 "[history_manager][slow]") {
     // When: fetch completes
     manager_->fetch();
     REQUIRE(wait_for_loaded());
@@ -185,7 +186,8 @@ TEST_CASE_METHOD(HistoryManagerTestFixture,
 }
 
 TEST_CASE_METHOD(HistoryManagerTestFixture,
-                 "PrintHistoryManager aggregates failure count correctly", "[history_manager][slow]") {
+                 "PrintHistoryManager aggregates failure count correctly",
+                 "[history_manager][slow]") {
     // When: fetch completes
     manager_->fetch();
     REQUIRE(wait_for_loaded());
@@ -302,6 +304,36 @@ TEST_CASE_METHOD(HistoryManagerTestFixture, "PrintHistoryManager supports multip
     // Then: both observers were notified
     REQUIRE(callback1_count.load() >= 1);
     REQUIRE(callback2_count.load() >= 1);
+}
+
+TEST_CASE_METHOD(HistoryManagerTestFixture,
+                 "PrintHistoryManager skips observers removed during notification",
+                 "[history_manager][slow]") {
+    // Regression: notify_observers() iterated a snapshot of the observer list
+    // and called through each raw HistoryChangedCallback* without re-checking it
+    // against the live set. If an observer's backing object was destroyed during
+    // the same dispatch pass — e.g. a PrintStatusWidget torn down on panel
+    // teardown, whose destructor calls remove_observer() — the stale snapshot
+    // still dereferenced the now-freed std::function pointer (SIGSEGV, debug
+    // bundle S52DJB5W: fault ~0x800020c during nav-away + reconnect).
+    std::atomic<int> victim_count{0};
+
+    // The "victim" models that torn-down widget: it is removed mid-dispatch and
+    // must NOT be invoked afterward (in production its memory is already freed).
+    HistoryChangedCallback victim = [&victim_count]() { victim_count++; };
+
+    // The "remover" is registered first so it runs before the victim in the
+    // snapshot iteration; when it fires it removes the victim, exactly as
+    // PrintStatusWidget::detach() removes its observer during teardown.
+    HistoryChangedCallback remover = [this, &victim]() { manager_->remove_observer(&victim); };
+
+    manager_->add_observer(&remover); // dispatched first
+    manager_->add_observer(&victim);  // dispatched second — must be skipped
+
+    manager_->fetch();
+    REQUIRE(wait_for_loaded());
+
+    REQUIRE(victim_count.load() == 0);
 }
 
 // ============================================================================
@@ -474,7 +506,8 @@ TEST_CASE_METHOD(HistoryManagerTestFixture, "PrintHistoryStats includes uuid fro
 }
 
 TEST_CASE_METHOD(HistoryManagerTestFixture,
-                 "PrintHistoryStats includes size_bytes from most recent job", "[history][uuid][slow]") {
+                 "PrintHistoryStats includes size_bytes from most recent job",
+                 "[history][uuid][slow]") {
     manager_->fetch();
     REQUIRE(wait_for_loaded());
 

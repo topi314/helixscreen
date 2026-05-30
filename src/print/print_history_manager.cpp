@@ -177,8 +177,20 @@ std::vector<PrintHistoryJob> PrintHistoryManager::get_jobs_since(double since) c
 }
 
 void PrintHistoryManager::notify_observers() {
+    // Iterate a snapshot so an observer callback can add/remove observers without
+    // invalidating our loop. But the snapshot holds raw HistoryChangedCallback*
+    // whose pointees can be freed mid-dispatch: a registrant destroyed during
+    // this pass (e.g. a PrintStatusWidget torn down on panel teardown) removes
+    // itself via remove_observer() from its destructor. Re-check each pointer
+    // against the live set before calling — a pointer no longer in observers_
+    // has been removed and may now dangle, so calling through it is a
+    // use-after-free (debug bundle S52DJB5W: SIGSEGV at ~0x800020c during
+    // nav-away + reconnect).
     auto observers_copy = observers_;
     for (auto* cb : observers_copy) {
+        if (std::find(observers_.begin(), observers_.end(), cb) == observers_.end()) {
+            continue;
+        }
         if (cb && *cb) {
             (*cb)();
         }
