@@ -18,6 +18,10 @@
  * - **Allwinner**: Direct ioctl on /dev/disp for Allwinner SoCs (AD5M, sunxi)
  *   Used when sysfs backlight isn't exposed by the kernel.
  *
+ * - **BrightnessCLI**: Shells out to the Creality Sonic Pad `brightness` helper
+ *   (`brightness -s 0|1`, `brightness -d 0..255`). For Sonic Pad variants where
+ *   the sysfs/ioctl paths don't actually drive the panel (#972).
+ *
  * - **None**: No-op backend for platforms without hardware control.
  *   In test mode, simulates brightness for UI testing.
  *
@@ -26,7 +30,8 @@
  * 2. HELIX_BACKLIGHT_DEVICE env override
  * 3. Sysfs (most portable Linux approach)
  * 4. Allwinner ioctl (AD5M/sunxi specific)
- * 5. None fallback (no hardware control)
+ * 5. BrightnessCLI (Sonic Pad `brightness` tool, if present)
+ * 6. None fallback (no hardware control)
  *
  * Usage:
  * @code
@@ -108,10 +113,11 @@ class BacklightBackend {
      *
      * Detection order:
      * 1. Test mode check → Simulated (None with tracking)
-     * 2. HELIX_BACKLIGHT_DEVICE env var ("sysfs", "allwinner", "none")
+     * 2. HELIX_BACKLIGHT_DEVICE env var ("sysfs", "allwinner", "brightness", "none")
      * 3. Sysfs (/sys/class/backlight/)
      * 4. Allwinner (/dev/disp with ioctl)
-     * 5. None fallback
+     * 5. BrightnessCLI (Sonic Pad `brightness` tool)
+     * 6. None fallback
      *
      * @return Unique pointer to selected backend (never null)
      */

@@ -40,6 +40,31 @@ class FdGuard {
 #endif
 
 // ============================================================================
+// Sonic Pad `brightness` CLI command builder (portable — testable on any host)
+// ============================================================================
+
+namespace helix::backlight_internal {
+
+// Map a 0-100 brightness percent to the Creality Sonic Pad `brightness` helper
+// invocation. <=0 powers the backlight off; otherwise it powers on and sets the
+// level scaled to 0..255 (never truncating a requested-on level to 0). (#972)
+std::string brightness_cli_command(int percent) {
+    if (percent <= 0) {
+        return "brightness -s 0";
+    }
+    int level = percent * 255 / 100;
+    if (level < 1) {
+        level = 1; // a requested-on level must never read as "off"
+    }
+    if (level > 255) {
+        level = 255;
+    }
+    return "brightness -s 1; brightness -d " + std::to_string(level);
+}
+
+} // namespace helix::backlight_internal
+
+// ============================================================================
 // BacklightBackendNone - No hardware control (or simulated for test mode)
 // ============================================================================
 
@@ -499,6 +524,73 @@ class BacklightBackendAllwinner : public BacklightBackend {
     bool available_ = false;
     bool use_enable_ioctl_ = true;
 };
+// ============================================================================
+// BacklightBackendBrightnessCli - Creality Sonic Pad `brightness` helper tool
+// ============================================================================
+
+/**
+ * @brief Backlight backend that shells out to the Sonic Pad `brightness` tool.
+ *
+ * Some Sonic Pad firmware variants don't honour the /dev/disp DISP2 ioctls that
+ * BacklightBackendAllwinner uses; Creality ships a `brightness` helper instead
+ * (`brightness -s 0|1` power, `brightness -d 0..255` level — see #972). This
+ * backend drives that tool. Opt in with HELIX_BACKLIGHT_DEVICE=brightness, or it
+ * is auto-selected as a last resort before None when the binary is present.
+ *
+ * The CLI has no brightness read-back, so get_brightness() returns the cached
+ * last-set value.
+ */
+class BacklightBackendBrightnessCli : public BacklightBackend {
+  public:
+    BacklightBackendBrightnessCli() : cached_brightness_(100) {}
+
+    bool set_brightness(int percent) override {
+        percent = std::clamp(percent, 0, 100);
+        std::string cmd = helix::backlight_internal::brightness_cli_command(percent);
+        int rc = std::system(cmd.c_str());
+        if (rc != 0) {
+            spdlog::warn("[Backlight-BrightnessCLI] '{}' exited {}", cmd, rc);
+            return false;
+        }
+        cached_brightness_ = percent;
+        return true;
+    }
+
+    int get_brightness() const override {
+        return cached_brightness_; // CLI has no read-back; report last set
+    }
+
+    bool is_available() const override {
+        return binary_present();
+    }
+
+    const char* name() const override {
+        return "BrightnessCLI";
+    }
+
+    bool supports_hardware_blank() const override {
+        return true; // `brightness -s 0` fully powers the backlight off
+    }
+
+    bool supports_dimming() const override {
+        return true; // 0..255 level range
+    }
+
+    // True when the Sonic Pad `brightness` helper is installed.
+    static bool binary_present() {
+        static const char* kPaths[] = {"/usr/bin/brightness", "/bin/brightness",
+                                       "/usr/sbin/brightness", "/sbin/brightness"};
+        for (const char* p : kPaths) {
+            if (access(p, X_OK) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+  private:
+    int cached_brightness_;
+};
 #endif // __linux__
 
 // ============================================================================
@@ -540,6 +632,14 @@ std::unique_ptr<BacklightBackend> BacklightBackend::create() {
             }
             spdlog::warn("[Backlight] Allwinner forced but not available, falling through");
         }
+
+        if (strcmp(env, "brightness") == 0) {
+            auto backend = std::make_unique<BacklightBackendBrightnessCli>();
+            if (backend->is_available()) {
+                return backend;
+            }
+            spdlog::warn("[Backlight] brightness CLI forced but tool not found, falling through");
+        }
 #endif
         // Unknown value or unavailable, fall through to auto-detection
     }
@@ -559,6 +659,18 @@ std::unique_ptr<BacklightBackend> BacklightBackend::create() {
         auto backend = std::make_unique<BacklightBackendAllwinner>();
         if (backend->is_available()) {
             spdlog::info("[Backlight] Auto-detected: Allwinner");
+            return backend;
+        }
+    }
+
+    // 4b. Try the Sonic Pad `brightness` CLI as a last resort before giving up —
+    // only fires when the helper binary is present (Sonic Pad variants where the
+    // sysfs and /dev/disp ioctl paths aren't usable). Force-select it instead with
+    // HELIX_BACKLIGHT_DEVICE=brightness when those paths exist but don't work (#972).
+    {
+        auto backend = std::make_unique<BacklightBackendBrightnessCli>();
+        if (backend->is_available()) {
+            spdlog::info("[Backlight] Auto-detected: BrightnessCLI");
             return backend;
         }
     }

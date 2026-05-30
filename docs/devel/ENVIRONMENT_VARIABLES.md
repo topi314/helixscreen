@@ -196,9 +196,9 @@ Control backlight device path or disable backlight control entirely.
 
 | Property | Value |
 |----------|-------|
-| **Values** | Device path, or `"none"` to disable |
+| **Values** | Device path, `sysfs`, `allwinner`, `brightness`, or `"none"` to disable |
 | **Default** | Auto-detect |
-| **File** | `src/backlight_backend.cpp` |
+| **File** | `src/api/backlight_backend.cpp` |
 
 ```bash
 # Disable backlight control (e.g., for external displays)
@@ -206,6 +206,11 @@ HELIX_BACKLIGHT_DEVICE=none ./build/bin/helix-screen
 
 # Use specific backlight device
 HELIX_BACKLIGHT_DEVICE=/sys/class/backlight/backlight-lvds ./build/bin/helix-screen
+
+# Creality Sonic Pad: drive the `brightness` CLI tool instead of sysfs/ioctl.
+# Use this when the screen brightness/blank doesn't respond on a Sonic Pad even
+# though auto-detection picked a backend (issue #972).
+HELIX_BACKLIGHT_DEVICE=brightness ./build/bin/helix-screen
 ```
 
 ### `HELIX_DISPLAY_ROTATION`

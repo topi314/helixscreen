@@ -23,6 +23,33 @@ struct TestModeGuard {
 };
 
 // ============================================================================
+// brightness_cli_command (#972) — Creality Sonic Pad `brightness` helper
+// ============================================================================
+
+// Forward declaration of the pure command builder (defined in backlight_backend.cpp,
+// outside the __linux__ guard so it is testable on any host).
+namespace helix::backlight_internal {
+std::string brightness_cli_command(int percent);
+}
+
+TEST_CASE("brightness_cli_command: zero or negative powers the backlight off",
+          "[api][backlight][cli]") {
+    REQUIRE(helix::backlight_internal::brightness_cli_command(0) == "brightness -s 0");
+    REQUIRE(helix::backlight_internal::brightness_cli_command(-10) == "brightness -s 0");
+}
+
+TEST_CASE("brightness_cli_command: positive powers on and scales 0-100 to 0-255",
+          "[api][backlight][cli]") {
+    REQUIRE(helix::backlight_internal::brightness_cli_command(100) ==
+            "brightness -s 1; brightness -d 255");
+    REQUIRE(helix::backlight_internal::brightness_cli_command(50) ==
+            "brightness -s 1; brightness -d 127");
+    // Smallest on-level never truncates to 0 (would read as "off").
+    REQUIRE(helix::backlight_internal::brightness_cli_command(1) ==
+            "brightness -s 1; brightness -d 2");
+}
+
+// ============================================================================
 // BacklightBackend::supports_hardware_blank() Tests
 // ============================================================================
 
