@@ -671,6 +671,16 @@ int GCodeLayerRenderer::render_layers_to_cache(int from_layer, int to_layer) {
     size_t segments_rendered = 0;
     int last_rendered = from_layer - 1;
 
+    // Breadcrumb the streaming render range. A SIGBUS has been seen here when
+    // the gcode object-name lookup table held a corrupted node (bundle
+    // YZQ47HQ6, AD5X, disk-full) — load_layer() runs under this call. This
+    // crumb pins the gcode-streaming subsystem and the target layer in the
+    // ring even if the stack is too corrupt for the crash-handler stack scan
+    // to resolve. Main-thread only (draw path) and once per render pass (not
+    // per frame), so it honors the single-producer breadcrumb contract without
+    // flooding the ring.
+    crash_handler::breadcrumb::note("gcode", "render_cache", static_cast<long>(to_layer));
+
     // Compute extrusion line width in pixels (scale-dependent)
     int line_width = get_extrusion_pixel_width();
 
@@ -1442,16 +1452,15 @@ void GCodeLayerRenderer::render_selection_brackets(lv_layer_t* layer) {
         dsc.width = 2;
         dsc.opa = LV_OPA_COVER;
 
-        bbox.for_each_bracket_arm(bracket_len,
-                                  [&](const glm::vec3& origin, const glm::vec3& tip) {
-                                      glm::ivec2 a = world_to_screen(origin.x, origin.y, origin.z);
-                                      glm::ivec2 b = world_to_screen(tip.x, tip.y, tip.z);
-                                      dsc.p1.x = static_cast<lv_value_precise_t>(a.x);
-                                      dsc.p1.y = static_cast<lv_value_precise_t>(a.y);
-                                      dsc.p2.x = static_cast<lv_value_precise_t>(b.x);
-                                      dsc.p2.y = static_cast<lv_value_precise_t>(b.y);
-                                      lv_draw_line(layer, &dsc);
-                                  });
+        bbox.for_each_bracket_arm(bracket_len, [&](const glm::vec3& origin, const glm::vec3& tip) {
+            glm::ivec2 a = world_to_screen(origin.x, origin.y, origin.z);
+            glm::ivec2 b = world_to_screen(tip.x, tip.y, tip.z);
+            dsc.p1.x = static_cast<lv_value_precise_t>(a.x);
+            dsc.p1.y = static_cast<lv_value_precise_t>(a.y);
+            dsc.p2.x = static_cast<lv_value_precise_t>(b.x);
+            dsc.p2.y = static_cast<lv_value_precise_t>(b.y);
+            lv_draw_line(layer, &dsc);
+        });
     }
 }
 
