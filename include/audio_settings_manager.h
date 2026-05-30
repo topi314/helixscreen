@@ -70,6 +70,12 @@ class AudioSettingsManager {
     /** @brief Set sound theme name (persists to config) */
     void set_sound_theme(const std::string& name);
 
+    /** @brief Get persisted ALSA output device PCM ("" if unset) */
+    std::string get_output_device() const;
+
+    /** @brief Set ALSA output device PCM (persists to config) */
+    void set_output_device(const std::string& pcm);
+
     /** @brief Get completion alert mode */
     CompletionAlertMode get_completion_alert_mode() const;
 

@@ -142,6 +142,19 @@ void AudioSettingsManager::set_sound_theme(const std::string& name) {
     config->save();
 }
 
+std::string AudioSettingsManager::get_output_device() const {
+    Config* config = Config::get_instance();
+    return config->get<std::string>("/sound/output_device", "");
+}
+
+void AudioSettingsManager::set_output_device(const std::string& pcm) {
+    spdlog::info("[AudioSettingsManager] set_output_device('{}')", pcm);
+
+    Config* config = Config::get_instance();
+    config->set<std::string>("/sound/output_device", pcm);
+    config->save();
+}
+
 CompletionAlertMode AudioSettingsManager::get_completion_alert_mode() const {
     int val = lv_subject_get_int(const_cast<lv_subject_t*>(&completion_alert_subject_));
     return static_cast<CompletionAlertMode>(std::max(0, std::min(2, val)));
