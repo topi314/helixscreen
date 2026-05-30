@@ -3660,6 +3660,66 @@
       ]
     },
     {
+      "id": "sovol_sv06_ace",
+      "name": "Sovol SV06 ACE",
+      "manufacturer": "Sovol",
+      "image": "sovol-sv06-ace.png",
+      "display": {
+        "resolution": "480x272",
+        "touch_controller": "goodix",
+        "touch_type": "capacitive",
+        "notes": "4.3\" Goodix capacitive touchscreen at 480x272. The Goodix controller may report an 800x480 ABS range; the calibration wizard runs on first boot when that mismatch is detected (#123)."
+      },
+      "note": "Distinct SKU from the plain Sovol SV06 but shares the i3 Cartesian platform and 220x220x250 build volume, so the load-cell (strain-gauge) nozzle probe and an 'ace' hostname token are the only fingerprint differences. Hosts without an 'ace' token may still resolve to 'Sovol SV06' until a Sovol-ACE-specific Klipper object/macro is identified as a high-confidence discriminator. DRAFTED from public specs (#123) — verify the load_cell object name and hostname against a real SV06 ACE config before relying on detection.",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "cartesian",
+          "confidence": 40,
+          "reason": "Cartesian kinematics (bedslinger)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 200,
+          "max_x": 240,
+          "min_y": 200,
+          "max_y": 240,
+          "confidence": 40,
+          "reason": "Build volume ~220mm (SV06 ACE size)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "load_cell",
+          "confidence": 55,
+          "reason": "Load-cell/strain-gauge nozzle probe (ACE; plain SV06 uses inductive probe)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sovol",
+          "confidence": 85,
+          "reason": "Hostname contains 'sovol'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv06-ace",
+          "confidence": 97,
+          "reason": "Hostname contains 'sv06-ace'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv06ace",
+          "confidence": 97,
+          "reason": "Hostname contains 'sv06ace'"
+        }
+      ]
+    },
+    {
       "id": "sovol_sv06_plus",
       "name": "Sovol SV06 Plus",
       "manufacturer": "Sovol",
@@ -3702,6 +3762,66 @@
           "pattern": "sv06plus",
           "confidence": 95,
           "reason": "Hostname contains 'sv06plus'"
+        }
+      ]
+    },
+    {
+      "id": "sovol_sv06_plus_ace",
+      "name": "Sovol SV06 Plus ACE",
+      "manufacturer": "Sovol",
+      "image": "sovol-sv06-plus-ace.png",
+      "display": {
+        "resolution": "480x272",
+        "touch_controller": "goodix",
+        "touch_type": "capacitive",
+        "notes": "4.3\" capacitive touchscreen (landscape orientation) at 480x272. Calibration wizard runs on first boot if the touch ABS range mismatches the panel (#123)."
+      },
+      "note": "Distinct SKU from the plain Sovol SV06 Plus but shares its 300x300x350 Cartesian platform, so the load-cell (strain-gauge) nozzle probe and a 'plus-ace' hostname token are the only fingerprint differences. Hosts without an 'ace' token may still resolve to 'Sovol SV06 Plus'. DRAFTED from public specs — verify the load_cell object name and hostname against a real SV06 Plus ACE config before relying on detection.",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "cartesian",
+          "confidence": 40,
+          "reason": "Cartesian kinematics (bedslinger)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 280,
+          "max_x": 320,
+          "min_y": 280,
+          "max_y": 320,
+          "confidence": 60,
+          "reason": "Build volume ~300mm (SV06 Plus ACE size)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "load_cell",
+          "confidence": 55,
+          "reason": "Load-cell/strain-gauge nozzle probe (ACE; plain SV06 Plus uses inductive probe)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sovol",
+          "confidence": 85,
+          "reason": "Hostname contains 'sovol'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv06-plus-ace",
+          "confidence": 97,
+          "reason": "Hostname contains 'sv06-plus-ace'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv06plusace",
+          "confidence": 97,
+          "reason": "Hostname contains 'sv06plusace'"
         }
       ]
     },
