@@ -56,6 +56,15 @@ TEST_CASE("resolve_alsa_device precedence: env > settings > default", "[sound][a
     CHECK(resolve_alsa_device("", "") == "default");
 }
 
+TEST_CASE("list() always offers System default first", "[sound][alsa-device]") {
+    // Non-flaky invariant: regardless of host hardware (or none), the picker
+    // list is never empty and always leads with the System default entry.
+    auto devices = list();
+    REQUIRE(!devices.empty());
+    CHECK(devices[0].pcm == "default");
+    CHECK(devices[0].id.empty());
+}
+
 #include "sound_manager.h"
 
 TEST_CASE("set_output_device is a no-op without an ALSA backend", "[sound][alsa-device]") {
