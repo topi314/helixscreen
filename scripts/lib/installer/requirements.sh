@@ -42,18 +42,22 @@ check_requirements() {
 
     # Zip extraction: prefer unzip, but python's zipfile module is a built-in
     # fallback (used on platforms like recent Creality K2 firmware that lack
-    # unzip but ship python3). Try a transparent apt-install of unzip on
-    # Debian/Ubuntu images that lack it (notably Snapmaker U1 extended firmware);
-    # only mark it missing when there's no apt AND no python fallback.
+    # unzip but ship python3). The fallback needs zipfile + zlib (release zips
+    # are DEFLATE-compressed), so gate on those modules rather than mere python
+    # presence — otherwise a zlib-less python passes here and the install dies
+    # in extract_release instead of failing fast with a clear message. Try a
+    # transparent apt-install of unzip on Debian/Ubuntu images that lack it
+    # (notably Snapmaker U1 extended firmware); only mark it missing when
+    # there's no apt AND no usable python zipfile fallback.
     if ! command -v unzip >/dev/null 2>&1; then
         if command -v apt-get >/dev/null 2>&1 && ! _has_no_new_privs; then
             log_info "Installing missing dependency: unzip"
             _apt_update_once
             $SUDO apt-get install -y --no-install-recommends unzip >/dev/null 2>&1 || true
-            if ! command -v unzip >/dev/null 2>&1 && ! _has_python; then
+            if ! command -v unzip >/dev/null 2>&1 && ! _py_has_module zipfile zlib; then
                 _helix_add_missing "unzip"
             fi
-        elif ! _has_python; then
+        elif ! _py_has_module zipfile zlib; then
             _helix_add_missing "unzip"
         fi
     fi

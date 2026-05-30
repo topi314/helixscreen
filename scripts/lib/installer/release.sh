@@ -53,29 +53,13 @@ _has_real_curl() {
 # with an empty UA or the default Python-urllib/x.y UA; any other UA passes.
 _PY_UA="helixscreen-installer/1.0"
 
-# Fetch a URL to stdout via python urllib (fallback when curl/wget unavailable).
-# Sends a non-default User-Agent so the CDN doesn't 403 us. Returns non-zero on
-# any error. Args: url
-_py_fetch() {
-    _has_python || return 1
-    HELIX_PY_URL="$1" HELIX_PY_UA="$_PY_UA" "$_PY_BIN" - <<'PYEOF'
-import os, sys, urllib.request
-url = os.environ["HELIX_PY_URL"]
-ua = os.environ["HELIX_PY_UA"]
-try:
-    req = urllib.request.Request(url, headers={"User-Agent": ua})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        import shutil
-        shutil.copyfileobj(resp, sys.stdout.buffer)
-except Exception:
-    sys.exit(1)
-PYEOF
-}
-
-# Download a URL to a file via python urllib (fallback when curl/wget
-# unavailable). Sends a non-default User-Agent so the CDN doesn't 403 us.
-# Returns non-zero on error. Args: url dest [max_seconds]
-_py_download() {
+# Core python urllib GET (fallback when curl/wget unavailable). Writes the
+# response to DEST, or to stdout when DEST is "-". Sends a non-default
+# User-Agent so the CDN doesn't 403 us (it rejects the urllib default).
+# Returns non-zero on any error. Args: url dest("-"=stdout) [max_seconds]
+# NOTE: urllib's timeout is a per-socket-operation (inactivity) timeout, not a
+# total transfer deadline, and min_speed CDN fail-fast is not honored here.
+_py_get() {
     _has_python || return 1
     HELIX_PY_URL="$1" HELIX_PY_DEST="$2" HELIX_PY_UA="$_PY_UA" \
         HELIX_PY_TIMEOUT="${3:-300}" "$_PY_BIN" - <<'PYEOF'
@@ -90,12 +74,21 @@ except ValueError:
 try:
     req = urllib.request.Request(url, headers={"User-Agent": ua})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        with open(dest, "wb") as out:
-            shutil.copyfileobj(resp, out)
+        if dest == "-":
+            shutil.copyfileobj(resp, sys.stdout.buffer)
+        else:
+            with open(dest, "wb") as out:
+                shutil.copyfileobj(resp, out)
 except Exception:
     sys.exit(1)
 PYEOF
 }
+
+# Fetch a URL to stdout via python urllib. Args: url
+_py_fetch() { _py_get "$1" "-" 15; }
+
+# Download a URL to a file via python urllib. Args: url dest [max_seconds]
+_py_download() { _py_get "$1" "$2" "${3:-300}"; }
 
 # Test a zip archive for validity via python zipfile (fallback when unzip
 # unavailable). Returns non-zero if the archive is missing or corrupt.
@@ -138,12 +131,12 @@ try:
             mode = (info.external_attr >> 16) & 0o777
             if mode:
                 os.chmod(target, mode)
-            # Ensure anything under a bin/ path is owner-executable, even when
-            # the zip carried no exec bit (e.g. helixscreen/bin/helix-screen
-            # stored as 0644 or with no mode bits at all). Must run regardless
-            # of whether external_attr had mode bits.
+            # Ensure files under the top-level bin/ are owner-executable, even
+            # when the zip carried no exec bit (e.g. bin/helix-screen stored as
+            # 0644 or with no mode bits at all). Anchored to a leading "bin/"
+            # component so unrelated nested dirs named "bin" aren't affected.
             parts = info.filename.split("/")
-            if "bin" in parts[:-1]:
+            if len(parts) > 1 and parts[0] == "bin":
                 st = os.stat(target)
                 os.chmod(target, st.st_mode | stat.S_IXUSR)
 except Exception:
@@ -331,9 +324,11 @@ validate_tarball() {
 # Check if we can download from HTTPS URLs
 # BusyBox wget on AD5M doesn't support HTTPS
 check_https_capability() {
-    # python urllib has working ssl (verified system CA certs) on python-only
-    # systems like recent Creality K2 firmware — treat as HTTPS-capable.
-    if _has_python; then
+    # python urllib with the ssl module reaches HTTPS on python-only systems
+    # like recent Creality K2 firmware — treat as HTTPS-capable. (An ssl-less
+    # python can still download over the plain-HTTP mirror, so it must NOT be
+    # reported HTTPS-capable here.)
+    if _py_has_module ssl; then
         return 0
     fi
 

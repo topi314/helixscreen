@@ -38,11 +38,14 @@ _is_self_update() {
     [ "${HELIX_SELF_UPDATE:-}" = "1" ]
 }
 
-# Probe for a usable Python interpreter with working ssl + urllib (cached).
-# Sets _PY_BIN to the first of python3/python that can import ssl and
-# urllib.request. Used as a download/extraction fallback on platforms that
-# lack curl/wget/unzip (notably recent Creality K2 Tina/OpenWrt firmware).
-# Returns 0 if a usable interpreter was found, non-zero otherwise.
+# Probe for a usable Python interpreter with urllib (cached). Sets _PY_BIN to
+# the first of python3/python that can import urllib.request — the baseline for
+# downloading over plain HTTP. Used as a download/extraction fallback on
+# platforms that lack curl/wget/unzip (notably recent Creality K2 Tina/OpenWrt
+# firmware). HTTPS and zip support are probed separately via _py_has_module
+# (ssl / zipfile) so an ssl-less or zlib-less python can still serve the
+# HTTP-only mirror rather than being rejected outright. Returns 0 if a usable
+# interpreter was found, non-zero otherwise.
 _PY_BIN=""
 _PY_PROBED=""
 _has_python() {
@@ -50,13 +53,25 @@ _has_python() {
         _PY_PROBED=1
         for _cand in python3 python; do
             if command -v "$_cand" >/dev/null 2>&1 && \
-               "$_cand" -c 'import ssl, urllib.request' >/dev/null 2>&1; then
+               "$_cand" -c 'import urllib.request' >/dev/null 2>&1; then
                 _PY_BIN="$_cand"
                 break
             fi
         done
     fi
     [ -n "$_PY_BIN" ]
+}
+
+# Check that the resolved python (_PY_BIN) can import the named module(s).
+# Args: one or more module names (e.g. "ssl", or "zipfile zlib"). Returns
+# non-zero if no python is available or any module fails to import. Modules are
+# passed as argv (no external tr/echo dependency, so this works on a minimal
+# PATH). Not cached — callers invoke it once per capability gate.
+_py_has_module() {
+    _has_python || return 1
+    "$_PY_BIN" -c 'import sys
+for m in sys.argv[1:]:
+    __import__(m)' "$@" >/dev/null 2>&1
 }
 
 # Get sudo prefix needed for a file operation.
