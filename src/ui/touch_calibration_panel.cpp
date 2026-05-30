@@ -8,6 +8,8 @@
 
 #include "touch_calibration_panel.h"
 
+#include "runtime_config.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -19,7 +21,8 @@ namespace helix {
 constexpr int DEFAULT_SCREEN_WIDTH = 800;
 constexpr int DEFAULT_SCREEN_HEIGHT = 480;
 
-TouchCalibrationPanel::TouchCalibrationPanel() = default;
+TouchCalibrationPanel::TouchCalibrationPanel()
+    : debounce_enabled_(RuntimeConfig::touch_cal_debounce()) {}
 
 TouchCalibrationPanel::~TouchCalibrationPanel() {
     stop_countdown_timer();
@@ -96,7 +99,8 @@ void TouchCalibrationPanel::start() {
 
 void TouchCalibrationPanel::capture_point(Point raw) {
     if (is_touch_debug_enabled()) {
-        spdlog::warn("[TouchDebug] capture_point: state={} raw=({},{})", static_cast<int>(state_), raw.x, raw.y);
+        spdlog::warn("[TouchDebug] capture_point: state={} raw=({},{})", static_cast<int>(state_),
+                     raw.x, raw.y);
     }
 
     switch (state_) {
@@ -129,9 +133,9 @@ void TouchCalibrationPanel::capture_point(Point raw) {
         if (is_touch_debug_enabled()) {
             spdlog::warn("[TouchDebug] calibration computed for all 3 points:");
             for (int i = 0; i < 3; i++) {
-                spdlog::warn("[TouchDebug]   point[{}]: screen=({},{}) touch=({},{})",
-                             i, screen_points_[i].x, screen_points_[i].y,
-                             touch_points_[i].x, touch_points_[i].y);
+                spdlog::warn("[TouchDebug]   point[{}]: screen=({},{}) touch=({},{})", i,
+                             screen_points_[i].x, screen_points_[i].y, touch_points_[i].x,
+                             touch_points_[i].y);
             }
             if (calibration_.axes_swapped) {
                 spdlog::warn("[TouchDebug]   axes were auto-swapped");
@@ -244,10 +248,30 @@ TouchCalibrationPanel::Progress TouchCalibrationPanel::get_progress() const {
 }
 
 void TouchCalibrationPanel::add_sample(Point raw) {
+    // Press-debounce gate (issue #943): when enabled, a physical contact may
+    // contribute at most one sample. A burst of PRESSED events from one tap is
+    // ignored until notify_release() (or the stall-guard) clears the gate.
+    if (debounce_enabled_ && awaiting_release_) {
+        // Stall-guard: some controllers emit PRESSED without a matching RELEASED.
+        // If the gate has been held longer than the timeout, clear it and proceed
+        // so calibration cannot wedge forever.
+        if (now_fn_() >= release_deadline_ms_) {
+            awaiting_release_ = false;
+        } else {
+            if (is_touch_debug_enabled()) {
+                spdlog::warn("[TouchDebug] ignored press (awaiting release)");
+            }
+            return;
+        }
+    }
+
     // Auto-start on first tap if in IDLE state (don't count this tap as a sample —
     // the crosshair isn't visible yet, so the user's first tap ON the crosshair is touch 1)
     if (state_ == State::IDLE) {
         start();
+        // Arm the gate so the same physical contact's burst doesn't immediately
+        // record sample 1 of POINT_1 without a finger-lift first.
+        arm_release_gate();
         return;
     }
 
@@ -259,11 +283,14 @@ void TouchCalibrationPanel::add_sample(Point raw) {
         sample_buffer_[sample_count_] = {raw.x, raw.y};
         sample_count_++;
 
+        // Arm the gate: the next press from this same contact is debounced until
+        // a finger-lift (RELEASED) or the stall-guard timeout.
+        arm_release_gate();
+
         if (is_touch_debug_enabled()) {
             auto p = get_progress();
-            spdlog::warn("[TouchDebug] sample {}/{} for point {}: raw=({},{}){}",
-                         sample_count_, SAMPLES_REQUIRED, p.point_num,
-                         raw.x, raw.y,
+            spdlog::warn("[TouchDebug] sample {}/{} for point {}: raw=({},{}){}", sample_count_,
+                         SAMPLES_REQUIRED, p.point_num, raw.x, raw.y,
                          is_bad_sample(raw) ? " REJECTED" : "");
         }
 
@@ -285,6 +312,23 @@ void TouchCalibrationPanel::add_sample(Point raw) {
         }
         reset_samples();
     }
+}
+
+void TouchCalibrationPanel::arm_release_gate() {
+    if (!debounce_enabled_) {
+        return;
+    }
+    awaiting_release_ = true;
+    release_deadline_ms_ = now_fn_() + RELEASE_TIMEOUT_MS;
+}
+
+void TouchCalibrationPanel::notify_release() {
+    // No-op when debounce is disabled — keeps the default path byte-for-byte
+    // identical to pre-#943 behavior.
+    if (!debounce_enabled_) {
+        return;
+    }
+    awaiting_release_ = false;
 }
 
 void TouchCalibrationPanel::accept() {

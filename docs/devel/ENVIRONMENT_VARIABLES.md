@@ -7,7 +7,7 @@ This document provides a comprehensive reference for all environment variables u
 | Category | Count | Prefix |
 |----------|-------|--------|
 | [Display & Backend](#display--backend-configuration) | 14 | `HELIX_` |
-| [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
+| [Touch Calibration](#touch-calibration) | 8 | `HELIX_TOUCH_*` |
 | [G-Code Viewer](#g-code-viewer) | 4 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
 | [Mock & Testing](#mock--testing) | 14 | `HELIX_MOCK_*` |
@@ -441,6 +441,27 @@ echo "HELIX_TOUCH_CALIBRATE=1" >> ~/helixscreen/config/helixscreen.env
 ```
 
 **Note:** There are no environment variable overrides for affine calibration coefficients. Edit the config file directly or use the calibration wizard.
+
+### `HELIX_TOUCH_CAL_DEBOUNCE`
+
+Press-debounce for the calibration wizard. When enabled, the calibration state machine records **at most one sample per physical contact** — a burst of `LV_EVENT_PRESSED` events from a single tap (some controllers, e.g. the Qidi Q2, emit several) contributes only one sample instead of filling a target (or all targets) from one finger touch. See [issue #943](https://github.com/prestonbrown/helixscreen/issues/943).
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HELIX_TOUCH_CAL_DEBOUNCE` | Gate calibration sampling on touch release (`1` = enable) | Disabled |
+
+**How it works:** After a sample is recorded, further presses are ignored until a `LV_EVENT_RELEASED` (genuine finger-lift) arrives. A ~1500 ms stall-guard auto-clears the gate if a controller emits no matching release, so calibration can never wedge. Default **off** so devices that calibrate correctly today are unaffected until the fix is hardware-validated.
+
+**Composes with `HELIX_DEBUG_TOUCH`:** set both to capture the validation evidence in a debug bundle — `HELIX_DEBUG_TOUCH=1` logs one `[TouchDebug] sample N/3 …` line per recorded sample, and with debounce on you also get `[TouchDebug] ignored press (awaiting release)` for each collapsed burst press.
+
+**Example:**
+```bash
+# Enable the debounce gate plus per-press debug logging
+HELIX_TOUCH_CAL_DEBOUNCE=1 HELIX_DEBUG_TOUCH=1 ./build/bin/helix-screen
+
+# Or persist on the affected device
+echo "HELIX_TOUCH_CAL_DEBOUNCE=1" >> ~/helixscreen/config/helixscreen.env
+```
 
 ### Touch Jitter Filter
 

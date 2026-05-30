@@ -7,7 +7,8 @@
   <consts>
     <!-- Step metadata (read by wizard orchestrator) -->
     <str name="step_title" value="Printer Setup: Touch Calibration" value_tag="Printer Setup: Touch Calibration"/>
-    <str name="step_subtitle" value="Calibrate your touchscreen for accurate input" value_tag="Calibrate your touchscreen for accurate input"/>
+    <str name="step_subtitle"
+         value="Calibrate your touchscreen for accurate input" value_tag="Calibrate your touchscreen for accurate input"/>
     <int name="step_order" value="0"/>
   </consts>
   <view name="wizard_touch_calibration_root"
@@ -18,6 +19,7 @@
     <!-- Hidden in IDLE/VERIFY/COMPLETE states, shown during POINT_1/2/3 -->
     <lv_obj name="touch_capture_overlay" width="100%" height="100%" align="top_left" hidden="true" clickable="true">
       <event_cb trigger="pressed" callback="on_touch_cal_screen_touched"/>
+      <event_cb trigger="released" callback="on_touch_cal_screen_released"/>
     </lv_obj>
 
     <!-- Crosshair target - positioned dynamically by C++ code -->
@@ -30,8 +32,8 @@
 
     <!-- Test area container - shown in COMPLETE state for testing calibration -->
     <lv_obj name="test_area_container"
-            width="100%" flex_grow="1" flex_flow="row" style_flex_main_place="start"
-            style_pad_all="#space_md" style_pad_gap="#space_md" scrollable="false" hidden="true">
+            width="100%" flex_grow="1" flex_flow="row" style_flex_main_place="start" style_pad_all="#space_md"
+            style_pad_gap="#space_md" scrollable="false" hidden="true">
 
       <!-- Large touch test area - user taps here to verify calibration -->
       <lv_obj name="test_touch_area"
@@ -39,7 +41,8 @@
               style_border_color="#border" style_radius="#border_radius" clickable="true" scrollable="false">
         <event_cb trigger="pressed" callback="on_touch_cal_test_area_touched"/>
         <!-- Instruction label centered -->
-        <text_body text="Touch anywhere to test calibration" translation_tag="Touch anywhere to test calibration" align="center"/>
+        <text_body text="Touch anywhere to test calibration"
+                   translation_tag="Touch anywhere to test calibration" align="center"/>
       </lv_obj>
 
       <!-- Button column on right - flex_grow=0 to prevent expansion -->

@@ -139,6 +139,18 @@ struct RuntimeConfig {
     static void set_debug_touches(bool value);
 
     /**
+     * @brief Check if touch-calibration press debounce is enabled
+     *
+     * When enabled, the calibration state machine records at most one sample
+     * per physical contact (gated on LV_EVENT_RELEASED), fixing controllers
+     * that emit a burst of PRESSED events per tap (issue #943). Default off;
+     * enabled via HELIX_TOUCH_CAL_DEBOUNCE=1. Static-cached, read once.
+     *
+     * @return true if press debounce is enabled
+     */
+    static bool touch_cal_debounce();
+
+    /**
      * @brief Check if XML hot reload is enabled
      *
      * When enabled, XML files are polled for changes and re-registered live.

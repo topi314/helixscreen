@@ -149,6 +149,7 @@ void WizardTouchCalibrationStep::register_callbacks() {
     lv_xml_register_event_cb(nullptr, "on_touch_cal_accept_clicked", on_accept_clicked_static);
     lv_xml_register_event_cb(nullptr, "on_touch_cal_retry_clicked", on_retry_clicked_static);
     lv_xml_register_event_cb(nullptr, "on_touch_cal_screen_touched", on_screen_touched_static);
+    lv_xml_register_event_cb(nullptr, "on_touch_cal_screen_released", on_screen_released_static);
     lv_xml_register_event_cb(nullptr, "on_touch_cal_test_area_touched",
                              on_test_area_touched_static);
 }
@@ -417,6 +418,11 @@ void WizardTouchCalibrationStep::on_screen_touched_static(lv_event_t* e) {
     get_wizard_touch_calibration_step()->handle_screen_touched(e);
 }
 
+void WizardTouchCalibrationStep::on_screen_released_static(lv_event_t* e) {
+    (void)e;
+    get_wizard_touch_calibration_step()->handle_screen_released();
+}
+
 void WizardTouchCalibrationStep::on_test_area_touched_static(lv_event_t* e) {
     get_wizard_touch_calibration_step()->handle_test_area_touched(e);
 }
@@ -500,6 +506,14 @@ void WizardTouchCalibrationStep::handle_screen_touched(lv_event_t* e) {
     update_instruction_text();
     update_crosshair_position();
     update_button_visibility();
+}
+
+void WizardTouchCalibrationStep::handle_screen_released() {
+    // Forward finger-lift to the panel so the press-debounce gate clears
+    // (issue #943). No-op when debounce is disabled. Main-thread input only.
+    if (panel_) {
+        panel_->notify_release();
+    }
 }
 
 void WizardTouchCalibrationStep::handle_test_area_touched(lv_event_t* e) {

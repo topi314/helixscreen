@@ -165,6 +165,14 @@ class TouchCalibrationOverlay : public OverlayBase {
      */
     void handle_screen_touched(lv_event_t* e);
 
+    /**
+     * @brief Handle screen release event - clears the press-debounce gate
+     *
+     * Forwards LV_EVENT_RELEASED to the panel so one physical contact records
+     * at most one sample when HELIX_TOUCH_CAL_DEBOUNCE=1 (issue #943).
+     */
+    void handle_screen_released();
+
     /** @brief Handle back button click - cancels calibration */
     void handle_back_clicked();
 

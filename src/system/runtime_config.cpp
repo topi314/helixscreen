@@ -56,6 +56,17 @@ void RuntimeConfig::set_debug_touches(bool value) {
     g_debug_touches = value;
 }
 
+bool RuntimeConfig::touch_cal_debounce() {
+    static bool checked = false;
+    static bool enabled = false;
+    if (!checked) {
+        checked = true;
+        const char* val = std::getenv("HELIX_TOUCH_CAL_DEBOUNCE");
+        enabled = (val != nullptr && std::strcmp(val, "1") == 0);
+    }
+    return enabled;
+}
+
 bool RuntimeConfig::hot_reload_enabled() {
     static bool checked = false;
     static bool enabled = false;

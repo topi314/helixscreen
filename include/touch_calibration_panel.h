@@ -5,10 +5,13 @@
 
 #include "touch_calibration.h"
 
+#include <cstdint>
 #include <functional>
 #include <lvgl.h>
 
 namespace helix {
+
+class TouchCalibrationPanelTestAccess;
 
 /**
  * @brief Touch calibration panel state machine
@@ -178,6 +181,15 @@ class TouchCalibrationPanel {
     void add_sample(Point raw);
 
     /**
+     * @brief Notify the panel that the physical touch contact was released
+     *
+     * Clears the press-debounce gate so the next press may record a sample.
+     * No-op when debounce is disabled (the default). Wired to LV_EVENT_RELEASED
+     * by the Settings overlay and first-boot wizard. See issue #943.
+     */
+    void notify_release();
+
+    /**
      * @brief Accept the computed calibration
      *
      * Only valid in VERIFY state.
@@ -261,6 +273,30 @@ class TouchCalibrationPanel {
     };
     RawSample sample_buffer_[SAMPLES_REQUIRED]{};
     int sample_count_ = 0;
+
+    // Press-debounce (issue #943): gate sample collection so one physical
+    // contact contributes at most one sample. Opt-in via HELIX_TOUCH_CAL_DEBOUNCE.
+    //
+    // `debounce_enabled_` is seeded once from RuntimeConfig::touch_cal_debounce()
+    // in the constructor. When false, the entire gate is skipped and behavior is
+    // byte-for-byte identical to the pre-#943 collection path.
+    bool debounce_enabled_ = false;
+    bool awaiting_release_ = false; ///< true while waiting for finger-lift after a recorded press
+    uint32_t release_deadline_ms_ = 0; ///< stall-guard: now()+RELEASE_TIMEOUT_MS when gate armed
+
+    /// Stall-guard window: auto-clear the gate if no RELEASED arrives within this
+    /// many ms. Long enough that rapid bursts (resolve <100ms) are still collapsed,
+    /// short enough that a deliberate tapper never feels stuck.
+    static constexpr uint32_t RELEASE_TIMEOUT_MS = 1500;
+
+    /// Monotonic-ms clock used ONLY for the debounce stall-guard. Defaults to
+    /// lv_tick_get(); tests inject a deterministic source via the test-access class.
+    std::function<uint32_t()> now_fn_ = []() { return static_cast<uint32_t>(lv_tick_get()); };
+
+    /// Arm the press-debounce gate (set awaiting_release_ + stall-guard deadline).
+    void arm_release_gate();
+
+    friend class TouchCalibrationPanelTestAccess;
 
     /// Check if a sample has ADC-saturated or screen-edge phantom values
     bool is_bad_sample(const Point& sample) const;

@@ -60,6 +60,13 @@ static void on_touch_cal_overlay_touched(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+static void on_touch_cal_overlay_released(lv_event_t* e) {
+    (void)e;
+    LVGL_SAFE_EVENT_CB_BEGIN("[TouchCalibrationOverlay] screen released");
+    get_touch_calibration_overlay().handle_screen_released();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 static void on_touch_cal_back_clicked(lv_event_t* e) {
     (void)e;
     LVGL_SAFE_EVENT_CB_BEGIN("[TouchCalibrationOverlay] back clicked");
@@ -218,6 +225,7 @@ void TouchCalibrationOverlay::register_callbacks() {
         {"on_touch_cal_accept_clicked", on_touch_cal_accept_clicked},
         {"on_touch_cal_retry_clicked", on_touch_cal_retry_clicked},
         {"on_touch_cal_overlay_touched", on_touch_cal_overlay_touched},
+        {"on_touch_cal_overlay_released", on_touch_cal_overlay_released},
         {"on_touch_cal_back_clicked", on_touch_cal_back_clicked},
     });
 
@@ -559,8 +567,8 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
             TouchCalibration old_cal = dm->get_current_calibration();
             helix::Point raw;
             if (helix::invert_transform_point(old_cal, {point.x, point.y}, raw)) {
-                ripple_pt = helix::transform_point(*new_cal, raw, dm->width() - 1,
-                                                   dm->height() - 1);
+                ripple_pt =
+                    helix::transform_point(*new_cal, raw, dm->width() - 1, dm->height() - 1);
                 if (helix::is_touch_debug_enabled()) {
                     spdlog::warn("[TouchDebug] verify ripple: lvgl=({},{}) -> raw=({},{}) "
                                  "-> new_cal=({},{})",
@@ -572,9 +580,8 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
         // Draw ripple on the top layer so coordinates are SCREEN-ABSOLUTE.
         create_ripple(lv_layer_top(), ripple_pt.x, ripple_pt.y);
 
-        bool on_screen =
-            dm && ripple_pt.x >= 0 && ripple_pt.x < dm->width() && ripple_pt.y >= 0 &&
-            ripple_pt.y < dm->height();
+        bool on_screen = dm && ripple_pt.x >= 0 && ripple_pt.x < dm->width() && ripple_pt.y >= 0 &&
+                         ripple_pt.y < dm->height();
         panel_->report_verify_touch(on_screen);
         return;
     }
@@ -610,7 +617,8 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
         DisplayManager* dm = DisplayManager::instance();
         if (dm) {
             dm->enable_affine_calibration();
-            spdlog::info("[{}] Re-enabled original calibration for VERIFY (new cal NOT applied until accept)",
+            spdlog::info("[{}] Re-enabled original calibration for VERIFY (new cal NOT applied "
+                         "until accept)",
                          get_name());
         }
         has_backup_ = false;
@@ -620,6 +628,14 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
     update_state_subject();
     update_instruction_text();
     update_crosshair_position();
+}
+
+void TouchCalibrationOverlay::handle_screen_released() {
+    // Forward finger-lift to the panel so the press-debounce gate clears
+    // (issue #943). No-op when debounce is disabled. Main-thread input only.
+    if (panel_) {
+        panel_->notify_release();
+    }
 }
 
 void TouchCalibrationOverlay::handle_back_clicked() {

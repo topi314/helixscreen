@@ -146,12 +146,14 @@ class WizardTouchCalibrationStep {
     static void on_accept_clicked_static(lv_event_t* e);
     static void on_retry_clicked_static(lv_event_t* e);
     static void on_screen_touched_static(lv_event_t* e);
+    static void on_screen_released_static(lv_event_t* e);
     static void on_test_area_touched_static(lv_event_t* e);
 
     // Instance method handlers
     void handle_accept_clicked();
     void handle_retry_clicked();
     void handle_screen_touched(lv_event_t* e);
+    void handle_screen_released();
     void handle_test_area_touched(lv_event_t* e);
 
     // Ripple animation for touch feedback
