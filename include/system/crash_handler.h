@@ -106,6 +106,23 @@ void write_mock_crash_file(const std::string& crash_file_path);
 void write_exception_record(const char* what) noexcept;
 
 /**
+ * @brief Stash the std::terminate reason so a re-entrant terminate still
+ *        surfaces it.
+ *
+ * Call from a `std::terminate` handler BEFORE any fault-prone work (rethrow,
+ * `exception::what()`, writing the crash file). If that handler re-faults and
+ * falls through to a bare `abort()`, glibc leaves `__abort_msg` empty and the
+ * SIGABRT signal handler would otherwise have no reason to report — it instead
+ * emits this text as `terminate_msg:` in the crash record (issue #987).
+ *
+ * Bounded copy into a static buffer, newline-stripped, no allocation — safe to
+ * call when the heap may already be corrupt. nullptr is a no-op.
+ *
+ * @param what Exception message (e.what()) or a placeholder; may be nullptr.
+ */
+void set_terminate_context(const char* what) noexcept;
+
+/**
  * @brief Intentionally SIGSEGV through a deep call chain, for verifying the
  *        signal handler's unwind path on real hardware.
  *
@@ -158,8 +175,7 @@ void register_callback_tag_ptr(volatile const char* const* tag_ptr);
  * @param next       Pointer to the write-index counter (monotonically increasing)
  */
 void register_previous_tag_ring(volatile const char* const* ring,
-                                volatile const uint32_t* count_ring,
-                                unsigned int capacity,
+                                volatile const uint32_t* count_ring, unsigned int capacity,
                                 volatile const unsigned int* next);
 
 /**
@@ -177,8 +193,7 @@ void register_previous_tag_ring(volatile const char* const* ring,
  *
  * Signal-safe: two volatile writes, no locks, no allocations.
  */
-void set_current_event(const void* target, const void* original_target,
-                       unsigned int code) noexcept;
+void set_current_event(const void* target, const void* original_target, unsigned int code) noexcept;
 
 /**
  * @brief Refresh the cached heap snapshot
@@ -251,8 +266,7 @@ void dump_to_fd(int fd) noexcept;
 
 // C-ABI bridge for LVGL (C source) to record the current event target. Calls
 // crash_handler::set_current_event() — same semantics, usable from C.
-extern "C" void helix_crash_note_event(const void* target,
-                                       const void* original_target,
+extern "C" void helix_crash_note_event(const void* target, const void* original_target,
                                        unsigned int code);
 
 // C-ABI bridge for the in-flight event target's identity (class name + obj
@@ -261,8 +275,7 @@ extern "C" void helix_crash_note_event(const void* target,
 // crash handler can dump them as event_target_class / event_target_name.
 // Bundle 3XNZQB2R: bare event_target=0x23042e0 wasn't enough to ID the click;
 // next bundle in this signature should name the widget. Both args may be NULL.
-extern "C" void helix_crash_note_event_target_id(const char* class_name,
-                                                 const char* obj_name);
+extern "C" void helix_crash_note_event_target_id(const char* class_name, const char* obj_name);
 
 // C-ABI bridge: text segment bounds for the patched LVGL cb-bounds gate.
 // Returns 1 if bounds are valid, 0 if not yet captured (early init). The

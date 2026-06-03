@@ -275,6 +275,41 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: abort_msg absent when not in file",
     REQUIRE_FALSE(result.contains("abort_msg"));
 }
 
+// abort_msg_state / terminate_msg (issue #987): a blank glibc abort reason is
+// no longer ambiguous, and a re-entrant std::terminate still surfaces its reason.
+TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file extracts abort_msg_state",
+                 "[telemetry][crash]") {
+    write_crash_file("signal:6\n"
+                     "name:SIGABRT\n"
+                     "version:0.99.72\n"
+                     "timestamp:1707350400\n"
+                     "uptime:100\n"
+                     "abort_msg_state:empty\n");
+    auto result = crash_handler::read_crash_file(crash_path());
+
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result.contains("abort_msg_state"));
+    REQUIRE(result["abort_msg_state"] == "empty");
+    // "empty" means glibc stored no reason — there must be no abort_msg line.
+    REQUIRE_FALSE(result.contains("abort_msg"));
+}
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file extracts terminate_msg",
+                 "[telemetry][crash]") {
+    write_crash_file("signal:6\n"
+                     "name:SIGABRT\n"
+                     "version:0.99.72\n"
+                     "timestamp:1707350400\n"
+                     "uptime:100\n"
+                     "abort_msg_state:empty\n"
+                     "terminate_msg:std::bad_alloc\n");
+    auto result = crash_handler::read_crash_file(crash_path());
+
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result.contains("terminate_msg"));
+    REQUIRE(result["terminate_msg"] == "std::bad_alloc");
+}
+
 // ============================================================================
 // End-to-end: real glibc abort propagates via __abort_msg into the crash file.
 // Forks a child, triggers a malloc-corruption abort, parent reads the dump.
@@ -304,13 +339,11 @@ TEST_CASE_METHOD(CrashTestFixture,
         // corruption code path actually firing through Catch2's harness
         // (Catch2 v3 installs its own SIGABRT handlers that interfere with
         // letting glibc abort() drive the test child's termination).
-        void** abort_msg_slot =
-            static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+        void** abort_msg_slot = static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
         if (abort_msg_slot == nullptr) {
             _exit(98);
         }
-        static const char synthetic_msg[] =
-            "helixscreen abort_msg capture test (synthetic)";
+        static const char synthetic_msg[] = "helixscreen abort_msg capture test (synthetic)";
         *abort_msg_slot = const_cast<char*>(synthetic_msg);
 
         crash_handler::install(crash_path());
@@ -320,9 +353,8 @@ TEST_CASE_METHOD(CrashTestFixture,
 
     int status = 0;
     REQUIRE(waitpid(pid, &status, 0) == pid);
-    INFO("raw status = " << status << ", WIFEXITED=" << WIFEXITED(status)
-                         << ", WEXITSTATUS=" << WEXITSTATUS(status)
-                         << ", WIFSIGNALED=" << WIFSIGNALED(status)
+    INFO("raw status = " << status << ", WIFEXITED=" << WIFEXITED(status) << ", WEXITSTATUS="
+                         << WEXITSTATUS(status) << ", WIFSIGNALED=" << WIFSIGNALED(status)
                          << ", WTERMSIG=" << WTERMSIG(status));
     // SIGABRT is auto-blocked during sa_sigaction handlers (sigaction default
     // unless SA_NODEFER is set), so the handler's tail `raise(SIGABRT)` stays
@@ -353,8 +385,7 @@ TEST_CASE_METHOD(CrashTestFixture,
     REQUIRE(pid >= 0);
 
     if (pid == 0) {
-        void** abort_msg_slot =
-            static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+        void** abort_msg_slot = static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
         if (abort_msg_slot == nullptr) {
             _exit(98);
         }
@@ -381,8 +412,7 @@ TEST_CASE_METHOD(CrashTestFixture,
     REQUIRE(msg == "line one line two line three");
 }
 
-TEST_CASE_METHOD(CrashTestFixture,
-                 "Crash: SIGABRT handler truncates oversized __abort_msg",
+TEST_CASE_METHOD(CrashTestFixture, "Crash: SIGABRT handler truncates oversized __abort_msg",
                  "[telemetry][crash][subprocess]") {
     if (dlsym(RTLD_DEFAULT, "__abort_msg") == nullptr) {
         SKIP("__abort_msg not resolvable on this libc");
@@ -392,8 +422,7 @@ TEST_CASE_METHOD(CrashTestFixture,
     REQUIRE(pid >= 0);
 
     if (pid == 0) {
-        void** abort_msg_slot =
-            static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+        void** abort_msg_slot = static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
         if (abort_msg_slot == nullptr) {
             _exit(98);
         }
@@ -426,6 +455,46 @@ TEST_CASE_METHOD(CrashTestFixture,
     REQUIRE(msg.size() == 255);
     REQUIRE(msg.find("TAILMARKER") == std::string::npos);
     REQUIRE(msg.find_first_not_of('a') == std::string::npos);
+}
+
+// Issue #987: when glibc stored no abort reason (bare abort()/raise — NOT a
+// malloc/assert/fortify abort), the handler must emit abort_msg_state:empty and
+// omit abort_msg, so a blank reason is diagnosable rather than ambiguous.
+TEST_CASE_METHOD(CrashTestFixture,
+                 "Crash: SIGABRT with empty __abort_msg records abort_msg_state:empty",
+                 "[telemetry][crash][subprocess]") {
+    if (dlsym(RTLD_DEFAULT, "__abort_msg") == nullptr) {
+        SKIP("__abort_msg not resolvable on this libc");
+    }
+
+    pid_t pid = fork();
+    REQUIRE(pid >= 0);
+
+    if (pid == 0) {
+        void** abort_msg_slot = static_cast<void**>(dlsym(RTLD_DEFAULT, "__abort_msg"));
+        if (abort_msg_slot == nullptr) {
+            _exit(98);
+        }
+        // Force the "glibc stored no message" condition a bare abort()/raise
+        // produces (the exact #987 signature).
+        *abort_msg_slot = nullptr;
+
+        crash_handler::install(crash_path());
+        raise(SIGABRT);
+        _exit(99);
+    }
+
+    int status = 0;
+    REQUIRE(waitpid(pid, &status, 0) == pid);
+    REQUIRE(WIFEXITED(status));
+    REQUIRE(WEXITSTATUS(status) == 128 + SIGABRT);
+
+    auto result = crash_handler::read_crash_file(crash_path());
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result["signal"] == 6);
+    REQUIRE(result.contains("abort_msg_state"));
+    REQUIRE(result["abort_msg_state"] == "empty");
+    REQUIRE_FALSE(result.contains("abort_msg"));
 }
 #endif
 
@@ -899,7 +968,8 @@ TEST_CASE("Crash: breadcrumb ring keeps the newest 256 entries on wraparound",
 
     auto extract_index = [](const std::string& line) -> int {
         auto pos = line.rfind(' ');
-        if (pos == std::string::npos) return -1;
+        if (pos == std::string::npos)
+            return -1;
         return std::stoi(line.substr(pos + 1));
     };
 

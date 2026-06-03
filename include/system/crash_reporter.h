@@ -66,6 +66,18 @@ class CrashReporter {
         // where __abort_msg doesn't exist.
         std::string abort_msg;
 
+        // Why abort_msg may be blank on SIGABRT (issue #987): "present" (a real
+        // glibc reason is in abort_msg), "empty" (glibc stored no message — a
+        // bare abort()/raise or std::terminate fall-through, NOT malloc/assert/
+        // fortify), or "unresolved" (__abort_msg symbol not found). Empty for
+        // non-SIGABRT.
+        std::string abort_msg_state;
+
+        // std::terminate reason captured when a re-entrant terminate fell
+        // through to a bare abort() (which leaves __abort_msg empty). This is
+        // the reason behind an otherwise-blank SIGABRT (issue #987).
+        std::string terminate_msg;
+
         // Fault info (Phase 2 - from siginfo_t)
         std::string fault_addr;
         int fault_code = 0;

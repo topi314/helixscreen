@@ -189,6 +189,12 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     if (crash_data.contains("abort_msg"))
         report.abort_msg = crash_data["abort_msg"];
 
+    if (crash_data.contains("abort_msg_state"))
+        report.abort_msg_state = crash_data["abort_msg_state"];
+
+    if (crash_data.contains("terminate_msg"))
+        report.terminate_msg = crash_data["terminate_msg"];
+
     if (crash_data.contains("backtrace") && crash_data["backtrace"].is_array()) {
         for (const auto& addr : crash_data["backtrace"]) {
             report.backtrace.push_back(addr.get<std::string>());
@@ -403,6 +409,12 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
     // glibc abort reason for SIGABRT (e.g. "free(): invalid pointer")
     if (!report.abort_msg.empty()) {
         j["abort_msg"] = report.abort_msg;
+    }
+    if (!report.abort_msg_state.empty()) {
+        j["abort_msg_state"] = report.abort_msg_state;
+    }
+    if (!report.terminate_msg.empty()) {
+        j["terminate_msg"] = report.terminate_msg;
     }
 
     // Fault info (only when present)
@@ -664,6 +676,15 @@ std::string CrashReporter::generate_github_url(const CrashReport& report) {
     }
     if (!report.abort_msg.empty()) {
         body << "- **Abort Reason:** `" << report.abort_msg << "`\n";
+    }
+    // The std::terminate reason behind an otherwise-blank SIGABRT (issue #987).
+    if (!report.terminate_msg.empty()) {
+        body << "- **Terminate Reason:** `" << report.terminate_msg << "`\n";
+    }
+    // Make a blank abort reason self-explanatory rather than silently missing.
+    if (report.abort_msg.empty() && !report.abort_msg_state.empty() &&
+        report.abort_msg_state != "present") {
+        body << "- **Abort Reason:** _(none captured — " << report.abort_msg_state << ")_\n";
     }
     if (!report.fault_code_name.empty()) {
         body << "- **Fault:** " << report.fault_code_name << " at " << report.fault_addr << "\n";

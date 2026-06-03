@@ -230,6 +230,29 @@ static struct sigaction s_old_sigfpe = {};
 /// crash file.
 static char** s_abort_msg_ptr = nullptr;
 
+/// Reason text stashed by the C++ std::terminate handler (main.cpp) before it
+/// does any fault-prone work (rethrow / exception::what() / writing the crash
+/// file). If that handler re-faults and falls through to its bare `abort()`
+/// re-entrance guard, glibc leaves `__abort_msg` empty — so the SIGABRT handler
+/// emits this instead as `terminate_msg:`. Without it, a re-entrant terminate
+/// produces a blank SIGABRT record with no reason at all (issue #987).
+/// Newlines are stripped at set time so it stays a single crash-file line.
+static char s_terminate_msg[256] = {};
+
+void crash_handler::set_terminate_context(const char* what) noexcept {
+    if (what == nullptr) {
+        return;
+    }
+    // Bounded, allocation-free copy with newline strip — safe to call from a
+    // std::terminate handler (which may run after the heap is corrupt).
+    size_t n = 0;
+    for (; n + 1 < sizeof(s_terminate_msg) && what[n] != '\0'; ++n) {
+        char c = what[n];
+        s_terminate_msg[n] = (c == '\n' || c == '\r') ? ' ' : c;
+    }
+    s_terminate_msg[n] = '\0';
+}
+
 // =============================================================================
 // Async-signal-safe helpers
 // These use ONLY functions from the POSIX async-signal-safe list.
@@ -423,8 +446,7 @@ static void write_kv_long(int fd, const char* key, long value, char* num_buf, si
 /// plant a saved_fp value that walks into unrelated memory, and the .text
 /// filter catches that. If any check fails we stop walking rather than
 /// wander into bad memory.
-static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp,
-                             uintptr_t word_size) {
+static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp, uintptr_t word_size) {
 #if defined(__aarch64__) || defined(__x86_64__) || defined(__arm__)
     constexpr uintptr_t kMaxStackSize = 16 * 1024 * 1024;
     constexpr int kMaxFrames = 48;
@@ -472,9 +494,8 @@ static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp,
         // break), so the saved_fp chain can still walk into the caller
         // whose frame does have a proper {r7, lr} layout.
         uintptr_t lr_addr = saved_lr & ~static_cast<uintptr_t>(1);
-        bool lr_in_text =
-            (s_text_start != 0 && s_text_end > s_text_start
-             && lr_addr >= s_text_start && lr_addr < s_text_end);
+        bool lr_in_text = (s_text_start != 0 && s_text_end > s_text_start &&
+                           lr_addr >= s_text_start && lr_addr < s_text_end);
         if (lr_in_text && lr_addr != 0) {
             safe_write(fd, "bt:");
             safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), lr_addr));
@@ -513,8 +534,8 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     // trample it — the EXCEPTION record is strictly more informative than
     // a bare SIGABRT signature. The CAS is async-signal-safe (lock-free).
     sig_atomic_t expected = 0;
-    if (!__atomic_compare_exchange_n(&s_crash_file_written, &expected, 1, false,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+    if (!__atomic_compare_exchange_n(&s_crash_file_written, &expected, 1, false, __ATOMIC_SEQ_CST,
+                                     __ATOMIC_SEQ_CST)) {
         // Already written by the exception path. Skip the dump but still
         // re-raise with the default handler so the process exits with the
         // correct status — never leave the signal unhandled.
@@ -592,24 +613,47 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     // Distinguishes "free(): invalid pointer" / "double free or corruption" /
     // "munmap_chunk(): invalid pointer" / assertion failures — without this
     // every SIGABRT looked identical from the issue body (see issue #960).
-    if (sig == SIGABRT && s_abort_msg_ptr != nullptr) {
-        const char* msg = *s_abort_msg_ptr;
-        if (msg != nullptr) {
-            // Bounded copy + newline strip so the value stays a single
-            // line "key:value\n" in the crash file format.
-            char abort_msg_buf[256];
-            size_t n = 0;
-            for (; n + 1 < sizeof(abort_msg_buf) && msg[n] != '\0'; ++n) {
-                char c = msg[n];
-                abort_msg_buf[n] = (c == '\n' || c == '\r') ? ' ' : c;
-            }
-            abort_msg_buf[n] = '\0';
-            if (n > 0) {
+    //
+    // Always emit `abort_msg_state` for SIGABRT (issue #987) so a missing reason
+    // is never ambiguous. A blank `abort_msg` previously had three indistinct
+    // causes; the state tells them apart:
+    //   unresolved — dlsym couldn't find __abort_msg (non-glibc, or stripped).
+    //   empty      — glibc stored no message: a bare abort()/raise(SIGABRT) or a
+    //                std::terminate fall-through, NOT a malloc/assert/fortify
+    //                abort (those all populate __abort_msg). Look at terminate_msg.
+    //   present    — a real glibc diagnostic follows on the `abort_msg` line.
+    if (sig == SIGABRT) {
+        if (s_abort_msg_ptr == nullptr) {
+            safe_write(fd, "abort_msg_state:unresolved\n");
+        } else {
+            const char* msg = *s_abort_msg_ptr;
+            if (msg == nullptr || msg[0] == '\0') {
+                safe_write(fd, "abort_msg_state:empty\n");
+            } else {
+                // Bounded copy + newline strip so the value stays a single
+                // line "key:value\n" in the crash file format.
+                char abort_msg_buf[256];
+                size_t n = 0;
+                for (; n + 1 < sizeof(abort_msg_buf) && msg[n] != '\0'; ++n) {
+                    char c = msg[n];
+                    abort_msg_buf[n] = (c == '\n' || c == '\r') ? ' ' : c;
+                }
+                abort_msg_buf[n] = '\0';
+                safe_write(fd, "abort_msg_state:present\n");
                 safe_write(fd, "abort_msg:");
                 safe_write(fd, abort_msg_buf);
                 safe_write(fd, "\n");
             }
         }
+    }
+
+    // std::terminate reason stashed before main.cpp's terminate handler did any
+    // fault-prone work. Only non-empty when terminate executed, so emit it for
+    // any signal — it's the reason behind an otherwise-blank SIGABRT (#987).
+    if (s_terminate_msg[0] != '\0') {
+        safe_write(fd, "terminate_msg:");
+        safe_write(fd, s_terminate_msg);
+        safe_write(fd, "\n");
     }
 
     // Write register state from ucontext
@@ -807,7 +851,8 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
             // Reading from (next - 1 - i) handles wraparound via unsigned arithmetic.
             unsigned int idx = (next + s_previous_tag_capacity - 1 - i) % s_previous_tag_capacity;
             const char* prev = const_cast<const char*>(s_previous_tag_ring[idx]);
-            if (!prev) break; // Unfilled slot — rest of the ring is empty.
+            if (!prev)
+                break; // Unfilled slot — rest of the ring is empty.
             safe_write(fd, kLabels[i]);
             safe_write(fd, prev);
             // Append " (xN)" when the producer coalesced N>1 consecutive
@@ -819,8 +864,7 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
                 uint32_t count = s_previous_tag_count_ring[idx];
                 if (count > 1) {
                     safe_write(fd, " (x");
-                    safe_write(fd, int_to_str(num_buf, sizeof(num_buf),
-                                              static_cast<long>(count)));
+                    safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(count)));
                     safe_write(fd, ")");
                 }
             }
@@ -1148,9 +1192,9 @@ void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_pt
 }
 
 void crash_handler::register_previous_tag_ring(volatile const char* const* ring,
-                                                volatile const uint32_t* count_ring,
-                                                unsigned int capacity,
-                                                volatile const unsigned int* next) {
+                                               volatile const uint32_t* count_ring,
+                                               unsigned int capacity,
+                                               volatile const unsigned int* next) {
     s_previous_tag_ring = ring;
     s_previous_tag_count_ring = count_ring;
     s_previous_tag_capacity = capacity;
@@ -1182,8 +1226,7 @@ extern "C" void helix_crash_note_event(const void* target, const void* original_
 // stored by reference (LVGL class names live in static .rodata). Obj name is
 // copied to a fixed buffer because LVGL frees the heap-allocated name when
 // the widget is destroyed. NULL args clear the slots.
-extern "C" void helix_crash_note_event_target_id(const char* class_name,
-                                                 const char* obj_name) {
+extern "C" void helix_crash_note_event_target_id(const char* class_name, const char* obj_name) {
     s_current_event_target_class = class_name;
     if (obj_name == nullptr) {
         s_current_event_target_name[0] = '\0';
@@ -1195,7 +1238,8 @@ extern "C" void helix_crash_note_event_target_id(const char* class_name,
     constexpr size_t kBufSize = sizeof(s_current_event_target_name);
     while (i < kBufSize - 1) {
         char c = obj_name[i];
-        if (c == '\0') break;
+        if (c == '\0')
+            break;
         s_current_event_target_name[i] = c;
         ++i;
     }
@@ -1210,8 +1254,10 @@ extern "C" int helix_get_text_bounds(unsigned long* lo, unsigned long* hi) {
     if (s_text_start == 0 || s_text_end <= s_text_start) {
         return 0;
     }
-    if (lo) *lo = static_cast<unsigned long>(s_text_start);
-    if (hi) *hi = static_cast<unsigned long>(s_text_end);
+    if (lo)
+        *lo = static_cast<unsigned long>(s_text_start);
+    if (hi)
+        *hi = static_cast<unsigned long>(s_text_end);
     return 1;
 }
 
@@ -1517,8 +1563,8 @@ void crash_handler::write_exception_record(const char* what) noexcept {
     // First-writer-wins. If a signal already laid down a crash file, don't
     // overwrite — the original signal carries fault_addr/registers we'd lose.
     sig_atomic_t expected = 0;
-    if (!__atomic_compare_exchange_n(&s_crash_file_written, &expected, 1, false,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+    if (!__atomic_compare_exchange_n(&s_crash_file_written, &expected, 1, false, __ATOMIC_SEQ_CST,
+                                     __ATOMIC_SEQ_CST)) {
         return;
     }
 
@@ -1682,6 +1728,10 @@ nlohmann::json crash_handler::read_crash_file(const std::string& crash_file_path
                 result["exception"] = value;
             } else if (key == "abort_msg") {
                 result["abort_msg"] = value;
+            } else if (key == "abort_msg_state") {
+                result["abort_msg_state"] = value;
+            } else if (key == "terminate_msg") {
+                result["terminate_msg"] = value;
             } else if (key == "bt") {
                 backtrace_arr.push_back(value);
             } else if (key == "map") {
@@ -1829,8 +1879,7 @@ namespace {
 } // namespace
 
 [[noreturn]] void crash_handler::trigger_test_crash() {
-    spdlog::warn(
-        "[CrashHandler] HELIX_CRASH_TEST active — triggering SIGSEGV at crash_level_4()");
+    spdlog::warn("[CrashHandler] HELIX_CRASH_TEST active — triggering SIGSEGV at crash_level_4()");
     // Read the result so the compiler can't elide the chain.
     volatile int sink = crash_level_1();
     (void)sink;

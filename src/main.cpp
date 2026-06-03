@@ -44,12 +44,20 @@ static void log_fatal(const char* msg) {
 // destruction, and other fatal C++ runtime errors. Logs what we can before
 // the default terminate handler calls abort() (which triggers crash_handler).
 static void terminate_handler() {
-    // Guard against re-entrance (e.g. exception::what() throws)
+    // Guard against re-entrance (e.g. exception::what() throws). The reason — if
+    // already determined — was stashed via crash_handler::set_terminate_context()
+    // below, so this bare abort() still surfaces it as `terminate_msg:` in the
+    // SIGABRT record instead of producing a blank crash (issue #987).
     static bool entered = false;
     if (entered) {
         abort();
     }
     entered = true;
+
+    // Stash a placeholder reason up front so even a fault while inspecting the
+    // exception (rethrow / what()) leaves a trace — refined with the real reason
+    // once it's known below.
+    crash_handler::set_terminate_context("std::terminate (reason capture in progress)");
 
     // Check if there's a current exception we can inspect
     const char* what = nullptr;
@@ -69,6 +77,10 @@ static void terminate_handler() {
                   "(joinable thread destroyed? noexcept violation?)");
         what = "std::terminate without active exception";
     }
+
+    // Refine the stashed reason now that the real exception text is known, so a
+    // re-fault inside write_exception_record() still reports it (issue #987).
+    crash_handler::set_terminate_context(what);
 
     // Write crash file BEFORE abort — abort triggers the signal handler which
     // would overwrite it without the exception message.
