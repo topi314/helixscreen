@@ -12,6 +12,7 @@
     - ams_sidebar_bypass_toggled: Bypass toggle switch
     - ams_sidebar_unload_clicked: Unload button
     - ams_sidebar_reset_clicked: Reset button
+    - ams_sidebar_check_gates_clicked: Check gates button (Happy Hare only)
     - ams_sidebar_settings_clicked: Settings button
 
     C++ companion: AmsOperationSidebar (ui_ams_sidebar.h)
@@ -70,6 +71,11 @@
       <ui_button name="btn_reset" width="100%" variant="secondary" icon="refresh" text="Reset" translation_tag="Reset">
         <bind_flag_if_eq subject="ams_type" flag="hidden" ref_value="4"/>
         <event_cb trigger="clicked" callback="ams_sidebar_reset_clicked"/>
+      </ui_button>
+      <!-- Check Gates (Happy Hare): probe all gate sensors. Shown only when supported. -->
+      <ui_button name="btn_check_gates" width="100%" variant="secondary" icon="refresh"
+                 text="Check gates" translation_tag="Check gates" hidden="true">
+        <event_cb trigger="clicked" callback="ams_sidebar_check_gates_clicked"/>
       </ui_button>
       <!-- Settings Button (full width) -->
       <ui_button name="btn_settings" width="100%" icon="settings" text="Settings" translation_tag="Settings">

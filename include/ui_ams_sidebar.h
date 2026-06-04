@@ -93,6 +93,11 @@ class AmsOperationSidebar {
     void update_settings_visibility();
 
     /**
+     * @brief Show/hide Check gates button based on whether the active backend supports it.
+     */
+    void update_check_gates_visibility();
+
+    /**
      * @brief Set btn_reset's label from the active backend (e.g. "Home" for Happy Hare).
      */
     void sync_reset_button_label();
@@ -167,6 +172,7 @@ class AmsOperationSidebar {
     // Action handlers
     void handle_unload();
     void handle_reset();
+    void handle_check_gates();
     void handle_bypass_toggle();
 
     // Action display (sidebar-relevant parts only)
@@ -179,6 +185,7 @@ class AmsOperationSidebar {
     static void on_bypass_toggled_cb(lv_event_t* e);
     static void on_unload_clicked_cb(lv_event_t* e);
     static void on_reset_clicked_cb(lv_event_t* e);
+    static void on_check_gates_clicked_cb(lv_event_t* e);
     static void on_settings_clicked_cb(lv_event_t* e);
 };
 
