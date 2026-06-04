@@ -120,6 +120,7 @@ static void ensure_ams_widgets_registered() {
     lv_xml_register_component_from_file("A:ui_xml/components/ams_sidebar.xml");
     lv_xml_register_component_from_file("A:ui_xml/ams_panel.xml");
     lv_xml_register_component_from_file("A:ui_xml/ams_context_menu.xml");
+    lv_xml_register_component_from_file("A:ui_xml/ams_selector_menu.xml");
     // NOTE: spoolman_spool_item.xml and ams_edit_modal.xml are registered
     // globally in xml_registration.cpp (needed by FilamentPanel without AMS lazy init)
     lv_xml_register_component_from_file("A:ui_xml/ams_loading_error_modal.xml");

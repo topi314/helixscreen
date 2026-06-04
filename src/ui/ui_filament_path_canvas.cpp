@@ -231,6 +231,15 @@ struct FilamentPathData {
     hub_callback_t hub_callback = nullptr;
     void* hub_user_data = nullptr;
 
+    // Selector/hub box hit rect, recorded by the renderer (absolute display
+    // coords) so the click handler tests against EXACTLY what was drawn. The
+    // LINEAR selector's Y is butted against the prep sensors and its width spans
+    // the slot row — neither matches the default hub_width/HUB_Y_RATIO, so any
+    // re-derivation in the click handler drifts from the visible box. Single
+    // source of truth: render writes, click reads. Reset each render.
+    lv_area_t hub_hit_rect = {0, 0, 0, 0};
+    bool hub_hit_valid = false;
+
     // Theme-derived colors (cached for performance)
     lv_color_t color_idle;
     lv_color_t color_error;
@@ -2483,6 +2492,10 @@ static void filament_path_render(lv_obj_t* obj, lv_layer_t* layer, FilamentPathD
     int32_t x_off = g.x_off;
     int32_t y_off = g.y_off;
 
+    // Invalidated until a selector/hub box is actually drawn this pass (e.g.
+    // PARALLEL draws none). The draw site below records the real rect.
+    data->hub_hit_valid = false;
+
     // Calculate Y positions
     int32_t entry_y = y_off + (int32_t)(height * ENTRY_Y_RATIO);
     int32_t prep_y = y_off + (int32_t)(height * PREP_Y_RATIO);
@@ -2892,6 +2905,13 @@ static void filament_path_render(lv_obj_t* obj, lv_layer_t* layer, FilamentPathD
                      data->color_text, data->label_font, data->border_radius, hub_label, hub_opa,
                      /*interactive=*/data->hub_callback != nullptr);
 
+        // Single source of truth for the selector/hub hit-test: record the exact
+        // box we just drew (absolute display coords). The click handler reads
+        // this instead of re-deriving geometry that drifts from the render.
+        data->hub_hit_rect = {center_x - hub_w / 2, hub_y - hub_h / 2, center_x + hub_w / 2,
+                              hub_y + hub_h / 2};
+        data->hub_hit_valid = true;
+
         // Draw filament tube through SELECTOR (LINEAR topology only)
         if (data->topology == 0 && data->active_slot >= 0) {
             int32_t sel_top = hub_y - hub_h / 2;
@@ -3239,25 +3259,16 @@ static void filament_path_click_cb(lv_event_t* e) {
         }
     }
 
-    // Check if the selector/hub box was clicked. Gated to LINEAR (Happy Hare
-    // selector) and HUB topologies — PARALLEL has no hub box, and MIXED uses a
-    // different hub-center derivation, so both are excluded here.
-    if (data->hub_callback && (data->topology == static_cast<int>(PathTopology::LINEAR) ||
-                               data->topology == static_cast<int>(PathTopology::HUB))) {
-        int32_t hub_y = y_off + (int32_t)(height * HUB_Y_RATIO);
-        int32_t hub_h = (int32_t)(height * HUB_HEIGHT_RATIO);
-        int32_t hub_w = data->hub_width;
-        // center_x mirrors BaseGeometry::center_x (slot-bounds midpoint), the
-        // same source the renderer uses to place the hub box.
-        int32_t center_x = x_off + width / 2;
-        if (data->slot_count >= 2) {
-            int32_t first_x = x_off + get_slot_x(data, 0, x_off);
-            int32_t last_x = x_off + get_slot_x(data, data->slot_count - 1, x_off);
-            center_x = (first_x + last_x) / 2;
-        } else if (data->slot_count == 1) {
-            center_x = x_off + get_slot_x(data, 0, x_off);
-        }
-        if (helix::ui::hub_box_hit(point, center_x, hub_y, hub_w, hub_h, 4)) {
+    // Check if the selector/hub box was clicked. The renderer records the exact
+    // drawn box in data->hub_hit_rect (absolute coords) — the single source of
+    // truth — so we never re-derive geometry that could drift from what's on
+    // screen. hub_hit_valid is set only when a box was actually drawn this pass
+    // (LINEAR selector / HUB), so PARALLEL is naturally excluded.
+    if (data->hub_callback && data->hub_hit_valid) {
+        const lv_area_t& r = data->hub_hit_rect;
+        int32_t cx = (r.x1 + r.x2) / 2;
+        int32_t cy = (r.y1 + r.y2) / 2;
+        if (helix::ui::hub_box_hit(point, cx, cy, r.x2 - r.x1, r.y2 - r.y1, 4)) {
             spdlog::debug("[FilamentPath] Selector/hub box clicked");
             data->hub_callback(point, data->hub_user_data);
             return;
