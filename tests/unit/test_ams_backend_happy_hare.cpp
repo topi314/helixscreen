@@ -2831,3 +2831,54 @@ TEST_CASE("Happy Hare select_gate fails when not running", "[ams][happy_hare]") 
     REQUIRE_FALSE(result.success());
     REQUIRE_FALSE(helper.has_gcode("MMU_SELECT GATE=0"));
 }
+
+// ============================================================================
+// check_gate() / check_all_gates() Tests
+// ============================================================================
+
+TEST_CASE("Happy Hare check_gate sends per-gate MMU_CHECK_GATE", "[ams][happy_hare]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_running(true);
+
+    AmsError result = helper.check_gate(1);
+
+    REQUIRE(result.result == AmsResult::SUCCESS);
+    REQUIRE(helper.has_gcode("MMU_CHECK_GATE GATE=1"));
+}
+
+TEST_CASE("Happy Hare check_all_gates sends bare MMU_CHECK_GATE", "[ams][happy_hare]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_running(true);
+
+    AmsError result = helper.check_all_gates();
+
+    REQUIRE(result.result == AmsResult::SUCCESS);
+    REQUIRE(helper.has_gcode("MMU_CHECK_GATE"));
+}
+
+TEST_CASE("Happy Hare advertises gate-check capability", "[ams][happy_hare][capability]") {
+    AmsBackendHappyHareTestHelper helper;
+    REQUIRE(helper.supports_gate_check());
+}
+
+TEST_CASE("Happy Hare check_gate fails when not running", "[ams][happy_hare]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    AmsError result = helper.check_gate(0);
+
+    REQUIRE_FALSE(result.success());
+    REQUIRE_FALSE(helper.has_gcode("MMU_CHECK_GATE GATE=0"));
+}
+
+TEST_CASE("Happy Hare check_all_gates fails when not running", "[ams][happy_hare]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    AmsError result = helper.check_all_gates();
+
+    REQUIRE_FALSE(result.success());
+    REQUIRE_FALSE(helper.has_gcode("MMU_CHECK_GATE"));
+}

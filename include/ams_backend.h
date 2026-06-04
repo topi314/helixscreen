@@ -531,6 +531,45 @@ class AmsBackend {
     }
 
     /**
+     * @brief Whether the backend can probe gate sensors (MMU_CHECK_GATE).
+     * @return true if check_gate()/check_all_gates() are implemented.
+     */
+    [[nodiscard]] virtual bool supports_gate_check() const {
+        return false;
+    }
+
+    /**
+     * @brief Probe a single gate's filament sensor (MMU_CHECK_GATE GATE=n).
+     *
+     * Asks the firmware to check whether filament is present at the specified
+     * gate's sensor. Useful for diagnosing gate-status discrepancies without
+     * a full load/unload cycle.
+     *
+     * Default implementation returns NOT_SUPPORTED.
+     *
+     * @param slot_index Zero-based gate index.
+     * @return AmsError indicating success or failure.
+     */
+    virtual AmsError check_gate(int slot_index) {
+        (void)slot_index;
+        return AmsErrorHelper::not_supported("Gate check not supported");
+    }
+
+    /**
+     * @brief Probe all gate sensors at once (MMU_CHECK_GATE, no params).
+     *
+     * Asks the firmware to check filament presence at every gate sensor
+     * in one pass. Useful for a full gate-status audit.
+     *
+     * Default implementation returns NOT_SUPPORTED.
+     *
+     * @return AmsError indicating success or failure.
+     */
+    virtual AmsError check_all_gates() {
+        return AmsErrorHelper::not_supported("Gate check not supported");
+    }
+
+    /**
      * @brief Cancel current operation
      *
      * Attempts to safely abort the current operation.

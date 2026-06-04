@@ -89,6 +89,17 @@ class AmsBackendHappyHare : public AmsSubscriptionBackend {
     [[nodiscard]] bool supports_gate_select() const override {
         return true;
     }
+    [[nodiscard]] bool supports_gate_check() const override {
+        return true;
+    }
+    /**
+     * @brief Probe a single gate's sensor (MMU_CHECK_GATE GATE=n).
+     */
+    AmsError check_gate(int slot_index) override;
+    /**
+     * @brief Probe all gate sensors (MMU_CHECK_GATE, no params).
+     */
+    AmsError check_all_gates() override;
     AmsError cancel() override;
 
     // Configuration

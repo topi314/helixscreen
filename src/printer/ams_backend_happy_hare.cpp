@@ -1676,6 +1676,37 @@ AmsError AmsBackendHappyHare::select_gate(int slot_index) {
     return execute_gcode("MMU_SELECT GATE=" + std::to_string(slot_index));
 }
 
+AmsError AmsBackendHappyHare::check_gate(int slot_index) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (!running_) {
+            return AmsErrorHelper::not_connected("Happy Hare backend not started");
+        }
+
+        AmsError slot_err = validate_slot_index(slot_index);
+        if (!slot_err) {
+            return slot_err;
+        }
+    }
+
+    spdlog::info("[AMS HappyHare] Checking gate {}", slot_index);
+    return execute_gcode("MMU_CHECK_GATE GATE=" + std::to_string(slot_index));
+}
+
+AmsError AmsBackendHappyHare::check_all_gates() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (!running_) {
+            return AmsErrorHelper::not_connected("Happy Hare backend not started");
+        }
+    }
+
+    spdlog::info("[AMS HappyHare] Checking all gates");
+    return execute_gcode("MMU_CHECK_GATE");
+}
+
 AmsError AmsBackendHappyHare::cancel() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
