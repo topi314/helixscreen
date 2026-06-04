@@ -110,6 +110,9 @@ std::vector<DeviceAction> hh_default_actions() {
         actions.push_back(std::move(a));
     }
     add_button("servo_buzz", "Buzz Servo", "maintenance");
+    add_button("servo_up", "Servo Up", "maintenance");
+    add_button("servo_move", "Servo Move", "maintenance");
+    add_button("servo_down", "Servo Down", "maintenance");
     add_button("reset_servo_counter", "Reset Servo Counter", "maintenance");
     add_button("reset_blade_counter", "Reset Blade Counter", "maintenance");
 

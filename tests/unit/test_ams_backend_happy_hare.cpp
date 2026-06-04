@@ -3,6 +3,7 @@
 
 #include "ams_backend_happy_hare.h"
 #include "ams_types.h"
+#include "hh_defaults.h"
 #include "moonraker_api.h"
 
 #include <algorithm>
@@ -2536,7 +2537,8 @@ TEST_CASE("Type B topology hides servo and selector actions", "[ams][happy_hare]
 
     auto actions = helper.get_device_actions();
     for (const auto& a : actions) {
-        if (a.id == "servo_buzz" || a.id == "calibrate_encoder") {
+        if (a.id == "servo_buzz" || a.id == "calibrate_encoder" || a.id == "servo_up" ||
+            a.id == "servo_move" || a.id == "servo_down") {
             REQUIRE_FALSE(a.enabled);
             REQUIRE_FALSE(a.disable_reason.empty());
         }
@@ -2881,4 +2883,35 @@ TEST_CASE("Happy Hare check_all_gates fails when not running", "[ams][happy_hare
 
     REQUIRE_FALSE(result.success());
     REQUIRE_FALSE(helper.has_gcode("MMU_CHECK_GATE"));
+}
+
+// ============================================================================
+// Servo position action tests
+// ============================================================================
+
+TEST_CASE("Happy Hare servo position actions send MMU_SERVO POS",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    REQUIRE(helper.execute_device_action("servo_up", {}).success());
+    REQUIRE(helper.execute_device_action("servo_move", {}).success());
+    REQUIRE(helper.execute_device_action("servo_down", {}).success());
+
+    REQUIRE(helper.has_gcode("MMU_SERVO POS=up"));
+    REQUIRE(helper.has_gcode("MMU_SERVO POS=move"));
+    REQUIRE(helper.has_gcode("MMU_SERVO POS=down"));
+}
+
+TEST_CASE("Happy Hare default actions include servo positions",
+          "[ams][happy_hare][device_actions]") {
+    using namespace helix::printer;
+    auto actions = hh_default_actions();
+    auto has = [&](const std::string& id) {
+        return std::any_of(actions.begin(), actions.end(),
+                           [&](const DeviceAction& a) { return a.id == id; });
+    };
+    REQUIRE(has("servo_up"));
+    REQUIRE(has("servo_move"));
+    REQUIRE(has("servo_down"));
 }

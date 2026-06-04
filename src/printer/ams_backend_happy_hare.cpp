@@ -2174,7 +2174,8 @@ std::vector<helix::printer::DeviceAction> AmsBackendHappyHare::get_device_action
     // --- Topology filtering (Type B = hub-based, no servo/selector/encoder) ---
     if (is_type_b()) {
         for (auto& a : actions) {
-            if (a.id == "calibrate_encoder" || a.id == "servo_buzz") {
+            if (a.id == "calibrate_encoder" || a.id == "servo_buzz" || a.id == "servo_up" ||
+                a.id == "servo_move" || a.id == "servo_down") {
                 a.enabled = false;
                 a.disable_reason = "Not available on hub-based (Type B) systems";
             } else if (a.id == "selector_speed") {
@@ -2259,6 +2260,9 @@ AmsError AmsBackendHappyHare::execute_device_action(const std::string& action_id
         {"test_load",           "MMU_TEST_LOAD"},
         {"test_move",           "MMU_TEST_MOVE"},
         {"servo_buzz",          "MMU_SERVO"},
+        {"servo_up",            "MMU_SERVO POS=up"},
+        {"servo_move",          "MMU_SERVO POS=move"},
+        {"servo_down",          "MMU_SERVO POS=down"},
         {"reset_servo_counter", "MMU_STATS COUNTER=servo RESET=1"},
         {"reset_blade_counter", "MMU_STATS COUNTER=cutter RESET=1"},
     };
