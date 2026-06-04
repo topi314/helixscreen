@@ -1311,6 +1311,32 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
             }
             break;
 
+        case helix::ui::AmsContextMenu::MenuAction::SELECT_GATE:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                AmsError error = backend->select_gate(slot);
+                if (error.result != AmsResult::SUCCESS) {
+                    NOTIFY_ERROR(lv_tr("Select gate failed: {}"), error.user_msg);
+                }
+            }
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::CHECK_GATE:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                AmsError error = backend->check_gate(slot);
+                if (error.result != AmsResult::SUCCESS) {
+                    NOTIFY_ERROR(lv_tr("Check gate failed: {}"), error.user_msg);
+                }
+            }
+            break;
+
         case helix::ui::AmsContextMenu::MenuAction::EDIT:
         case helix::ui::AmsContextMenu::MenuAction::SPOOLMAN:
             show_edit_modal(slot);

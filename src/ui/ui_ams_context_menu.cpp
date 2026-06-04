@@ -294,6 +294,28 @@ void AmsContextMenu::on_created(lv_obj_t* menu_obj) {
         }
     }
 
+    // Show Select Gate button if backend supports it (e.g. Happy Hare)
+    if (backend_ && backend_->supports_gate_select()) {
+        lv_obj_t* btn_gate_select = lv_obj_find_by_name(menu_obj, "btn_gate_select");
+        if (btn_gate_select) {
+            lv_obj_remove_flag(btn_gate_select, LV_OBJ_FLAG_HIDDEN);
+            if (system_busy) {
+                lv_obj_add_state(btn_gate_select, LV_STATE_DISABLED);
+            }
+        }
+    }
+
+    // Show Check Gate button if backend supports it (e.g. Happy Hare)
+    if (backend_ && backend_->supports_gate_check()) {
+        lv_obj_t* btn_gate_check = lv_obj_find_by_name(menu_obj, "btn_gate_check");
+        if (btn_gate_check) {
+            lv_obj_remove_flag(btn_gate_check, LV_OBJ_FLAG_HIDDEN);
+            if (system_busy) {
+                lv_obj_add_state(btn_gate_check, LV_STATE_DISABLED);
+            }
+        }
+    }
+
     // Show Clear Spool button when an empty slot still has a sticky assignment.
     // btn_edit ("Spool Info") stays visible so users can reopen the edit modal
     // to correct metadata without first clearing.
@@ -369,6 +391,16 @@ void AmsContextMenu::handle_reset_lane() {
     dispatch_ams_action(MenuAction::RESET_LANE);
 }
 
+void AmsContextMenu::handle_gate_select() {
+    spdlog::info("[AmsContextMenu] Select gate requested for slot {}", get_item_index());
+    dispatch_ams_action(MenuAction::SELECT_GATE);
+}
+
+void AmsContextMenu::handle_gate_check() {
+    spdlog::info("[AmsContextMenu] Check gate requested for slot {}", get_item_index());
+    dispatch_ams_action(MenuAction::CHECK_GATE);
+}
+
 void AmsContextMenu::handle_edit() {
     spdlog::info("[AmsContextMenu] Edit requested for slot {}", get_item_index());
     dispatch_ams_action(MenuAction::EDIT);
@@ -403,6 +435,8 @@ void AmsContextMenu::register_callbacks() {
         {"ams_context_load_cb", on_load_cb},
         {"ams_context_unload_cb", on_unload_cb},
         {"ams_context_reset_lane_cb", on_reset_lane_cb},
+        {"ams_context_gate_select_cb", on_gate_select_cb},
+        {"ams_context_gate_check_cb", on_gate_check_cb},
         {"ams_context_edit_cb", on_edit_cb},
         {"ams_context_clear_spool_cb", on_clear_spool_cb},
         {"ams_context_spoolman_cb", on_spoolman_cb},
@@ -451,6 +485,20 @@ void AmsContextMenu::on_reset_lane_cb(lv_event_t* /*e*/) {
     auto* self = get_active_instance();
     if (self) {
         self->handle_reset_lane();
+    }
+}
+
+void AmsContextMenu::on_gate_select_cb(lv_event_t* /*e*/) {
+    auto* self = get_active_instance();
+    if (self) {
+        self->handle_gate_select();
+    }
+}
+
+void AmsContextMenu::on_gate_check_cb(lv_event_t* /*e*/) {
+    auto* self = get_active_instance();
+    if (self) {
+        self->handle_gate_check();
     }
 }
 

@@ -49,6 +49,8 @@ class AmsContextMenu : public ContextMenu {
         UNLOAD,      ///< Unload filament from toolhead
         EJECT,       ///< Eject filament from lane (release spool)
         RESET_LANE,  ///< Reset lane to known-good state
+        SELECT_GATE, ///< Select this gate as the active gate (Happy Hare)
+        CHECK_GATE,  ///< Check filament state of this gate (Happy Hare)
         EDIT,        ///< Edit slot properties
         CLEAR_SPOOL, ///< Clear assigned spool from empty slot
         SPOOLMAN,    ///< Assign Spoolman spool
@@ -142,6 +144,8 @@ class AmsContextMenu : public ContextMenu {
     void handle_load();
     void handle_unload();
     void handle_reset_lane();
+    void handle_gate_select();
+    void handle_gate_check();
     void handle_edit();
     void handle_clear_spool();
     void handle_spoolman();
@@ -169,6 +173,8 @@ class AmsContextMenu : public ContextMenu {
     static void on_load_cb(lv_event_t* e);
     static void on_unload_cb(lv_event_t* e);
     static void on_reset_lane_cb(lv_event_t* e);
+    static void on_gate_select_cb(lv_event_t* e);
+    static void on_gate_check_cb(lv_event_t* e);
     static void on_edit_cb(lv_event_t* e);
     static void on_clear_spool_cb(lv_event_t* e);
     static void on_spoolman_cb(lv_event_t* e);
