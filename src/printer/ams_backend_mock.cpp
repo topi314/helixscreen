@@ -650,6 +650,7 @@ AmsError AmsBackendMock::change_tool(int tool_number) {
 
 AmsError AmsBackendMock::recover() {
     bool use_realistic;
+    bool is_hh;
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -658,9 +659,11 @@ AmsError AmsBackendMock::recover() {
         }
 
         use_realistic = realistic_mode_;
+        is_hh = (system_info_.type == AmsType::HAPPY_HARE);
 
         if (!use_realistic) {
-            // Simple mode: immediate recovery to IDLE
+            // Simple mode: clear the error and reset to IDLE. (Happy Hare then
+            // surfaces a brief "Recovering" status below via the transient helper.)
             system_info_.action = AmsAction::IDLE;
             system_info_.operation_detail.clear();
             error_segment_ = PathSegment::NONE;
@@ -672,6 +675,12 @@ AmsError AmsBackendMock::recover() {
     }
 
     if (!use_realistic) {
+        if (is_hh) {
+            // Show a brief "Recovering" state in the AMS status display (matching
+            // the other HH quick commands — status surface, not a toast); the
+            // transient helper returns the action to IDLE afterward.
+            return simulate_transient_action(AmsAction::RESETTING, "Recovering");
+        }
         emit_event(EVENT_STATE_CHANGED);
         return AmsErrorHelper::success();
     }
