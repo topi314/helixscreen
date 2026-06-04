@@ -546,9 +546,10 @@ AmsError AmsBackendMock::load_filament(int slot_index) {
             return AmsErrorHelper::slot_not_available(slot_index);
         }
 
-        // Start loading
+        // Start loading. Status string is 1-based to match the slot numbering
+        // shown on the panel (slot circles 1..N); slot_index is 0-based.
         system_info_.action = AmsAction::LOADING;
-        system_info_.operation_detail = "Loading from slot " + std::to_string(slot_index);
+        system_info_.operation_detail = "Loading from slot " + std::to_string(slot_index + 1);
         filament_segment_ = PathSegment::SPOOL; // Start at spool
         spdlog::info("[AmsBackendMock] Loading from slot {}", slot_index);
     }
@@ -2554,9 +2555,9 @@ void AmsBackendMock::execute_load_operation(int slot_index,
         if (shutdown_requested_ || cancel_requested_)
             return;
 
-        // Phase 2: LOADING with segment animation
+        // Phase 2: LOADING with segment animation (1-based slot label; index is 0-based)
         spdlog::debug("[AmsBackendMock] Load phase: LOADING (segment animation)");
-        set_action(AmsAction::LOADING, "Loading from slot " + std::to_string(slot_index));
+        set_action(AmsAction::LOADING, "Loading from slot " + std::to_string(slot_index + 1));
         emit_event(EVENT_STATE_CHANGED);
     }
 
@@ -2625,7 +2626,7 @@ void AmsBackendMock::execute_tool_change_operation(int target_slot,
     // Phase 2: SELECTING (only in realistic mode)
     if (realistic_mode_) {
         spdlog::debug("[AmsBackendMock] Tool change phase: SELECTING slot {}", target_slot);
-        set_action(AmsAction::SELECTING, "Selecting slot " + std::to_string(target_slot));
+        set_action(AmsAction::SELECTING, "Selecting slot " + std::to_string(target_slot + 1));
         emit_event(EVENT_STATE_CHANGED);
         if (!interruptible_sleep(get_effective_delay_ms(SELECTING_BASE_MS, SELECTING_VARIANCE)))
             return;
@@ -2634,7 +2635,7 @@ void AmsBackendMock::execute_tool_change_operation(int target_slot,
     } else {
         // Non-realistic: finalize_unload_state set action to IDLE, but we need LOADING
         // for the load phase so that UI elements (slot pulse, step progress) stay active
-        set_action(AmsAction::LOADING, "Loading slot " + std::to_string(target_slot));
+        set_action(AmsAction::LOADING, "Loading slot " + std::to_string(target_slot + 1));
         emit_event(EVENT_STATE_CHANGED);
     }
 
