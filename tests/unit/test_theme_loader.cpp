@@ -124,6 +124,41 @@ TEST_CASE("parse_theme_json returns Nord when missing palettes", "[theme]") {
     REQUIRE(theme.is_valid());
 }
 
+TEST_CASE("parse_theme_json fills missing/empty color keys with defaults", "[theme]") {
+    // A theme that omits some keys and supplies an empty string for another.
+    // Empty palette fields used to escape the loader, flooding the log with
+    // "[Theme] Invalid hex color string:" and rendering widgets black
+    // (prestonbrown/helixscreen#989). The loader must substitute the default
+    // theme color so no palette field is ever empty.
+    const char* json = R"({
+        "name": "Partial Theme",
+        "dark": {
+            "screen_bg": "#123456",
+            "card_bg": "",
+            "text": "#eceff4"
+        }
+    })";
+
+    auto theme = helix::parse_theme_json(json, "partial.json");
+    auto defaults = helix::get_default_nord_theme();
+
+    // Explicit, non-empty value is preserved
+    REQUIRE(theme.name == "Partial Theme");
+    REQUIRE(theme.dark.screen_bg == "#123456");
+
+    // Every dark field is a valid #RRGGBB — never empty
+    for (size_t i = 0; i < 16; ++i) {
+        INFO("dark color index " << i << " = '" << theme.dark.at(i) << "'");
+        REQUIRE_FALSE(theme.dark.at(i).empty());
+        REQUIRE(theme.dark.at(i)[0] == '#');
+        REQUIRE(theme.dark.at(i).size() == 7);
+    }
+
+    // Empty-valued key and missing key both fall back to the default color
+    REQUIRE(theme.dark.card_bg == defaults.dark.card_bg);       // present but ""
+    REQUIRE(theme.dark.overlay_bg == defaults.dark.overlay_bg); // absent key
+}
+
 TEST_CASE("save_theme_to_file and load_theme_from_file roundtrip", "[theme]") {
     auto original = helix::get_default_nord_theme();
     original.name = "Roundtrip Test";

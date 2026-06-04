@@ -7,6 +7,7 @@
 #include "ui_fonts.h"
 #include "ui_gradient_canvas.h"
 
+#include "border_radius_sizes.h"
 #include "config.h"
 #include "helix-xml/src/libs/expat/expat.h"
 #include "helix-xml/src/xml/lv_xml.h"
@@ -15,12 +16,10 @@
 #include "settings_manager.h"
 #include "theme_loader.h"
 
-#include "border_radius_sizes.h"
-
 #include <spdlog/spdlog.h>
 
 #ifndef HELIX_MAX_FONT_TIER
-#define HELIX_MAX_FONT_TIER 6  // default: all tiers (micro=0 .. xxlarge=6)
+#define HELIX_MAX_FONT_TIER 6 // default: all tiers (micro=0 .. xxlarge=6)
 #endif
 
 #include <cstring>
@@ -28,13 +27,20 @@
 // Maps a value-suffix (e.g. "_large") to its tier number. Same ordering as the
 // UiBreakpoint tiers and fonts.mk FONT_TIERS. Returns -1 on unknown suffix.
 static int tier_num_for_suffix(const char* suffix) {
-    if (strcmp(suffix, "_micro") == 0) return 0;
-    if (strcmp(suffix, "_tiny") == 0) return 1;
-    if (strcmp(suffix, "_small") == 0) return 2;
-    if (strcmp(suffix, "_medium") == 0) return 3;
-    if (strcmp(suffix, "_large") == 0) return 4;
-    if (strcmp(suffix, "_xlarge") == 0) return 5;
-    if (strcmp(suffix, "_xxlarge") == 0) return 6;
+    if (strcmp(suffix, "_micro") == 0)
+        return 0;
+    if (strcmp(suffix, "_tiny") == 0)
+        return 1;
+    if (strcmp(suffix, "_small") == 0)
+        return 2;
+    if (strcmp(suffix, "_medium") == 0)
+        return 3;
+    if (strcmp(suffix, "_large") == 0)
+        return 4;
+    if (strcmp(suffix, "_xlarge") == 0)
+        return 5;
+    if (strcmp(suffix, "_xxlarge") == 0)
+        return 6;
     return -1;
 }
 
@@ -43,12 +49,18 @@ static int tier_num_for_suffix(const char* suffix) {
 // rotation refresh (theme_manager_refresh_layout_constants) so both paths
 // select the same breakpoint for a given vertical resolution.
 static UiBreakpoint compute_breakpoint_from_height(int32_t ver_res) {
-    if (ver_res <= UI_BREAKPOINT_MICRO_MAX) return UiBreakpoint::Micro;
-    if (ver_res <= UI_BREAKPOINT_TINY_MAX) return UiBreakpoint::Tiny;
-    if (ver_res <= UI_BREAKPOINT_SMALL_MAX) return UiBreakpoint::Small;
-    if (ver_res <= UI_BREAKPOINT_MEDIUM_MAX) return UiBreakpoint::Medium;
-    if (ver_res <= UI_BREAKPOINT_LARGE_MAX) return UiBreakpoint::Large;
-    if (ver_res <= UI_BREAKPOINT_XLARGE_MAX) return UiBreakpoint::XLarge;
+    if (ver_res <= UI_BREAKPOINT_MICRO_MAX)
+        return UiBreakpoint::Micro;
+    if (ver_res <= UI_BREAKPOINT_TINY_MAX)
+        return UiBreakpoint::Tiny;
+    if (ver_res <= UI_BREAKPOINT_SMALL_MAX)
+        return UiBreakpoint::Small;
+    if (ver_res <= UI_BREAKPOINT_MEDIUM_MAX)
+        return UiBreakpoint::Medium;
+    if (ver_res <= UI_BREAKPOINT_LARGE_MAX)
+        return UiBreakpoint::Large;
+    if (ver_res <= UI_BREAKPOINT_XLARGE_MAX)
+        return UiBreakpoint::XLarge;
     return UiBreakpoint::XXLarge;
 }
 
@@ -251,8 +263,15 @@ static const helix::ModePalette& get_current_mode_palette() {
 
 // Parse hex color string "#FF4444" -> lv_color_hex(0xFF4444)
 lv_color_t theme_manager_parse_hex_color(const char* hex_str) {
-    if (!hex_str || hex_str[0] != '#') {
-        spdlog::error("[Theme] Invalid hex color string: {}", hex_str ? hex_str : "NULL");
+    if (!hex_str || hex_str[0] == '\0') {
+        // Unset palette field. The theme loader substitutes defaults so this
+        // shouldn't happen, but a per-widget tree-walk would otherwise flood the
+        // log if it did — keep it quiet (prestonbrown/helixscreen#989).
+        spdlog::debug("[Theme] Empty hex color string, using black fallback");
+        return lv_color_hex(0x000000);
+    }
+    if (hex_str[0] != '#') {
+        spdlog::error("[Theme] Invalid hex color string: {}", hex_str);
         return lv_color_hex(0x000000);
     }
     uint32_t hex = static_cast<uint32_t>(strtoul(hex_str + 1, nullptr, 16));
@@ -390,8 +409,9 @@ static void update_handle_styles(const theme_palette_t* palette, int border_radi
     } else {
         // Responsive knob padding: smaller at tiny/micro to avoid clipping in compact cards
         auto* display = lv_display_get_default();
-        auto bp = display ? compute_breakpoint_from_height(lv_display_get_vertical_resolution(display))
-                          : UiBreakpoint::Medium;
+        auto bp = display
+                      ? compute_breakpoint_from_height(lv_display_get_vertical_resolution(display))
+                      : UiBreakpoint::Medium;
         int32_t knob_pad = (bp <= UiBreakpoint::Tiny) ? LV_DPX(4) : LV_DPX(6);
         lv_style_set_pad_left(&slider_knob_style, knob_pad);
         lv_style_set_pad_right(&slider_knob_style, knob_pad);
@@ -641,9 +661,8 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
  * @brief Resolve border radius pixels from size index + current display breakpoint.
  */
 static int resolve_border_radius(const helix::ThemeProperties& props) {
-    int32_t ver_res = theme_display
-        ? lv_display_get_vertical_resolution(theme_display)
-        : 600; // safe fallback
+    int32_t ver_res =
+        theme_display ? lv_display_get_vertical_resolution(theme_display) : 600; // safe fallback
     const char* suffix = theme_manager_get_breakpoint_suffix(ver_res);
     return helix::BorderRadiusSizes::pixels(props.border_radius_size, suffix);
 }
@@ -790,9 +809,8 @@ static void theme_manager_register_color_pairs(lv_xml_component_scope_t* scope, 
  * These static constants are registered first so dynamic variants can override them.
  */
 static void theme_manager_register_static_constants(lv_xml_component_scope_t* scope) {
-    const std::vector<std::string> skip_suffixes = {"_light",  "_dark",    "_micro",
-                                                    "_tiny",   "_small",   "_medium",
-                                                    "_large",  "_xlarge",  "_xxlarge"};
+    const std::vector<std::string> skip_suffixes = {
+        "_light", "_dark", "_micro", "_tiny", "_small", "_medium", "_large", "_xlarge", "_xxlarge"};
 
     auto has_dynamic_suffix = [&](const std::string& name) {
         for (const auto& suffix : skip_suffixes) {
@@ -884,7 +902,7 @@ void theme_manager_register_responsive_spacing(lv_display_t* display) {
 
     // Use screen height for breakpoint selection — vertical space is the constraint
     const char* size_suffix = theme_manager_get_breakpoint_suffix(ver_res);
-    const char* size_label = (ver_res <= UI_BREAKPOINT_MICRO_MAX)     ? "MICRO"
+    const char* size_label = (ver_res <= UI_BREAKPOINT_MICRO_MAX)    ? "MICRO"
                              : (ver_res <= UI_BREAKPOINT_TINY_MAX)   ? "TINY"
                              : (ver_res <= UI_BREAKPOINT_SMALL_MAX)  ? "SMALL"
                              : (ver_res <= UI_BREAKPOINT_MEDIUM_MAX) ? "MEDIUM"
@@ -927,7 +945,8 @@ void theme_manager_register_responsive_spacing(lv_display_t* display) {
         }
     }
 
-    // Auto-discover all px tokens from all XML files (including optional _micro, _tiny, _xlarge, and _xxlarge)
+    // Auto-discover all px tokens from all XML files (including optional _micro, _tiny, _xlarge,
+    // and _xxlarge)
     auto micro_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_micro");
     auto tiny_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_tiny");
     auto small_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_small");
@@ -1143,7 +1162,7 @@ void theme_manager_register_responsive_fonts(lv_display_t* display) {
 
     // Use screen height for breakpoint selection — vertical space is the constraint
     const char* size_suffix = theme_manager_get_breakpoint_suffix(ver_res);
-    const char* size_label = (ver_res <= UI_BREAKPOINT_MICRO_MAX)     ? "MICRO"
+    const char* size_label = (ver_res <= UI_BREAKPOINT_MICRO_MAX)    ? "MICRO"
                              : (ver_res <= UI_BREAKPOINT_TINY_MAX)   ? "TINY"
                              : (ver_res <= UI_BREAKPOINT_SMALL_MAX)  ? "SMALL"
                              : (ver_res <= UI_BREAKPOINT_MEDIUM_MAX) ? "MEDIUM"
@@ -1157,8 +1176,8 @@ void theme_manager_register_responsive_fonts(lv_display_t* display) {
         return;
     }
 
-    // Auto-discover all string tokens from all XML files (including optional _micro, _tiny, _xlarge,
-    // and _xxlarge)
+    // Auto-discover all string tokens from all XML files (including optional _micro, _tiny,
+    // _xlarge, and _xxlarge)
     auto micro_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "string", "_micro");
     auto tiny_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "string", "_tiny");
     auto small_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "string", "_small");
@@ -1243,8 +1262,8 @@ void theme_manager_register_responsive_fonts(lv_display_t* display) {
             // Only apply font existence check to actual font constants.
             // Other string constants (e.g. icon_size_xlarge = "xl") are not
             // font names and must be registered as-is.
-            bool is_font_constant = (base_name.rfind("font_", 0) == 0) ||
-                                    (base_name.rfind("icon_font_", 0) == 0);
+            bool is_font_constant =
+                (base_name.rfind("font_", 0) == 0) || (base_name.rfind("icon_font_", 0) == 0);
 
             // Verify the selected font is actually linked. If not, fall back to
             // _large (guaranteed present by the triplet check above) and emit
@@ -1403,12 +1422,10 @@ static void theme_manager_register_theme_properties(lv_xml_component_scope_t* sc
     char buf[32];
 
     // Register border_radius and button_radius from size table + current breakpoint
-    int32_t ver_res = theme_display
-        ? lv_display_get_vertical_resolution(theme_display)
-        : 600; // safe fallback
+    int32_t ver_res =
+        theme_display ? lv_display_get_vertical_resolution(theme_display) : 600; // safe fallback
     const char* suffix = theme_manager_get_breakpoint_suffix(ver_res);
-    int radius_px = helix::BorderRadiusSizes::pixels(
-        theme.properties.border_radius_size, suffix);
+    int radius_px = helix::BorderRadiusSizes::pixels(theme.properties.border_radius_size, suffix);
     snprintf(buf, sizeof(buf), "%d", radius_px);
     lv_xml_register_const(scope, "border_radius", buf);
 
@@ -1749,10 +1766,10 @@ void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
     // Update border_radius constant for live preview (register_const is first-wins,
     // so we need update_const for subsequent changes)
     {
-        const char* bp_suffix = theme_manager_get_breakpoint_suffix(
-            lv_display_get_vertical_resolution(theme_display));
-        int radius_px = helix::BorderRadiusSizes::pixels(
-            active_theme.properties.border_radius_size, bp_suffix);
+        const char* bp_suffix =
+            theme_manager_get_breakpoint_suffix(lv_display_get_vertical_resolution(theme_display));
+        int radius_px =
+            helix::BorderRadiusSizes::pixels(active_theme.properties.border_radius_size, bp_suffix);
         char radius_buf[16];
         snprintf(radius_buf, sizeof(radius_buf), "%d", radius_px);
         lv_xml_update_const(nullptr, "border_radius", radius_buf);

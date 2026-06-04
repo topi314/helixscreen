@@ -170,19 +170,31 @@ ThemeData get_default_nord_theme() {
 
 /**
  * @brief Helper to parse a ModePalette from a JSON object
+ *
+ * A key that is missing OR present-but-empty falls back to the corresponding
+ * color from the built-in default theme, so no palette field is ever left empty.
+ * Empty fields used to flow straight into the color parser, flooding the log with
+ * "[Theme] Invalid hex color string:" (one per widget, per redraw) and rendering
+ * those widgets black (prestonbrown/helixscreen#989).
  */
 static void parse_mode_palette(const nlohmann::json& palette_json, ModePalette& palette,
                                const std::string& filename, const std::string& mode_name) {
     auto& names = ModePalette::color_names();
+    const ThemeData defaults = get_default_nord_theme();
+    const ModePalette& default_palette = (mode_name == "light") ? defaults.light : defaults.dark;
 
     for (size_t i = 0; i < 16; ++i) {
         const char* name = names[i];
-        if (palette_json.contains(name)) {
-            palette.at(i) = palette_json[name].get<std::string>();
-        } else {
-            spdlog::warn("[ThemeLoader] Missing '{}' in {}.{}, using empty", name, filename,
-                         mode_name);
+        std::string value;
+        if (palette_json.contains(name) && palette_json[name].is_string()) {
+            value = palette_json[name].get<std::string>();
         }
+        if (value.empty()) {
+            spdlog::warn("[ThemeLoader] Missing/empty '{}' in {}.{}, using default", name, filename,
+                         mode_name);
+            value = default_palette.at(i);
+        }
+        palette.at(i) = value;
     }
 }
 
@@ -223,13 +235,11 @@ ThemeData parse_theme_json(const std::string& json_str, const std::string& filen
         // New format: border_radius_size (0-7 index)
         // Old format: border_radius (raw pixels) — auto-migrate
         if (json.contains("border_radius_size")) {
-            theme.properties.border_radius_size =
-                std::clamp(json.value("border_radius_size", 3), 0,
-                           helix::BorderRadiusSizes::count() - 1);
+            theme.properties.border_radius_size = std::clamp(json.value("border_radius_size", 3), 0,
+                                                             helix::BorderRadiusSizes::count() - 1);
         } else {
             int raw = json.value("border_radius", 12);
-            theme.properties.border_radius_size =
-                helix::BorderRadiusSizes::nearest_size_index(raw);
+            theme.properties.border_radius_size = helix::BorderRadiusSizes::nearest_size_index(raw);
             spdlog::info("[ThemeLoader] Migrated border_radius={} -> border_radius_size={} ({})",
                          raw, theme.properties.border_radius_size,
                          helix::BorderRadiusSizes::name(theme.properties.border_radius_size));
