@@ -93,6 +93,11 @@ class AmsOperationSidebar {
     void update_settings_visibility();
 
     /**
+     * @brief Set btn_reset's label from the active backend (e.g. "Home" for Happy Hare).
+     */
+    void sync_reset_button_label();
+
+    /**
      * @brief Register XML event callbacks (call once before XML parsing)
      */
     static void register_callbacks_static();
@@ -116,6 +121,7 @@ class AmsOperationSidebar {
     // Observers
     ObserverGuard action_observer_;
     ObserverGuard current_slot_observer_;
+    ObserverGuard active_backend_observer_;
     ObserverGuard extruder_temp_observer_;
     ObserverGuard extruder_target_observer_;
     ObserverGuard color_observer_;

@@ -4,6 +4,7 @@
 #include "ui_ams_sidebar.h"
 
 #include "ui_ams_device_operations_overlay.h"
+#include "ui_button.h"
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
@@ -152,6 +153,7 @@ bool AmsOperationSidebar::setup(lv_obj_t* panel) {
     update_settings_visibility();
 
     active_ = true;
+    sync_reset_button_label();
     spdlog::debug("[AmsSidebar] Setup complete");
     return true;
 }
@@ -212,14 +214,24 @@ void AmsOperationSidebar::init_observers() {
             self->prev_ams_action_ = action;
         });
 
-    // Current slot observer: updates loaded card display
+    // Current slot observer: updates loaded card display and reset button label
     current_slot_observer_ =
         observe_int_sync<AmsOperationSidebar>(AmsState::instance().get_current_slot_subject(), this,
                                               [](AmsOperationSidebar* self, int /*slot_index*/) {
                                                   if (!self->active_ || !self->sidebar_root_)
                                                       return;
                                                   self->update_current_loaded_display();
+                                                  self->sync_reset_button_label();
                                               });
+
+    // Active backend observer: re-syncs reset button label when the user switches backend tabs
+    active_backend_observer_ = observe_int_sync<AmsOperationSidebar>(
+        AmsState::instance().get_active_backend_subject(), this,
+        [](AmsOperationSidebar* self, int /*active_index*/) {
+            if (!self->active_ || !self->sidebar_root_)
+                return;
+            self->sync_reset_button_label();
+        });
 
     // Bypass spool color observer: refreshes loaded card when external spool changes
     bypass_spool_observer_ = observe_int_sync<AmsOperationSidebar>(
@@ -288,6 +300,7 @@ void AmsOperationSidebar::cleanup() {
     // observer still holds a raw pointer to it.
     action_observer_.reset();
     current_slot_observer_.reset();
+    active_backend_observer_.reset();
     bypass_spool_observer_.reset();
     color_observer_.reset();
     extruder_temp_observer_.reset();
@@ -352,6 +365,23 @@ void AmsOperationSidebar::update_settings_visibility() {
             lv_obj_remove_flag(btn_settings, LV_OBJ_FLAG_HIDDEN);
         }
     }
+}
+
+// ============================================================================
+// Reset Button Label
+// ============================================================================
+
+void AmsOperationSidebar::sync_reset_button_label() {
+    if (!active_ || !sidebar_root_) {
+        return;
+    }
+    lv_obj_t* btn_reset = lv_obj_find_by_name(sidebar_root_, "btn_reset");
+    if (!btn_reset) {
+        return;
+    }
+    AmsBackend* backend = AmsState::instance().get_backend();
+    std::string label = backend ? backend->reset_button_label() : std::string("Reset");
+    ui_button_set_text(btn_reset, lv_tr(label.c_str()));
 }
 
 // ============================================================================
