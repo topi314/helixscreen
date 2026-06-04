@@ -57,6 +57,7 @@ LVGL_PATCHED_FILES := \
 	src/draw/sw/lv_draw_sw.c \
 	src/layouts/flex/lv_flex.c \
 	src/layouts/grid/lv_grid.c \
+	src/misc/lv_assert.h \
 	lv_conf_template.h
 
 # Files modified by libhv patches
@@ -100,6 +101,7 @@ reset-patches:
 			echo "$(DIM)  (clean) $$file$(RESET)"; \
 		fi \
 	done
+	$(Q)rm -f $(LVGL_DIR)/src/misc/lv_check_arg.h
 	$(ECHO) "$(GREEN)✓ All LVGL patches reset$(RESET)"
 
 # Force reapply all patches (reset first, then apply)
@@ -585,6 +587,20 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 		fi \
 	else \
 		echo "$(GREEN)✓ LVGL flex hidden+grow gap fix already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_check_arg_backport.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL LV_CHECK_ARG backport patch (master macro for v9.5.0; drop at upgrade)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_check_arg_backport.patch && \
+		echo "$(GREEN)✓ LV_CHECK_ARG backport patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL LV_CHECK_ARG backport patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_fbdev_arg_guards.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL fbdev arg-guard + log-order patch (uses backported LV_CHECK_ARG)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_fbdev_arg_guards.patch && \
+		echo "$(GREEN)✓ Fbdev arg-guard patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL fbdev arg-guard patch already applied$(RESET)"; \
 	fi
 	$(ECHO) "$(CYAN)Checking libhv patches...$(RESET)"
 	$(Q)if git -C $(LIBHV_DIR) diff --quiet Makefile.in 2>/dev/null; then \
