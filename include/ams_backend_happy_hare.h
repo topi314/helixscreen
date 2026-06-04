@@ -92,6 +92,9 @@ class AmsBackendHappyHare : public AmsSubscriptionBackend {
     [[nodiscard]] bool supports_gate_check() const override {
         return true;
     }
+    [[nodiscard]] std::string reset_button_label() const override {
+        return "Home";
+    }
     /**
      * @brief Probe a single gate's sensor (MMU_CHECK_GATE GATE=n).
      */

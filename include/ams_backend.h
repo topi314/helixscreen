@@ -570,6 +570,19 @@ class AmsBackend {
     }
 
     /**
+     * @brief Display label for the sidebar reset()-button.
+     *
+     * Backends where reset() is a genuine reset keep "Reset"; selector-based
+     * systems where reset() homes the mechanism (Happy Hare -> MMU_HOME) override
+     * this to "Home" so the word "Reset" does not collide with the recover/re-sync
+     * concept.
+     * @return untranslated label key.
+     */
+    [[nodiscard]] virtual std::string reset_button_label() const {
+        return "Reset";
+    }
+
+    /**
      * @brief Cancel current operation
      *
      * Attempts to safely abort the current operation.

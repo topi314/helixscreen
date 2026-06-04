@@ -687,6 +687,11 @@ TEST_CASE("Default AmsBackend eject_lane returns not_supported", "[ams][capabili
     REQUIRE(helper.supports_lane_reset() == true);
 }
 
+TEST_CASE("Happy Hare reset button is labeled 'Home'", "[ams][happy_hare][capability]") {
+    AmsBackendHappyHareTestHelper helper;
+    REQUIRE(helper.reset_button_label() == "Home");
+}
+
 // ============================================================================
 // Happy Hare v4 Support Tests
 // ============================================================================
