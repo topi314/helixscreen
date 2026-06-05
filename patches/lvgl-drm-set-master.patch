@@ -1,0 +1,43 @@
+diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
+index 2a6ca6ed0..2b1506809 100644
+--- a/src/drivers/display/drm/lv_linux_drm.c
++++ b/src/drivers/display/drm/lv_linux_drm.c
+@@ -764,6 +764,38 @@ static int drm_setup(drm_dev_t * drm_dev, const char * device_path, int64_t conn
+         goto err;
+     }
+ 
++    /*
++     * Acquire DRM master before any KMS modesetting. The kernel grants master
++     * implicitly only to the FIRST client to open the device; during boot a
++     * compositor (cage/weston/KlipperScreen) or console may still hold it for a
++     * moment, in which case drmSetMaster() returns EACCES/EBUSY. Retry briefly
++     * to win that hand-off race. This is NON-FATAL and never steals an active
++     * master: if another process keeps it, drmSetMaster() keeps failing and we
++     * proceed exactly as before (drmModeSetCrtc would fail with EACCES anyway) -
++     * the only difference is a clear logged cause. On a working single-client
++     * setup we are already the implicit master and the first call is a no-op.
++     */
++    {
++        int master_attempts;
++        int got_master = 0;
++        for(master_attempts = 0; master_attempts < 10; master_attempts++) {
++            if(drmSetMaster(drm_dev->fd) == 0) {
++                got_master = 1;
++                break;
++            }
++            if(errno != EACCES && errno != EBUSY)
++                break; /* not a contention error - retrying won't help */
++            if(master_attempts == 0)
++                LV_LOG_WARN("DRM master held by another process; retrying...");
++            usleep(100000); /* 100 ms; up to ~1 s total */
++        }
++        if(!got_master)
++            LV_LOG_WARN("Could not acquire DRM master: %s - another process "
++                        "(a compositor such as cage/weston, KlipperScreen, or a "
++                        "console/getty) likely holds /dev/dri/card0; modesetting "
++                        "will fail until it is stopped", strerror(errno));
++    }
++
+     ret = drm_find_connector(drm_dev, connector_id);
+     if(ret) {
+         LV_LOG_ERROR("available drm devices not found");

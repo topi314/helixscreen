@@ -338,6 +338,17 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL DRM preferred mode patch already applied$(RESET)"; \
 	fi
+	$(Q)if ! grep -q 'drmSetMaster' $(LVGL_DIR)/src/drivers/display/drm/lv_linux_drm.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL DRM set-master patch...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl-drm-set-master.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl-drm-set-master.patch && \
+			echo "$(GREEN)✓ DRM set-master patch applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL DRM set-master patch already applied$(RESET)"; \
+	fi
 	$(Q)if git -C $(LVGL_DIR) diff --quiet src/core/lv_refr.c 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL refr reshape NULL guard patch...$(RESET)"; \
 		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_refr_reshape_null_guard.patch 2>/dev/null; then \
