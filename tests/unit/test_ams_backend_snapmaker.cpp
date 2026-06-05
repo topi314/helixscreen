@@ -985,23 +985,29 @@ TEST_CASE("Snapmaker auto-mirror uses OverwriteAlways policy after firmware writ
 }
 
 // ============================================================================
-// prepare_for_resume — virtual_sdcard.is_active=false guard (#23)
+// prepare_for_resume — virtual_sdcard.is_active=false with classifier (#991)
 //
-// Snapmaker U1 paints a "paused" state on top of a dead virtual_sdcard after
-// a level-2 abort exception (dirty bed #532). prepare_for_resume must detect
-// this BEFORE running any recovery gcode and surface AmsResult::RESUME_REQUIRES_RESTART
-// so the dispatcher shows a "Restart from beginning?" modal instead of firing
-// a useless RESUME macro chain.
+// The old blunt sdcard gate has been replaced by classify_pause(). With the
+// terminal-matcher list currently empty (tasks 5+6 add matchers), sdcard
+// inactive alone is no longer terminal — it feeds into PauseSignals and the
+// classifier returns Recoverable. The resume path proceeds, and with sensor
+// reporting present the "skipping recovery" fast path returns SUCCESS.
+//
+// When terminal matchers are added (dirty-bed message, exception_id=532, etc.)
+// this scenario will again produce RESUME_REQUIRES_RESTART. Until then, the
+// post-resume backstop (task 6) catches the silent no-op after RESUME fires.
 // ============================================================================
 
-TEST_CASE("Snapmaker prepare_for_resume returns RESUME_REQUIRES_RESTART when SD inactive",
-          "[ams][snapmaker][resume]") {
+TEST_CASE(
+    "Snapmaker prepare_for_resume: sdcard inactive + no matchers → not terminal (Recoverable)",
+    "[ams][snapmaker][resume]") {
     lv_init_safe();
     PrinterState& ps = get_printer_state();
     PrinterStateTestAccess::reset(ps);
     ps.init_subjects(false);
 
-    // Simulate Snapmaker dirty-bed scenario: state=paused with SD inactive.
+    // SD inactive — old gate would have returned RESUME_REQUIRES_RESTART here.
+    // New classifier (empty matchers) treats it as Recoverable.
     json deactivated = {{"print_stats", {{"state", "paused"}}},
                         {"virtual_sdcard", {{"is_active", false}}}};
     ps.update_from_status(deactivated);
@@ -1009,17 +1015,17 @@ TEST_CASE("Snapmaker prepare_for_resume returns RESUME_REQUIRES_RESTART when SD 
 
     AmsBackendSnapmaker backend(nullptr, nullptr);
 
-    AmsError captured{AmsResult::SUCCESS};
+    AmsError captured{AmsResult::RESUME_REQUIRES_RESTART}; // poison value
     bool callback_fired = false;
+    // slot 0 with sensor_present=true (default) → fast-path SUCCESS
     backend.prepare_for_resume(/*slot_index=*/0, [&](const AmsError& err) {
         callback_fired = true;
         captured = err;
     });
 
     REQUIRE(callback_fired);
-    REQUIRE(captured.result == AmsResult::RESUME_REQUIRES_RESTART);
-    // user_msg is what the modal/toast layer reads.
-    REQUIRE_FALSE(captured.user_msg.empty());
+    // Classifier returns Recoverable (no matchers); sensor present → success
+    REQUIRE(captured.result != AmsResult::RESUME_REQUIRES_RESTART);
 }
 
 TEST_CASE("Snapmaker prepare_for_resume proceeds normally when SD active",

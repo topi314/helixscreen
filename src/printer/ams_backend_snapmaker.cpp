@@ -2,12 +2,16 @@
 
 #include "ams_backend_snapmaker.h"
 
+#include "ui_resume_dispatch.h"
+
 #include "ams_error.h"
 #include "app_globals.h"
 #include "filament_slot_override.h"
 #include "filament_slot_override_store.h"
 #include "moonraker_api.h"
+#include "pause_cause.h"
 #include "post_op_cooldown_manager.h"
+#include "snapmaker_resume.h"
 
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
@@ -280,28 +284,6 @@ bool AmsBackendSnapmaker::is_stuck_motion_sensor_runout(int slot_index) const {
 }
 
 void AmsBackendSnapmaker::prepare_for_resume(int slot_index, ResumeReadyCallback on_ready) {
-    // Dirty-bed / level-2-abort guard. Snapmaker U1's visual-AI dirty-bed
-    // detection (and other level-2 exceptions) pauses the print AND
-    // deactivates virtual_sdcard.is_active. In that state pause_resume.resume()
-    // runs to completion but has no SD context — the macro chain succeeds
-    // while the print stays paused, looking like a silent no-op. Recovery
-    // requires SDCARD_RESET_FILE + CANCEL_PRINT_BASE + a fresh print start.
-    //
-    // Surface this to the dispatcher via AmsResult::RESUME_REQUIRES_RESTART
-    // BEFORE running any heater/sensor/motor recovery — none of it matters
-    // when SD playback can't resume. The dispatcher shows a "Restart from
-    // beginning?" modal instead of firing RESUME.
-    if (!get_printer_state().is_sdcard_active()) {
-        spdlog::warn("{} prepare_for_resume: virtual_sdcard.is_active=false — "
-                     "RESUME would no-op; surfacing restart UX",
-                     backend_log_tag());
-        if (on_ready) {
-            on_ready(AmsErrorHelper::resume_requires_restart(
-                "Snapmaker prepare_for_resume: virtual_sdcard.is_active=false"));
-        }
-        return;
-    }
-
     // Resolve target slot. Caller passes -1 when they don't know which tool
     // is active — fall back to system_info_.current_tool. If still unset, no
     // active tool means there's nothing to prep; just unblock the caller.
@@ -329,6 +311,25 @@ void AmsBackendSnapmaker::prepare_for_resume(int slot_index, ResumeReadyCallback
         spdlog::debug("{} prepare_for_resume: no active tool, skipping prep", backend_log_tag());
         if (on_ready) {
             on_ready(AmsErrorHelper::success());
+        }
+        return;
+    }
+
+    // Classify why the print paused. Terminal causes (confirmed under #991)
+    // get the restart modal up front; everything else attempts RESUME
+    // (default-recoverable), with the post-resume backstop catching any
+    // unrecognized terminal cause. Replaces the old blunt virtual_sdcard gate.
+    helix::PauseSignals sig;
+    sig.message = lv_subject_get_string(get_printer_state().get_print_message_subject());
+    sig.exception_id = -1; // PROVISIONAL(#991): no print_stats.exception getter yet
+    sig.sdcard_active = get_printer_state().is_sdcard_active();
+    sig.runout_tripped = !sensor_present;
+    if (helix::classify_pause(sig, helix::snapmaker_terminal_matchers()) ==
+        helix::PauseCause::Terminal) {
+        spdlog::warn("{} prepare_for_resume: classified Terminal — surfacing restart UX",
+                     backend_log_tag());
+        if (on_ready) {
+            on_ready(AmsErrorHelper::resume_requires_restart("classify_pause: Terminal"));
         }
         return;
     }
