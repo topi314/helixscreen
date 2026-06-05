@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "snapmaker_resume.h"
 
-#include <string>
-
 namespace helix {
 
 std::vector<TerminalMatcher> snapmaker_terminal_matchers() {

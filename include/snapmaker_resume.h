@@ -30,11 +30,11 @@ std::vector<TerminalMatcher> snapmaker_terminal_matchers();
 /// NOTE (prestonbrown/helixscreen#991): uses the confirmed manual gcode arg
 /// names FILAMENT_TYPE / VENDOR (Discord 2026-06). The REST /filament_detect/set
 /// path uses MAIN_TYPE — a different interface; verify casing on-device.
-std::string snapmaker_filament_config_gcode(int extruder, const std::string& material,
-                                            const std::string& brand);
+[[nodiscard]] std::string snapmaker_filament_config_gcode(int extruder, const std::string& material,
+                                                          const std::string& brand);
 
 /// Post-resume no-op backstop predicate: true => RESUME silently no-op'd
 /// (print still paused with SD playback inactive) => offer restart.
-bool snapmaker_resume_noop_detected(bool is_paused, bool sdcard_active);
+[[nodiscard]] bool snapmaker_resume_noop_detected(bool is_paused, bool sdcard_active);
 
 } // namespace helix

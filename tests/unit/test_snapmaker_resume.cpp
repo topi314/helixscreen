@@ -28,6 +28,12 @@ TEST_CASE("snapmaker_filament_config_gcode: empty brand => skip (empty string)",
     REQUIRE(snapmaker_filament_config_gcode(1, "PETG", "").empty());
 }
 
+TEST_CASE("snapmaker_filament_config_gcode: uses the given non-zero extruder index",
+          "[pause][snapmaker]") {
+    REQUIRE(snapmaker_filament_config_gcode(2, "ABS", "eSUN") ==
+            "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER='2' FILAMENT_TYPE='ABS' VENDOR='eSUN'\n");
+}
+
 TEST_CASE("snapmaker_resume_noop_detected: paused + SD inactive => true", "[pause][snapmaker]") {
     REQUIRE(snapmaker_resume_noop_detected(/*is_paused=*/true, /*sdcard_active=*/false));
 }
