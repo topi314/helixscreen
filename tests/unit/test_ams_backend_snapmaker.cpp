@@ -1025,7 +1025,7 @@ TEST_CASE(
 
     REQUIRE(callback_fired);
     // Classifier returns Recoverable (no matchers); sensor present → success
-    REQUIRE(captured.result != AmsResult::RESUME_REQUIRES_RESTART);
+    REQUIRE(captured.result == AmsResult::SUCCESS);
 }
 
 TEST_CASE("Snapmaker prepare_for_resume proceeds normally when SD active",
