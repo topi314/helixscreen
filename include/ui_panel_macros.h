@@ -47,6 +47,19 @@ class MacrosPanel : public OverlayBase {
     void on_activate() override;
     void on_deactivate() override;
 
+  protected:
+    /**
+     * @brief Null cached widget pointers after the overlay tree is freed.
+     *
+     * OverlayBase::destroy_overlay_ui() async-deletes overlay_root_ and then
+     * calls this hook. Because MacrosPanel is a singleton that outlives its
+     * widgets, the cached child pointers (macro_list_container_, etc.) would
+     * otherwise dangle — a deferred populate_macro_list() then dereferences a
+     * freed container in lv_obj_update_layout()/lv_obj_get_screen() (SIGSEGV).
+     */
+    void on_ui_destroyed() override;
+
+  public:
     // === Public API ===
     lv_obj_t* get_panel() const {
         return overlay_root_;
@@ -112,8 +125,7 @@ class MacrosPanel : public OverlayBase {
      * @param macro_name The macro name
      * @param params Map of parameter name to value
      */
-    void execute_with_params(const std::string& macro_name,
-                             const helix::MacroParamResult& result);
+    void execute_with_params(const std::string& macro_name, const helix::MacroParamResult& result);
 
     /**
      * @brief Prettify a macro name for display

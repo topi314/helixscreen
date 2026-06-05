@@ -146,6 +146,17 @@ void MacrosPanel::on_deactivate() {
     OverlayBase::on_deactivate();
 }
 
+void MacrosPanel::on_ui_destroyed() {
+    // overlay_root_ and all its children have been async-deleted. This singleton
+    // panel outlives its widgets, so null the cached child pointers — otherwise a
+    // deferred populate_macro_list() dereferences a freed macro_list_container_ in
+    // lv_obj_update_layout()/lv_obj_get_screen() (SIGSEGV).
+    macro_list_container_ = nullptr;
+    empty_state_container_ = nullptr;
+    status_label_ = nullptr;
+    system_toggle_ = nullptr;
+}
+
 // ============================================================================
 // Macro List Management
 // ============================================================================
@@ -163,6 +174,13 @@ void MacrosPanel::clear_macro_list() {
 }
 
 void MacrosPanel::populate_macro_list() {
+    // Overlay UI may have been destroyed (singleton outlives its widgets) before
+    // a deferred populate runs — bail rather than touch a freed container.
+    if (!macro_list_container_) {
+        spdlog::debug("[{}] populate_macro_list() skipped — overlay UI destroyed", get_name());
+        return;
+    }
+
     clear_macro_list();
 
     // Get macros from capabilities
