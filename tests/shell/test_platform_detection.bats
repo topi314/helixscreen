@@ -639,11 +639,20 @@ _mock_u1_detect_platform() {
         "$WORKTREE_ROOT/scripts/install.sh"
 }
 
-@test "moonraker.sh release_info.json picks pi/pi32 for m1 (not helixscreen-m1.zip)" {
-    # Regression guard: if anyone adds a literal helixscreen-m1.zip case, the
-    # asset_name written into release_info.json will 404 on Moonraker update.
+@test "release_info.json picks pi/pi32 for m1 (not helixscreen-m1.zip)" {
+    # Regression guard: m1 (Artillery, a Debian SBC) self-updates to the pi/pi32
+    # binary, never a non-existent helixscreen-m1.zip (which 404s on Moonraker
+    # update). The asset is resolved by helix_self_update_asset() in platform.sh,
+    # the single source of truth shared by moonraker.sh and mk/cross.mk.
     ! grep -q 'helixscreen-m1\.zip' "$WORKTREE_ROOT/scripts/lib/installer/moonraker.sh"
-    # And the m1 branch must exist explicitly (not just fall through to default)
-    # so future readers don't strip the pi/pi32 dispatch as dead code.
-    grep -q '^[[:space:]]*m1)' "$WORKTREE_ROOT/scripts/lib/installer/moonraker.sh"
+    ! grep -q 'helixscreen-m1\.zip' "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
+
+    # The m1 dispatch must resolve to pi or pi32 (by userspace bitness).
+    local asset
+    asset=$(helix_self_update_asset m1)
+    [ "$asset" = "helixscreen-pi.zip" ] || [ "$asset" = "helixscreen-pi32.zip" ]
+
+    # And the explicit m1 branch must still exist in get_download_platform() so
+    # future readers don't strip the pi/pi32 dispatch as dead code.
+    grep -q '^[[:space:]]*m1)' "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
 }

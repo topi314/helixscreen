@@ -25,6 +25,13 @@ CROSS_MK="$WORKTREE_ROOT/mk/cross.mk"
 UPDATE_CHECKER_CPP="$WORKTREE_ROOT/src/system/update_checker.cpp"
 TEST_UPDATE_CHECKER_CPP="$WORKTREE_ROOT/tests/unit/test_update_checker.cpp"
 RELEASE_YML="$WORKTREE_ROOT/.github/workflows/release.yml"
+PLATFORM_SH="$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
+
+# Space-separated release matrix platforms from release.yml.
+_release_matrix_platforms() {
+    grep -E 'platform: *\[' "$RELEASE_YML" | head -1 \
+        | sed -E 's/.*\[([^]]+)\].*/\1/' | tr ',' '\n' | tr -d ' '
+}
 
 @test "every HELIX_PLATFORM_* in cross.mk has a branch in get_platform_key()" {
     # Extract the -DHELIX_PLATFORM_X tokens from mk/cross.mk. The set is
@@ -129,4 +136,78 @@ RELEASE_YML="$WORKTREE_ROOT/.github/workflows/release.yml"
         echo "known_platforms in tests/unit/test_update_checker.cpp."
         false
     fi
+}
+
+# --- Self-update asset picker (helix_self_update_asset) ----------------------
+#
+# helix_self_update_asset() in scripts/lib/installer/platform.sh is the single
+# source of truth for the release asset a platform self-updates to. It is shared
+# by moonraker.sh's write_release_info() (Moonraker type:web runtime fallback)
+# AND mk/cross.mk's baked release_info.json, so the two can't drift. Moonraker
+# downloads the asset whose name == release_info.json's asset_name; if no asset
+# matches, it falls back to the alphabetically-first release asset — a .sym
+# debug file — and dies with "File is not a zip file"
+# (prestonbrown/helixscreen#993). These run the real function and check it
+# resolves every platform to an asset the release matrix actually builds.
+
+@test "helix_self_update_asset maps each matrix platform to its own artifact" {
+    # shellcheck disable=SC1090
+    source "$PLATFORM_SH"
+
+    local matrix
+    matrix=$(_release_matrix_platforms)
+    [ -n "$matrix" ]
+
+    # Every platform the matrix builds ships helixscreen-<platform>.zip, so each
+    # must self-update to exactly its own artifact. Catches both a missing asset
+    # (k1-dynamic.zip class) and a wrong-but-existing asset (ad5x->k1.zip class).
+    local bad=""
+    for p in $matrix; do
+        local asset
+        asset=$(helix_self_update_asset "$p")
+        if [ "$asset" != "helixscreen-$p.zip" ]; then
+            bad="$bad ${p}->${asset}(want helixscreen-${p}.zip)"
+        fi
+    done
+
+    if [ -n "$bad" ]; then
+        echo "helix_self_update_asset() does not map these matrix platforms to"
+        echo "their own release artifact:"
+        echo "   $bad"
+        echo ""
+        echo "A mismatch makes Moonraker download the wrong asset (or fall back"
+        echo "to a .sym file -> 'File is not a zip file', #993). Fix the mapping"
+        echo "in scripts/lib/installer/platform.sh."
+        false
+    fi
+}
+
+@test "helix_self_update_asset borrows resolve to assets the matrix builds" {
+    # shellcheck disable=SC1090
+    source "$PLATFORM_SH"
+
+    local matrix
+    matrix=$(_release_matrix_platforms)
+    [ -n "$matrix" ]
+
+    # Non-matrix platforms borrow another platform's artifact. The borrow target
+    # must itself be a built asset, or Moonraker hits the #993 fallback.
+    #   k1-dynamic (dev/debug variant) -> stable k1
+    [ "$(helix_self_update_asset k1-dynamic)" = "helixscreen-k1.zip" ]
+    #   m1 (Artillery, Debian SBC) -> pi or pi32 by userspace bitness
+    local m1_asset
+    m1_asset=$(helix_self_update_asset m1)
+    case "$m1_asset" in
+        helixscreen-pi.zip | helixscreen-pi32.zip) ;;
+        *) echo "m1 resolved to unexpected asset: $m1_asset"; false ;;
+    esac
+
+    # Borrow targets must be in the matrix.
+    local stem
+    for stem in k1 pi pi32; do
+        if ! echo "$matrix" | grep -qx "$stem"; then
+            echo "borrow target '$stem' is not a release matrix platform"
+            false
+        fi
+    done
 }

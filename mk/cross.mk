@@ -2376,6 +2376,19 @@ define release-strip-pii
 	       2>/dev/null || true
 endef
 
+# Bake release_info.json (consumed by Moonraker's type:web self-update) into the
+# staged release tree at $(RELEASE_DIR)/helixscreen. The asset_name is resolved
+# through helix_self_update_asset() in scripts/lib/installer/platform.sh — the
+# single source of truth shared with the installer's runtime fallback — so the
+# baked value and the fallback can't diverge and send Moonraker after the wrong
+# (or non-zip) asset (prestonbrown/helixscreen#993).
+# Args: $(1) = platform key (pi, pi32, ad5m, ad5x, cc1, k1, k1-dynamic, k2,
+#              snapmaker-u1, x86)
+define write-release-info
+	@asset=$$(. scripts/lib/installer/platform.sh >/dev/null 2>&1 && helix_self_update_asset $(1)); \
+	echo "{\"project_name\":\"helixscreen\",\"project_owner\":\"prestonbrown\",\"version\":\"$(RELEASE_VERSION)\",\"asset_name\":\"$$asset\"}" > $(RELEASE_DIR)/helixscreen/release_info.json
+endef
+
 .PHONY: release-pi release-pi32 release-ad5m release-k1 release-ad5x release-k1-dynamic release-k2 release-snapmaker-u1 release-x86 release-all release-clean pi-fbdev-docker pi32-fbdev-docker pi-all-docker pi32-all-docker x86-fbdev-docker x86-all-docker
 
 # Package Pi release
@@ -2412,7 +2425,7 @@ release-pi: | build/pi/bin/helix-screen build/pi/bin/helix-splash build/pi-fbdev
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-pi.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,pi)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-pi.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-pi-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2453,7 +2466,7 @@ release-pi32: | build/pi32/bin/helix-screen build/pi32/bin/helix-splash build/pi
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-pi32.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,pi32)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-pi32.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-pi32-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2501,7 +2514,7 @@ release-ad5m: | build/ad5m/bin/helix-screen build/ad5m/bin/helix-splash
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-ad5m.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,ad5m)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-ad5m.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-ad5m-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2548,7 +2561,7 @@ release-ad5x: | build/ad5x/bin/helix-screen build/ad5x/bin/helix-splash
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-ad5x.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,ad5x)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-ad5x.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-ad5x-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2595,7 +2608,7 @@ release-cc1: | build/cc1/bin/helix-screen build/cc1/bin/helix-splash
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-cc1.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,cc1)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-cc1.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-cc1-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2642,7 +2655,7 @@ release-k1: | build/mips/bin/helix-screen build/mips/bin/helix-splash
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-k1.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,k1)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-k1.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-k1-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2680,7 +2693,7 @@ release-k1-dynamic: | build/k1-dynamic/bin/helix-screen build/k1-dynamic/bin/hel
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-k1-dynamic.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,k1-dynamic)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-k1-dynamic.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-k1-dynamic-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2720,7 +2733,7 @@ release-k2: | build/k2/bin/helix-screen build/k2/bin/helix-splash
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-k2.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,k2)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-k2.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-k2-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2758,7 +2771,7 @@ release-snapmaker-u1: | build/snapmaker-u1/bin/helix-screen
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-snapmaker-u1.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,snapmaker-u1)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-snapmaker-u1.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-snapmaker-u1-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen
@@ -2799,7 +2812,7 @@ release-x86: | build/x86/bin/helix-screen build/x86/bin/helix-splash build/x86-f
 	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
 	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
 	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
-	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-x86.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	$(call write-release-info,x86)
 	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-x86.zip .
 	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-x86-$(RELEASE_VERSION).tar.gz helixscreen
 	@rm -rf $(RELEASE_DIR)/helixscreen

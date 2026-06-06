@@ -10,9 +10,12 @@ WORKTREE_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
 setup() {
     load helpers
 
-    # Source modules (reset source guards so each test gets a fresh load)
-    unset _HELIX_COMMON_SOURCED _HELIX_MOONRAKER_SOURCED
+    # Source modules (reset source guards so each test gets a fresh load).
+    # platform.sh provides helix_self_update_asset(), which write_release_info()
+    # calls to resolve the Moonraker self-update asset name.
+    unset _HELIX_COMMON_SOURCED _HELIX_MOONRAKER_SOURCED _HELIX_PLATFORM_SOURCED
     . "$WORKTREE_ROOT/scripts/lib/installer/common.sh" 2>/dev/null || true
+    . "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
     . "$WORKTREE_ROOT/scripts/lib/installer/moonraker.sh"
 
     # Set required globals

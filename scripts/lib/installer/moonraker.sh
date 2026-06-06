@@ -195,26 +195,13 @@ write_release_info() {
         return 0
     fi
 
-    # Determine platform-specific asset name. Platforms without a dedicated
-    # release artifact (m1) borrow pi/pi32; pick the variant matching the
-    # device's userspace bitness so Moonraker self-update fetches a runnable
-    # binary instead of a 404.
-    local asset_name="helixscreen-pi.zip"
-    case "${PLATFORM:-}" in
-        pi32)       asset_name="helixscreen-pi32.zip" ;;
-        ad5m)       asset_name="helixscreen-ad5m.zip" ;;
-        ad5x)       asset_name="helixscreen-k1.zip" ;;
-        k1)         asset_name="helixscreen-k1.zip" ;;
-        k1-dynamic) asset_name="helixscreen-k1-dynamic.zip" ;;
-        k2)         asset_name="helixscreen-k2.zip" ;;
-        m1)
-            if [ "$(getconf LONG_BIT 2>/dev/null || echo)" = "32" ]; then
-                asset_name="helixscreen-pi32.zip"
-            else
-                asset_name="helixscreen-pi.zip"
-            fi
-            ;;
-    esac
+    # Resolve the platform-specific asset name through the single source of
+    # truth in platform.sh (shared with mk/cross.mk's baked release_info.json,
+    # so the two never drift). A wrong/missing asset_name makes Moonraker fall
+    # back to the alphabetically-first release asset — a .sym debug file — and
+    # die with "File is not a zip file" (prestonbrown/helixscreen#993).
+    local asset_name
+    asset_name="$(helix_self_update_asset "${PLATFORM:-pi}")"
 
     log_info "Writing release_info.json (${version})..."
     cat > "${release_info}.tmp" << EOF

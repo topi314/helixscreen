@@ -327,6 +327,32 @@ get_download_platform() {
     esac
 }
 
+# Single source of truth: platform -> self-update release asset (zip) name.
+#
+# Both the Moonraker type:web updater (write_release_info() in moonraker.sh) and
+# the build-time release_info.json baked by mk/cross.mk resolve the asset name
+# through THIS function, so the two can't drift. Drift is not cosmetic: Moonraker
+# downloads the asset whose name matches release_info.json's asset_name, and if
+# no asset matches it falls back to the alphabetically-first release asset — a
+# .sym debug file — then dies with "File is not a zip file"
+# (prestonbrown/helixscreen#993). This must also agree with
+# UpdateChecker::get_platform_key() (src/system/update_checker.cpp);
+# tests/shell/test_update_platform_coverage.bats enforces the agreement.
+#
+# Convention: a platform's asset is helixscreen-<platform>.zip. The only borrows
+# are handled by get_download_platform() (m1 -> pi/pi32 by userspace bitness) and
+# the k1-dynamic dev/debug variant, which is not built by the release matrix and
+# rides the stable k1 asset.
+#
+# Args: platform (detected platform key)
+# Echoes: release asset filename, e.g. helixscreen-pi.zip
+helix_self_update_asset() {
+    case "$1" in
+        k1-dynamic) echo "helixscreen-k1.zip" ;;
+        *)          echo "helixscreen-$(get_download_platform "$1").zip" ;;
+    esac
+}
+
 # AD5X (FlashForge / ZMOD) preflight: refuse to run outside the chroot.
 #
 # ZMOD installs HelixScreen into an overlay rooted at /usr/data/.mod/.zmod/.
