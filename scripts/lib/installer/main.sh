@@ -118,6 +118,33 @@ print_platform_banner() {
     esac
 }
 
+# Refuse to run --uninstall from a script sitting inside the dir we're about to
+# delete. The release tarball ships scripts/install.sh into $INSTALL_DIR for
+# offline --local updates; users sometimes invoke that copy with --uninstall,
+# which "works" on Linux only because the kernel keeps the inode open after rm.
+# Force the user to copy out. No-op (returns 0) when INSTALL_DIR isn't known
+# yet or $0 lives elsewhere, so it's safe to call more than once.
+_refuse_uninstall_from_install_dir() {
+    local _script_dir _script_abs _install_norm
+    _script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _script_dir=""
+    [ -n "$_script_dir" ] || return 0
+    [ -n "${INSTALL_DIR:-}" ] || return 0
+    _script_abs="${_script_dir}/$(basename "$0")"
+    _install_norm="${INSTALL_DIR%/}"
+    case "$_script_abs" in
+        "$_install_norm"/* | "$_install_norm")
+            log_error "Refusing to run --uninstall from inside \$INSTALL_DIR"
+            log_error "  script:      $_script_abs"
+            log_error "  INSTALL_DIR: $INSTALL_DIR"
+            log_error ""
+            log_error "Copy the script out first, then re-run:"
+            log_error "  cp '$_script_abs' /tmp/install.sh"
+            log_error "  sh /tmp/install.sh --uninstall"
+            exit 1
+            ;;
+    esac
+}
+
 # Main installation flow
 main() {
     update_mode=false
@@ -174,6 +201,14 @@ main() {
         esac
     done
 
+    # Self-delete safety guard runs as early as possible — before platform
+    # detection, which exits on "unsupported" hardware and would otherwise
+    # preempt the guard. Only fires when INSTALL_DIR is already known (env);
+    # the post-set_install_paths call below covers the normal runtime case.
+    if [ "$uninstall_mode" = true ]; then
+        _refuse_uninstall_from_install_dir
+    fi
+
     printf '\n'
     printf '%b\n' "${BOLD}========================================${NC}"
     printf '%b\n' "${BOLD}       HelixScreen Installer${NC}"
@@ -219,32 +254,11 @@ main() {
     # Check permissions
     check_permissions "$platform"
 
-    # Handle uninstall (doesn't need all checks)
+    # Handle uninstall (doesn't need all checks). The self-delete guard also
+    # ran early (before platform detection); this second call covers the normal
+    # case where INSTALL_DIR was computed by set_install_paths just above.
     if [ "$uninstall_mode" = true ]; then
-        # Refuse to run uninstall from a script sitting inside the dir we're
-        # about to delete.  The release tarball ships scripts/install.sh into
-        # $INSTALL_DIR for offline --local updates; users sometimes invoke
-        # that copy with --uninstall, which works on Linux only because the
-        # kernel keeps the inode open after rm.  Force the user to copy out.
-        local _script_dir _script_abs _install_norm
-        _script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _script_dir=""
-        if [ -n "$_script_dir" ] && [ -n "${INSTALL_DIR:-}" ]; then
-            _script_abs="${_script_dir}/$(basename "$0")"
-            _install_norm="${INSTALL_DIR%/}"
-            case "$_script_abs" in
-                "$_install_norm"/*|"$_install_norm")
-                    log_error "Refusing to run --uninstall from inside \$INSTALL_DIR"
-                    log_error "  script:      $_script_abs"
-                    log_error "  INSTALL_DIR: $INSTALL_DIR"
-                    log_error ""
-                    log_error "Copy the script out first, then re-run:"
-                    log_error "  cp '$_script_abs' /tmp/install.sh"
-                    log_error "  sh /tmp/install.sh --uninstall"
-                    exit 1
-                    ;;
-            esac
-        fi
-
+        _refuse_uninstall_from_install_dir
         uninstall "$platform"
         exit 0
     fi

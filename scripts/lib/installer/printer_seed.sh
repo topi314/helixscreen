@@ -3,22 +3,31 @@
 # Module: printer_seed
 # Generic, data-driven per-printer settings.json seeding (GitHub #986).
 #
-# Some printers need known-good defaults written into the install's
-# settings.json BEFORE the app starts for the first time (e.g. a verified
-# touch-calibration matrix that the first-run wizard can't compute correctly
-# on a given panel). The app's runtime preset loader applies the full preset,
-# but too late to skip the first-run touch-calibration wizard, which checks
-# settings.json /input/calibration/valid at startup. So a small ALLOWLIST of
-# preset paths (today: just input.calibration) must be pre-baked into
-# settings.json at install time.
+# Some printers need known-good device-level defaults written into the install's
+# settings.json BEFORE the app starts for the first time:
+#   - the touch-calibration matrix (top-level "input" block) — the first-run
+#     touch-calibration wizard reads settings.json /input/calibration/valid at
+#     startup, before Moonraker is even connected, so it MUST be pre-baked.
+#   - display orientation/panel config (top-level "display" block, e.g. rotate)
+#     — needed for the very first boot frame to render right-side-up.
 #
 # Single source of truth (#986): the source of seed data is the runtime preset
-# at assets/config/presets/<printer_id>.json (calibration + hardware mappings +
-# TODOs). Only the pre-seed allowlist (input.calibration) is baked into
-# settings.json before first launch; the rest of the preset (heaters/fans/leds/
-# filament_sensors) is applied by the app's runtime preset loader, NOT pre-baked
-# into the user's settings.json. The allowlisted subset is deep-merged WITHOUT
-# clobbering any keys the user has already set: existing settings always win.
+# at assets/config/presets/<printer_id>.json. The installer reads ONLY the two
+# install-critical, pre-Moonraker device-level blocks from it: top-level "input"
+# and top-level "display". It deliberately does NOT seed:
+#   - the preset's "printer" block (heaters/fans/leds/filament_sensors), nor
+#   - the top-level "preset" key.
+# Both are applied by the app's runtime preset loader instead. The app's
+# PrinterDetector::auto_detect_and_save() (src/printer/printer_detector.cpp)
+# applies the FULL preset (printer.* + set_preset → has_preset() → wizard
+# preset-mode) once Moonraker connects. If the installer pre-set "preset" or a
+# printer_type, that path would hit the "already set" branch and SKIP that full
+# apply. So the installer's job is strictly the two device-level blocks; the
+# rest is the app's responsibility.
+#
+# The seeded blocks are deep-merged WITHOUT clobbering any keys the user has
+# already set: existing settings always win (the preset is the lower-priority
+# side).
 #
 # Seeded ids are recorded to ${INSTALL_DIR}/config/.seeded_settings so uninstall
 # can be aware of what the installer wrote.
@@ -70,12 +79,14 @@ _record_seeded_settings() {
     echo "settings:${printer_id}" | $(file_sudo "${INSTALL_DIR}/config") tee -a "$state_file" >/dev/null
 }
 
-# Pre-bake the install-time allowlist subset of a printer's runtime preset into
-# the install's settings.json. Only the allowlisted preset paths (see
-# PRESEED_PATHS in the embedded Python) are extracted and deep-merged; the rest
-# of the preset is applied by the app's runtime loader. Existing user keys win
-# over the seeded subset (the preset is the lower-priority side). Creates
-# settings.json from the subset if it is absent or empty.
+# Pre-bake the install-critical device-level subset of a printer's runtime
+# preset into the install's settings.json. Only the top-level "input" and
+# "display" blocks (see SEED_BLOCKS in the embedded Python) are extracted and
+# deep-merged; the preset's "printer" block and top-level "preset" key are
+# deliberately omitted — the app's runtime PrinterDetector applies the full
+# preset once Moonraker connects. Existing user keys win over the seeded subset
+# (the preset is the lower-priority side). Creates settings.json from the subset
+# if it is absent or empty.
 #
 # Graceful by design: a missing preset is a no-op success, and an absent
 # python3 logs a warning and skips WITHOUT failing the install.
@@ -114,8 +125,8 @@ seed_settings_for_printer() {
     # respect the same privilege model as the rest of the installer.
     local tmp_out="${settings}.seed.$$"
 
-    # Extract the install-time pre-seed allowlist from the preset, strip any
-    # "_"-prefixed provenance keys, then deep-merge that subset into the base
+    # Extract the install-critical device-level blocks from the preset, strip
+    # any "_"-prefixed provenance keys, then deep-merge that subset into the base
     # settings: existing settings (base) take precedence; the subset fills only
     # keys the base does not already define. Recurses into nested objects.
     if SETTINGS_PATH="$settings" FRAGMENT_PATH="$fragment" TMP_OUT="$tmp_out" python3 - <<'PY'
@@ -125,17 +136,19 @@ settings_path = os.environ["SETTINGS_PATH"]
 fragment_path = os.environ["FRAGMENT_PATH"]
 tmp_out = os.environ["TMP_OUT"]
 
-# Install-time pre-seed allowlist: the ONLY preset paths baked into the user's
-# settings.json BEFORE first launch. The rest of the preset is applied by the
-# app's runtime preset loader. input.calibration must be pre-baked because the
-# first-run touch-calibration wizard reads settings.json /input/calibration/valid
-# at startup, before the runtime preset loader runs.
-#
-# Adding a path here PRE-BAKES it into settings.json before first launch — only
-# do that for settings the app reads before its runtime preset loader applies.
-PRESEED_PATHS = [
-    ["input", "calibration"],
-]
+# The ONLY preset blocks baked into the user's settings.json BEFORE first launch.
+# These are the install-critical, pre-Moonraker device-level blocks:
+#   - "input":   touch calibration. The first-run touch-calibration wizard reads
+#                settings.json /input/calibration/valid at startup, before the
+#                app connects to Moonraker, so it MUST be pre-baked.
+#   - "display": panel orientation/config (e.g. rotate) needed for the first
+#                boot frame to render right-side-up.
+# Everything else (the preset's "printer" block and the top-level "preset" key)
+# is deliberately NOT seeded — the app's PrinterDetector applies the FULL preset
+# once Moonraker connects. Pre-setting "preset" here would make that path skip
+# the full apply (the "already set" branch). Add a block here ONLY if the app
+# reads it before its runtime preset loader runs.
+SEED_BLOCKS = ["input", "display"]
 
 def load(path):
     if not os.path.exists(path):
@@ -163,25 +176,14 @@ def strip_underscore(obj):
         return [strip_underscore(v) for v in obj]
     return obj
 
-def extract_subset(preset, paths):
-    """Build a fragment dict containing only the allowlisted paths present in
-    the preset, with provenance keys stripped."""
+def extract_subset(preset, blocks):
+    """Build a fragment dict containing only the named top-level blocks present
+    in the preset, with provenance keys stripped. A block absent from the preset
+    is simply omitted from the fragment."""
     out = {}
-    for path in paths:
-        src = preset
-        ok = True
-        for key in path:
-            if isinstance(src, dict) and key in src:
-                src = src[key]
-            else:
-                ok = False
-                break
-        if not ok:
-            continue
-        cursor = out
-        for key in path[:-1]:
-            cursor = cursor.setdefault(key, {})
-        cursor[path[-1]] = strip_underscore(src)
+    for key in blocks:
+        if isinstance(preset, dict) and isinstance(preset.get(key), dict):
+            out[key] = strip_underscore(preset[key])
     return out
 
 def deep_merge(base, frag, top_level=False):
@@ -201,7 +203,7 @@ def deep_merge(base, frag, top_level=False):
 
 base = load(settings_path)
 preset = load(fragment_path)
-frag = extract_subset(preset, PRESEED_PATHS)
+frag = extract_subset(preset, SEED_BLOCKS)
 merged = deep_merge(base, frag, top_level=True)
 
 with open(tmp_out, "w") as f:

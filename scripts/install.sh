@@ -2756,38 +2756,56 @@ stop_competing_uis() {
 # ============================================
 
 #
-# already set: existing settings always win over the fragment.
+#   - display orientation/panel config (top-level "display" block, e.g. rotate)
+#     — needed for the very first boot frame to render right-side-up.
 #
-# Bundled fragments live at: config/install_seeds/<printer_id>.json
+# Single source of truth (#986): the source of seed data is the runtime preset
+# at assets/config/presets/<printer_id>.json. The installer reads ONLY the two
+# install-critical, pre-Moonraker device-level blocks from it: top-level "input"
+# and top-level "display". It deliberately does NOT seed:
+#   - the preset's "printer" block (heaters/fans/leds/filament_sensors), nor
+#   - the top-level "preset" key.
+# Both are applied by the app's runtime preset loader instead. The app's
+# PrinterDetector::auto_detect_and_save() (src/printer/printer_detector.cpp)
+# applies the FULL preset (printer.* + set_preset → has_preset() → wizard
+# preset-mode) once Moonraker connects. If the installer pre-set "preset" or a
+# printer_type, that path would hit the "already set" branch and SKIP that full
+# apply. So the installer's job is strictly the two device-level blocks; the
+# rest is the app's responsibility.
+#
+# The seeded blocks are deep-merged WITHOUT clobbering any keys the user has
+# already set: existing settings always win (the preset is the lower-priority
+# side).
+#
 # Seeded ids are recorded to ${INSTALL_DIR}/config/.seeded_settings so uninstall
 # can be aware of what the installer wrote.
 #
-# Reads: INSTALL_DIR, SUDO (and HELIX_SEED_DIR override for tests)
+# Reads: INSTALL_DIR, SUDO (and HELIX_PRESET_DIR override for tests)
 # Calls: file_sudo() from common.sh
 
 # Source guard
 
-# Resolve the directory holding bundled seed fragments.
-# Override with HELIX_SEED_DIR (tests). Otherwise prefer the installed copy
-# under ${INSTALL_DIR}/config/install_seeds, then fall back to the in-repo
+# Resolve the directory holding the runtime presets (single source of truth).
+# Override with HELIX_PRESET_DIR (tests). Otherwise prefer the installed copy
+# under ${INSTALL_DIR}/assets/config/presets, then fall back to the in-repo
 # source tree (dev installer running from a checkout).
-_helix_seed_dir() {
-    if [ -n "${HELIX_SEED_DIR:-}" ]; then
-        echo "$HELIX_SEED_DIR"
+_helix_preset_dir() {
+    if [ -n "${HELIX_PRESET_DIR:-}" ]; then
+        echo "$HELIX_PRESET_DIR"
         return 0
     fi
-    if [ -n "${INSTALL_DIR:-}" ] && [ -d "${INSTALL_DIR}/config/install_seeds" ]; then
-        echo "${INSTALL_DIR}/config/install_seeds"
+    if [ -n "${INSTALL_DIR:-}" ] && [ -d "${INSTALL_DIR}/assets/config/presets" ]; then
+        echo "${INSTALL_DIR}/assets/config/presets"
         return 0
     fi
-    # Dev checkout: <repo>/config/install_seeds, relative to this module.
+    # Dev checkout: <repo>/assets/config/presets, relative to this module.
     local _self_dir
     _self_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _self_dir=""
-    if [ -n "$_self_dir" ] && [ -d "${_self_dir}/../../../config/install_seeds" ]; then
-        (cd "${_self_dir}/../../../config/install_seeds" && pwd)
+    if [ -n "$_self_dir" ] && [ -d "${_self_dir}/../../../assets/config/presets" ]; then
+        (cd "${_self_dir}/../../../assets/config/presets" && pwd)
         return 0
     fi
-    echo "${INSTALL_DIR:-/opt/helixscreen}/config/install_seeds"
+    echo "${INSTALL_DIR:-/opt/helixscreen}/assets/config/presets"
 }
 
 # Record a seeded printer-id to the state file (for uninstall awareness).
@@ -2807,11 +2825,16 @@ _record_seeded_settings() {
     echo "settings:${printer_id}" | $(file_sudo "${INSTALL_DIR}/config") tee -a "$state_file" >/dev/null
 }
 
-# Deep-merge a bundled seed fragment into the install's settings.json.
-# Existing user keys win over the fragment (fragment is the lower-priority side).
-# Creates settings.json from the fragment if it is absent or empty.
+# Pre-bake the install-critical device-level subset of a printer's runtime
+# preset into the install's settings.json. Only the top-level "input" and
+# "display" blocks (see SEED_BLOCKS in the embedded Python) are extracted and
+# deep-merged; the preset's "printer" block and top-level "preset" key are
+# deliberately omitted — the app's runtime PrinterDetector applies the full
+# preset once Moonraker connects. Existing user keys win over the seeded subset
+# (the preset is the lower-priority side). Creates settings.json from the subset
+# if it is absent or empty.
 #
-# Graceful by design: a missing fragment is a no-op success, and an absent
+# Graceful by design: a missing preset is a no-op success, and an absent
 # python3 logs a warning and skips WITHOUT failing the install.
 #
 # Args: $1 = printer_id
@@ -2819,11 +2842,11 @@ seed_settings_for_printer() {
     local printer_id="$1"
     [ -n "$printer_id" ] || return 0
 
-    local seed_dir
-    seed_dir="$(_helix_seed_dir)"
-    local fragment="${seed_dir}/${printer_id}.json"
+    local preset_dir
+    preset_dir="$(_helix_preset_dir)"
+    local fragment="${preset_dir}/${printer_id}.json"
 
-    # Missing fragment → nothing to seed for this printer. Success.
+    # Missing preset → nothing to seed for this printer. Success.
     if [ ! -f "$fragment" ]; then
         return 0
     fi
@@ -2848,7 +2871,9 @@ seed_settings_for_printer() {
     # respect the same privilege model as the rest of the installer.
     local tmp_out="${settings}.seed.$$"
 
-    # Deep-merge: existing settings (base) take precedence; fragment fills only
+    # Extract the install-critical device-level blocks from the preset, strip
+    # any "_"-prefixed provenance keys, then deep-merge that subset into the base
+    # settings: existing settings (base) take precedence; the subset fills only
     # keys the base does not already define. Recurses into nested objects.
     if SETTINGS_PATH="$settings" FRAGMENT_PATH="$fragment" TMP_OUT="$tmp_out" python3 - <<'PY'
 import json, os, sys
@@ -2856,6 +2881,20 @@ import json, os, sys
 settings_path = os.environ["SETTINGS_PATH"]
 fragment_path = os.environ["FRAGMENT_PATH"]
 tmp_out = os.environ["TMP_OUT"]
+
+# The ONLY preset blocks baked into the user's settings.json BEFORE first launch.
+# These are the install-critical, pre-Moonraker device-level blocks:
+#   - "input":   touch calibration. The first-run touch-calibration wizard reads
+#                settings.json /input/calibration/valid at startup, before the
+#                app connects to Moonraker, so it MUST be pre-baked.
+#   - "display": panel orientation/config (e.g. rotate) needed for the first
+#                boot frame to render right-side-up.
+# Everything else (the preset's "printer" block and the top-level "preset" key)
+# is deliberately NOT seeded — the app's PrinterDetector applies the FULL preset
+# once Moonraker connects. Pre-setting "preset" here would make that path skip
+# the full apply (the "already set" branch). Add a block here ONLY if the app
+# reads it before its runtime preset loader runs.
+SEED_BLOCKS = ["input", "display"]
 
 def load(path):
     if not os.path.exists(path):
@@ -2869,16 +2908,37 @@ def load(path):
         return obj if isinstance(obj, dict) else {}
     except (ValueError, OSError):
         # Malformed existing settings: treat as empty base rather than crash
-        # the install. The fragment becomes the new content.
+        # the install. The seeded subset becomes the new content.
         return {}
 
-def deep_merge(base, frag):
+def strip_underscore(obj):
+    """Recursively drop any "_"-prefixed keys (provenance/metadata) so the
+    preset's nested documentation (e.g. input.calibration._comment) never leaks
+    into the user's settings.json."""
+    if isinstance(obj, dict):
+        return {k: strip_underscore(v) for k, v in obj.items()
+                if not k.startswith("_")}
+    if isinstance(obj, list):
+        return [strip_underscore(v) for v in obj]
+    return obj
+
+def extract_subset(preset, blocks):
+    """Build a fragment dict containing only the named top-level blocks present
+    in the preset, with provenance keys stripped. A block absent from the preset
+    is simply omitted from the fragment."""
+    out = {}
+    for key in blocks:
+        if isinstance(preset, dict) and isinstance(preset.get(key), dict):
+            out[key] = strip_underscore(preset[key])
+    return out
+
+def deep_merge(base, frag, top_level=False):
     """Return base with frag's keys filled in where base lacks them.
     Existing base values always win (fragment is lower priority)."""
     for k, v in frag.items():
-        if k == "_comment":
-            # Carry the fragment's provenance comment only if base has none.
-            base.setdefault(k, v)
+        # Defense-in-depth: never copy a top-level "_"-prefixed provenance key
+        # into the user's settings.json (the subset is already stripped above).
+        if top_level and k.startswith("_"):
             continue
         if k in base and isinstance(base[k], dict) and isinstance(v, dict):
             deep_merge(base[k], v)
@@ -2888,8 +2948,9 @@ def deep_merge(base, frag):
     return base
 
 base = load(settings_path)
-frag = load(fragment_path)
-merged = deep_merge(base, frag)
+preset = load(fragment_path)
+frag = extract_subset(preset, SEED_BLOCKS)
+merged = deep_merge(base, frag, top_level=True)
 
 with open(tmp_out, "w") as f:
     json.dump(merged, f, indent=2)
@@ -5880,6 +5941,37 @@ undo_klipper_includes() {
     done < "$state_file"
 }
 
+# Undo per-printer settings seeding recorded at install time (#986).
+# Reads ${INSTALL_DIR}/config/.seeded_settings (written by
+# _record_seeded_settings() in printer_seed.sh as "settings:<printer_id>" lines)
+# and logs which printer's defaults were seeded. We deliberately do NOT attempt
+# to un-merge those values out of settings.json: the seed was deep-merged into
+# whatever the user already had, so seeded keys can't be safely separated from
+# the user's own choices (the user may have since edited them, too). The seeded
+# defaults therefore REMAIN in settings.json; we only remove the marker file.
+# Must run BEFORE $INSTALL_DIR is removed (the state file lives in it).
+undo_seeded_settings() {
+    local state_file="${INSTALL_DIR}/config/.seeded_settings"
+    [ -f "$state_file" ] || return 0
+
+    log_info "Reviewing HelixScreen settings seeds..."
+    while IFS= read -r entry; do
+        case "$entry" in ""|\#*) continue ;; esac
+
+        local type="${entry%%:*}"
+        local printer_id="${entry#*:}"
+
+        case "$type" in
+            settings)
+                log_info "Seeded defaults for ${printer_id} remain in settings.json (not un-merged: seeded and user values can't be safely separated)"
+                ;;
+        esac
+    done < "$state_file"
+
+    # Remove only the marker; settings.json is left untouched on purpose.
+    $(file_sudo "$state_file") rm -f "$state_file" 2>/dev/null || true
+}
+
 # Uninstall HelixScreen
 # Args: platform (optional)
 uninstall() {
@@ -5973,6 +6065,12 @@ uninstall() {
     # printer.cfg and remove the copied snippet. Must run before $INSTALL_DIR
     # (which holds the .klipper_includes state file) is removed.
     undo_klipper_includes
+
+    # Acknowledge per-printer settings seeding (#986) — log which defaults were
+    # seeded (they remain in settings.json by design) and remove the marker.
+    # Must run before $INSTALL_DIR (which holds the .seeded_settings state file)
+    # is removed.
+    undo_seeded_settings
 
     # Remove installation (check all possible locations)
     local removed_dir=""
@@ -6334,6 +6432,33 @@ print_platform_banner() {
     esac
 }
 
+# Refuse to run --uninstall from a script sitting inside the dir we're about to
+# delete. The release tarball ships scripts/install.sh into $INSTALL_DIR for
+# offline --local updates; users sometimes invoke that copy with --uninstall,
+# which "works" on Linux only because the kernel keeps the inode open after rm.
+# Force the user to copy out. No-op (returns 0) when INSTALL_DIR isn't known
+# yet or $0 lives elsewhere, so it's safe to call more than once.
+_refuse_uninstall_from_install_dir() {
+    local _script_dir _script_abs _install_norm
+    _script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _script_dir=""
+    [ -n "$_script_dir" ] || return 0
+    [ -n "${INSTALL_DIR:-}" ] || return 0
+    _script_abs="${_script_dir}/$(basename "$0")"
+    _install_norm="${INSTALL_DIR%/}"
+    case "$_script_abs" in
+        "$_install_norm"/* | "$_install_norm")
+            log_error "Refusing to run --uninstall from inside \$INSTALL_DIR"
+            log_error "  script:      $_script_abs"
+            log_error "  INSTALL_DIR: $INSTALL_DIR"
+            log_error ""
+            log_error "Copy the script out first, then re-run:"
+            log_error "  cp '$_script_abs' /tmp/install.sh"
+            log_error "  sh /tmp/install.sh --uninstall"
+            exit 1
+            ;;
+    esac
+}
+
 # Main installation flow
 main() {
     update_mode=false
@@ -6390,6 +6515,14 @@ main() {
         esac
     done
 
+    # Self-delete safety guard runs as early as possible — before platform
+    # detection, which exits on "unsupported" hardware and would otherwise
+    # preempt the guard. Only fires when INSTALL_DIR is already known (env);
+    # the post-set_install_paths call below covers the normal runtime case.
+    if [ "$uninstall_mode" = true ]; then
+        _refuse_uninstall_from_install_dir
+    fi
+
     printf '\n'
     printf '%b\n' "${BOLD}========================================${NC}"
     printf '%b\n' "${BOLD}       HelixScreen Installer${NC}"
@@ -6435,32 +6568,11 @@ main() {
     # Check permissions
     check_permissions "$platform"
 
-    # Handle uninstall (doesn't need all checks)
+    # Handle uninstall (doesn't need all checks). The self-delete guard also
+    # ran early (before platform detection); this second call covers the normal
+    # case where INSTALL_DIR was computed by set_install_paths just above.
     if [ "$uninstall_mode" = true ]; then
-        # Refuse to run uninstall from a script sitting inside the dir we're
-        # about to delete.  The release tarball ships scripts/install.sh into
-        # $INSTALL_DIR for offline --local updates; users sometimes invoke
-        # that copy with --uninstall, which works on Linux only because the
-        # kernel keeps the inode open after rm.  Force the user to copy out.
-        local _script_dir _script_abs _install_norm
-        _script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _script_dir=""
-        if [ -n "$_script_dir" ] && [ -n "${INSTALL_DIR:-}" ]; then
-            _script_abs="${_script_dir}/$(basename "$0")"
-            _install_norm="${INSTALL_DIR%/}"
-            case "$_script_abs" in
-                "$_install_norm"/*|"$_install_norm")
-                    log_error "Refusing to run --uninstall from inside \$INSTALL_DIR"
-                    log_error "  script:      $_script_abs"
-                    log_error "  INSTALL_DIR: $INSTALL_DIR"
-                    log_error ""
-                    log_error "Copy the script out first, then re-run:"
-                    log_error "  cp '$_script_abs' /tmp/install.sh"
-                    log_error "  sh /tmp/install.sh --uninstall"
-                    exit 1
-                    ;;
-            esac
-        fi
-
+        _refuse_uninstall_from_install_dir
         uninstall "$platform"
         exit 0
     fi

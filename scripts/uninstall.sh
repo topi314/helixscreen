@@ -3419,6 +3419,37 @@ undo_klipper_includes() {
     done < "$state_file"
 }
 
+# Undo per-printer settings seeding recorded at install time (#986).
+# Reads ${INSTALL_DIR}/config/.seeded_settings (written by
+# _record_seeded_settings() in printer_seed.sh as "settings:<printer_id>" lines)
+# and logs which printer's defaults were seeded. We deliberately do NOT attempt
+# to un-merge those values out of settings.json: the seed was deep-merged into
+# whatever the user already had, so seeded keys can't be safely separated from
+# the user's own choices (the user may have since edited them, too). The seeded
+# defaults therefore REMAIN in settings.json; we only remove the marker file.
+# Must run BEFORE $INSTALL_DIR is removed (the state file lives in it).
+undo_seeded_settings() {
+    local state_file="${INSTALL_DIR}/config/.seeded_settings"
+    [ -f "$state_file" ] || return 0
+
+    log_info "Reviewing HelixScreen settings seeds..."
+    while IFS= read -r entry; do
+        case "$entry" in ""|\#*) continue ;; esac
+
+        local type="${entry%%:*}"
+        local printer_id="${entry#*:}"
+
+        case "$type" in
+            settings)
+                log_info "Seeded defaults for ${printer_id} remain in settings.json (not un-merged: seeded and user values can't be safely separated)"
+                ;;
+        esac
+    done < "$state_file"
+
+    # Remove only the marker; settings.json is left untouched on purpose.
+    $(file_sudo "$state_file") rm -f "$state_file" 2>/dev/null || true
+}
+
 # Uninstall HelixScreen
 # Args: platform (optional)
 uninstall() {
@@ -3512,6 +3543,12 @@ uninstall() {
     # printer.cfg and remove the copied snippet. Must run before $INSTALL_DIR
     # (which holds the .klipper_includes state file) is removed.
     undo_klipper_includes
+
+    # Acknowledge per-printer settings seeding (#986) — log which defaults were
+    # seeded (they remain in settings.json by design) and remove the marker.
+    # Must run before $INSTALL_DIR (which holds the .seeded_settings state file)
+    # is removed.
+    undo_seeded_settings
 
     # Remove installation (check all possible locations)
     local removed_dir=""
