@@ -3,6 +3,7 @@
 
 #include "ui_toast_manager.h"
 
+#include "ui_breakpoint.h"
 #include "ui_icon_codepoints.h"
 #include "ui_notification_history.h"
 #include "ui_notification_manager.h"
@@ -13,7 +14,6 @@
 #include "sound_manager.h"
 #include "static_subject_registry.h"
 #include "theme_manager.h"
-#include "ui_breakpoint.h"
 
 #include <spdlog/spdlog.h>
 
@@ -34,9 +34,11 @@ ToastManager& ToastManager::instance() {
 }
 
 ToastManager::~ToastManager() {
-    if (!lv_is_initialized()) return;
+    if (!lv_is_initialized())
+        return;
     for (auto& inst : active_) {
-        if (inst.dismiss_timer) lv_timer_delete(inst.dismiss_timer);
+        if (inst.dismiss_timer)
+            lv_timer_delete(inst.dismiss_timer);
     }
 }
 
@@ -46,21 +48,30 @@ ToastManager::~ToastManager() {
 
 static const char* severity_to_string(ToastSeverity s) {
     switch (s) {
-    case ToastSeverity::ERROR:   return "error";
-    case ToastSeverity::WARNING: return "warning";
-    case ToastSeverity::SUCCESS: return "success";
+    case ToastSeverity::ERROR:
+        return "error";
+    case ToastSeverity::WARNING:
+        return "warning";
+    case ToastSeverity::SUCCESS:
+        return "success";
     case ToastSeverity::INFO:
-    default:                     return "info";
+    default:
+        return "info";
     }
 }
 
 static NotificationStatus severity_to_notification_status(ToastSeverity s) {
     switch (s) {
-    case ToastSeverity::INFO:    return NotificationStatus::INFO;
-    case ToastSeverity::SUCCESS: return NotificationStatus::INFO; // status bar has no success state
-    case ToastSeverity::WARNING: return NotificationStatus::WARNING;
-    case ToastSeverity::ERROR:   return NotificationStatus::ERROR;
-    default:                     return NotificationStatus::NONE;
+    case ToastSeverity::INFO:
+        return NotificationStatus::INFO;
+    case ToastSeverity::SUCCESS:
+        return NotificationStatus::INFO; // status bar has no success state
+    case ToastSeverity::WARNING:
+        return NotificationStatus::WARNING;
+    case ToastSeverity::ERROR:
+        return NotificationStatus::ERROR;
+    default:
+        return NotificationStatus::NONE;
     }
 }
 
@@ -84,14 +95,16 @@ static void severity_to_icon(ToastSeverity s, const char*& glyph, const char*& c
         color_token = "#info";
         break;
     }
-    if (!glyph) glyph = ""; // paranoia
+    if (!glyph)
+        glyph = ""; // paranoia
 }
 
 // Read an integer spacing constant from globals.xml (e.g. space_sm). Falls
 // back to a sane default if the scope isn't registered yet.
 static int32_t xml_int_const(const char* name, int32_t fallback) {
     const char* val = lv_xml_get_const_silent(nullptr, name);
-    if (!val || !*val) return fallback;
+    if (!val || !*val)
+        return fallback;
     return static_cast<int32_t>(std::atoi(val));
 }
 
@@ -102,13 +115,19 @@ static int32_t xml_int_const(const char* name, int32_t fallback) {
 static int32_t toast_stack_width_for(UiBreakpoint bp) {
     switch (bp) {
     case UiBreakpoint::Micro:
-    case UiBreakpoint::Tiny:    return 400;
-    case UiBreakpoint::Small:   return 420;
-    case UiBreakpoint::Medium:  return 460;
-    case UiBreakpoint::Large:   return 500;
-    case UiBreakpoint::XLarge:  return 560;
+    case UiBreakpoint::Tiny:
+        return 400;
+    case UiBreakpoint::Small:
+        return 420;
+    case UiBreakpoint::Medium:
+        return 460;
+    case UiBreakpoint::Large:
+        return 500;
+    case UiBreakpoint::XLarge:
+        return 560;
     case UiBreakpoint::XXLarge:
-    default:                    return 640;
+    default:
+        return 640;
     }
 }
 
@@ -142,7 +161,8 @@ void ToastManager::animate_entrance(lv_obj_t* toast) {
     lv_anim_set_path_cb(&slide_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&slide_anim, [](void* obj, int32_t value) {
         auto* o = static_cast<lv_obj_t*>(obj);
-        if (!lv_obj_is_valid(o)) return;
+        if (!lv_obj_is_valid(o))
+            return;
         lv_obj_set_style_translate_y(o, value, LV_PART_MAIN);
     });
     lv_anim_start(&slide_anim);
@@ -155,7 +175,8 @@ void ToastManager::animate_entrance(lv_obj_t* toast) {
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
         auto* o = static_cast<lv_obj_t*>(obj);
-        if (!lv_obj_is_valid(o)) return;
+        if (!lv_obj_is_valid(o))
+            return;
         lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&fade_anim);
@@ -175,7 +196,8 @@ void ToastManager::animate_exit(lv_obj_t* toast) {
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_in);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
         auto* o = static_cast<lv_obj_t*>(obj);
-        if (!lv_obj_is_valid(o)) return;
+        if (!lv_obj_is_valid(o))
+            return;
         lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_set_completed_cb(&fade_anim, exit_animation_complete_cb);
@@ -207,7 +229,8 @@ void ToastManager::init() {
 }
 
 void ToastManager::deinit_subjects() {
-    if (!initialized_.load(std::memory_order_acquire)) return;
+    if (!initialized_.load(std::memory_order_acquire))
+        return;
 
     if (!lv_is_initialized()) {
         initialized_.store(false, std::memory_order_release);
@@ -264,7 +287,8 @@ void ToastManager::ensure_stack_container() {
 
 ToastManager::ToastList::iterator ToastManager::find_by_widget(lv_obj_t* widget) {
     for (auto it = active_.begin(); it != active_.end(); ++it) {
-        if (it->widget == widget) return it;
+        if (it->widget == widget)
+            return it;
     }
     return active_.end();
 }
@@ -272,7 +296,8 @@ ToastManager::ToastList::iterator ToastManager::find_by_widget(lv_obj_t* widget)
 size_t ToastManager::visible_count() const {
     size_t n = 0;
     for (const auto& i : active_) {
-        if (!i.is_exiting) ++n;
+        if (!i.is_exiting)
+            ++n;
     }
     return n;
 }
@@ -292,9 +317,8 @@ void ToastManager::show(ToastSeverity severity, const char* message, uint32_t du
         std::make_unique<ToastParams>(ToastParams{severity, message ? message : "", duration_ms});
 
     helix::ui::queue_update<ToastParams>(std::move(params), [](ToastParams* p) {
-        ToastManager::instance().create_toast_internal(p->severity, p->message.c_str(),
-                                                       p->duration_ms, false, nullptr, nullptr,
-                                                       nullptr);
+        ToastManager::instance().create_toast_internal(
+            p->severity, p->message.c_str(), p->duration_ms, false, nullptr, nullptr, nullptr);
     });
 }
 
@@ -316,9 +340,8 @@ void ToastManager::show_with_action(ToastSeverity severity, const char* message,
         uint32_t duration_ms;
     };
 
-    auto params = std::make_unique<ToastActionParams>(
-        ToastActionParams{severity, message ? message : "", action_text, callback, user_data,
-                          duration_ms});
+    auto params = std::make_unique<ToastActionParams>(ToastActionParams{
+        severity, message ? message : "", action_text, callback, user_data, duration_ms});
 
     helix::ui::queue_update<ToastActionParams>(std::move(params), [](ToastActionParams* p) {
         ToastManager::instance().create_toast_internal(p->severity, p->message.c_str(),
@@ -330,7 +353,8 @@ void ToastManager::show_with_action(ToastSeverity severity, const char* message,
 void ToastManager::hide() {
     // Dismiss all visible toasts.
     for (auto it = active_.begin(); it != active_.end(); ++it) {
-        if (!it->is_exiting) begin_exit(it);
+        if (!it->is_exiting)
+            begin_exit(it);
     }
 }
 
@@ -361,8 +385,10 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
     // not-already-exiting toasts (exiting ones will be cleared by their anim).
     while (visible_count() >= max_visible_) {
         auto it = active_.begin();
-        while (it != active_.end() && it->is_exiting) ++it;
-        if (it == active_.end()) break;
+        while (it != active_.end() && it->is_exiting)
+            ++it;
+        if (it == active_.end())
+            break;
         force_remove(it);
     }
 
@@ -374,15 +400,12 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
     const char* hide_action_str = with_action ? "false" : "true";
     const char* action_text_safe = (with_action && action_text) ? action_text : "";
     // lv_xml_create's attrs are key/value pairs terminated by a null entry.
-    const char* attrs[] = {"message",     message,
-                           "icon_glyph",  icon_glyph,
-                           "icon_color",  icon_color,
-                           "action_text", action_text_safe,
-                           "hide_action", hide_action_str,
-                           nullptr};
+    const char* attrs[] = {"message",     message,         "icon_glyph",  icon_glyph,
+                           "icon_color",  icon_color,      "action_text", action_text_safe,
+                           "hide_action", hide_action_str, nullptr};
 
-    lv_obj_t* widget = static_cast<lv_obj_t*>(lv_xml_create(toast_stack_, "toast_notification",
-                                                            attrs));
+    lv_obj_t* widget =
+        static_cast<lv_obj_t*>(lv_xml_create(toast_stack_, "toast_notification", attrs));
     if (!widget) {
         spdlog::error("[ToastManager] Failed to create toast notification widget");
         return;
@@ -408,7 +431,8 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
     animate_entrance(widget);
 
     it->dismiss_timer = lv_timer_create(dismiss_timer_cb, duration_ms, widget);
-    if (it->dismiss_timer) lv_timer_set_repeat_count(it->dismiss_timer, 1);
+    if (it->dismiss_timer)
+        lv_timer_set_repeat_count(it->dismiss_timer, 1);
 
     update_notification_bell();
 
@@ -424,10 +448,37 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
 // Remove / dismiss
 // ============================================================================
 
+void ToastManager::detach_from_input(lv_obj_t* widget) {
+    if (!widget)
+        return;
+
+    // A toast being torn down may be an input device's cached press target.
+    // force_remove()/finalize_remove() hand the widget to
+    // safe_delete_deferred_raw(), which reparents it to lv_layer_top() and
+    // async-deletes it; in the window before that delete runs, indev's act_obj
+    // still points at the (soon-to-be-freed) action button. A release/click
+    // dispatched in that window dereferences freed widget memory in
+    // event_send_core (target->spec_attr->event_list) — SIGBUS (#850 pattern;
+    // crash bundle A5V73UV4). lv_indev_reset(NULL, ...) clears the cached
+    // press/scroll target on every pointer device; it is a no-op unless a press
+    // is actually in flight, so an idle auto-dismiss costs nothing.
+    lv_indev_reset(nullptr, widget);
+
+    // Belt-and-suspenders: a dying toast's action button must not latch a fresh
+    // press once teardown has begun (CLICKABLE gates indev hit-testing).
+    if (lv_obj_t* action_btn = lv_obj_find_by_name(widget, "toast_action_btn")) {
+        lv_obj_remove_flag(action_btn, LV_OBJ_FLAG_CLICKABLE);
+    }
+}
+
 void ToastManager::begin_exit(ToastList::iterator it) {
-    if (it == active_.end() || it->is_exiting) return;
+    if (it == active_.end() || it->is_exiting)
+        return;
 
     it->is_exiting = true;
+
+    // Detach from input before any (possibly synchronous) deletion path.
+    detach_from_input(it->widget);
     if (it->dismiss_timer) {
         lv_timer_delete(it->dismiss_timer);
         it->dismiss_timer = nullptr;
@@ -441,7 +492,9 @@ void ToastManager::begin_exit(ToastList::iterator it) {
 }
 
 void ToastManager::force_remove(ToastList::iterator it) {
-    if (it == active_.end()) return;
+    if (it == active_.end())
+        return;
+    detach_from_input(it->widget);
     if (it->dismiss_timer) {
         lv_timer_delete(it->dismiss_timer);
         it->dismiss_timer = nullptr;
@@ -451,7 +504,8 @@ void ToastManager::force_remove(ToastList::iterator it) {
         uint32_t child_count = lv_obj_get_child_count(it->widget);
         for (uint32_t i = 0; i < child_count; i++) {
             lv_obj_t* child = lv_obj_get_child(it->widget, static_cast<int32_t>(i));
-            if (child) lv_anim_delete(child, nullptr);
+            if (child)
+                lv_anim_delete(child, nullptr);
         }
         // safe_delete_deferred_raw reparents to lv_layer_top before async
         // delete, so the toast survives if toast_stack_ is torn down first.
@@ -463,7 +517,8 @@ void ToastManager::force_remove(ToastList::iterator it) {
 
 void ToastManager::finalize_remove(lv_obj_t* widget) {
     auto it = find_by_widget(widget);
-    if (it == active_.end()) return;
+    if (it == active_.end())
+        return;
 
     // Defense in depth: the dismiss timer should already be cancelled by
     // begin_exit before we get here, but null any leftover so a mis-routed
@@ -498,7 +553,8 @@ void ToastManager::update_notification_bell() {
 
 void ToastManager::dismiss_timer_cb(lv_timer_t* timer) {
     auto* widget = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
-    if (!widget) return;
+    if (!widget)
+        return;
     auto& mgr = ToastManager::instance();
     mgr.begin_exit(mgr.find_by_widget(widget));
 }
@@ -520,7 +576,8 @@ void ToastManager::close_btn_clicked(lv_event_t* e) {
 
 void ToastManager::action_btn_clicked(lv_event_t* e) {
     auto* inst = static_cast<ToastInstance*>(lv_event_get_user_data(e));
-    if (!inst) return;
+    if (!inst)
+        return;
 
     auto& mgr = ToastManager::instance();
     // Snapshot callback before dismissing (find_by_widget may re-enter).
@@ -531,5 +588,12 @@ void ToastManager::action_btn_clicked(lv_event_t* e) {
 
     mgr.begin_exit(mgr.find_by_widget(inst->widget));
 
-    if (cb) cb(data);
+    // Run the user action OUTSIDE this input-dispatch frame. Actions commonly
+    // navigate or tear down panels; doing that synchronously while LVGL is
+    // still iterating this button's event list invites re-entrant deletion of
+    // the widget mid-dispatch. Defer to the next UpdateQueue tick — cb/data are
+    // POD snapshots, so this stays valid even after the toast is gone.
+    if (cb) {
+        helix::ui::queue_update("ToastManager::action_cb", [cb, data]() { cb(data); });
+    }
 }

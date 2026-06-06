@@ -67,7 +67,9 @@ class ToastManager {
     /** Whether init() has completed. Callers before phase 9d should route
      *  through PendingStartupWarnings — see ui_notification.cpp. Atomic
      *  because ui_notification may read this from background threads. */
-    bool is_initialized() const { return initialized_.load(std::memory_order_acquire); }
+    bool is_initialized() const {
+        return initialized_.load(std::memory_order_acquire);
+    }
 
   private:
     ToastManager() = default;
@@ -90,6 +92,13 @@ class ToastManager {
     void begin_exit(ToastList::iterator it);
     void force_remove(ToastList::iterator it); // no animation
     void finalize_remove(lv_obj_t* widget);    // called from exit-anim completion
+
+    // Detach a toast that is being torn down from any input device that has it
+    // (or a child) as a cached press/scroll target, and make its action button
+    // unclickable. Prevents a stale release/click from dispatching to the
+    // soon-to-be-freed widget — SIGBUS in event_send_core (#850; bundle
+    // A5V73UV4).
+    static void detach_from_input(lv_obj_t* widget);
     void update_notification_bell();
     size_t visible_count() const; // active_ minus those already exiting
 
