@@ -356,6 +356,11 @@ class PrinterDiscovery {
             else if (name == "toolchanger") {
                 has_tool_changer_ = true;
             }
+            // MedusaHC pin-watch tool changer detection
+            else if (name == "pin_watch") {
+                has_mmu_ = true;
+                mmu_type_ = AmsType::MEDUSA_HC;
+            }
             // Tool object discovery
             else if (name.rfind("tool ", 0) == 0) {
                 std::string tool_name = name.substr(5); // Remove "tool " prefix
@@ -511,6 +516,8 @@ class PrinterDiscovery {
             // Native Snapmaker filament system (no aftermarket MMU)
             detected_ams_systems_.push_back({AmsType::SNAPMAKER, "Snapmaker"});
             mmu_type_ = AmsType::SNAPMAKER;
+        } else if (mmu_type_ == AmsType::MEDUSA_HC) {
+            detected_ams_systems_.push_back({AmsType::MEDUSA_HC, "MedusaHC"});
         } else if (has_tool_changer_ && !tool_names_.empty()) {
             // Standalone tool changer with no MMU — show parallel topology
             detected_ams_systems_.push_back({AmsType::TOOL_CHANGER, "Tool Changer"});
@@ -584,6 +591,14 @@ class PrinterDiscovery {
             if (key == "screws_tilt_adjust") {
                 has_screws_tilt_ = true;
                 spdlog::debug("[PrinterDiscovery] screws_tilt_adjust detected from config");
+            }
+
+            // MedusaHC exposes its pin_watch section in configfile, which is
+            // the earliest reliable signal that the Tn macro state machine is present.
+            if (key == "pin_watch" || key.rfind("pin_watch ", 0) == 0) {
+                has_mmu_ = true;
+                mmu_type_ = AmsType::MEDUSA_HC;
+                spdlog::debug("[PrinterDiscovery] MedusaHC detected from config: {}", key);
             }
         }
     }

@@ -38,15 +38,16 @@ constexpr uint32_t AMS_DEFAULT_SLOT_COLOR = 0x808080;
  * extruder, rather than a filament path to a shared toolhead.
  */
 enum class AmsType {
-    NONE = 0,        ///< No AMS detected
-    HAPPY_HARE = 1,  ///< Happy Hare MMU (mmu object in Moonraker)
-    AFC = 2,         ///< AFC-Klipper-Add-On (afc object, lane_data database)
-    ACE = 3,     ///< AnyCubic ACE Pro (ValgACE/BunnyACE/DuckACE Klipper drivers)
+    NONE = 0,         ///< No AMS detected
+    HAPPY_HARE = 1,   ///< Happy Hare MMU (mmu object in Moonraker)
+    AFC = 2,          ///< AFC-Klipper-Add-On (afc object, lane_data database)
+    ACE = 3,          ///< AnyCubic ACE Pro (ValgACE/BunnyACE/DuckACE Klipper drivers)
     TOOL_CHANGER = 4, ///< Physical tool changer (viesturz/klipper-toolchanger)
     AD5X_IFS = 5,     ///< FlashForge AD5X IFS (Intelligent Filament Switching)
-    CFS = 6,           ///< Creality Filament System (K2 series, RS-485)
-    SNAPMAKER = 7,     ///< Snapmaker U1 SnapSwap toolchanger
-    QIDI_BOX = 8       ///< QIDI Box filament changer (PLUS4, Q2, MAX4 — hub AMS, 4 slots chainable to 16)
+    CFS = 6,          ///< Creality Filament System (K2 series, RS-485)
+    SNAPMAKER = 7,    ///< Snapmaker U1 SnapSwap toolchanger
+    QIDI_BOX = 8,     ///< QIDI Box filament changer (PLUS4, Q2, MAX4 — hub AMS, 4 slots chainable to 16)
+    MEDUSA_HC = 9     ///< MedusaHC pin_watch-based tool changer
 };
 
 /**
@@ -72,6 +73,8 @@ inline const char* ams_type_to_string(AmsType type) {
         return "Snapmaker";
     case AmsType::QIDI_BOX:
         return "QIDI Box"; // i18n: do not translate - product name
+    case AmsType::MEDUSA_HC:
+        return "MedusaHC";
     default:
         return "None";
     }
@@ -112,6 +115,10 @@ inline AmsType ams_type_from_string(std::string_view str) {
     if (str == "qidi_box" || str == "QIDI Box" || str == "qidibox") {
         return AmsType::QIDI_BOX;
     }
+    if (str == "medusa_hc" || str == "medusahc" || str == "medusa hc" ||
+        str == "MedusaHC") {
+        return AmsType::MEDUSA_HC;
+    }
     return AmsType::NONE;
 }
 
@@ -127,7 +134,8 @@ inline AmsType ams_type_from_string(std::string_view str) {
  * @return true if this is a physical tool changer
  */
 inline bool is_tool_changer(AmsType type) {
-    return type == AmsType::TOOL_CHANGER || type == AmsType::SNAPMAKER;
+    return type == AmsType::TOOL_CHANGER || type == AmsType::SNAPMAKER ||
+           type == AmsType::MEDUSA_HC;
 }
 
 /**

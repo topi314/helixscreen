@@ -177,6 +177,8 @@ std::string WizardAmsIdentifyStep::get_ams_type_name() const {
         return "Snapmaker SnapSwap";
     case AmsType::QIDI_BOX:
         return "QIDI Box"; // i18n: do not translate - product name
+    case AmsType::MEDUSA_HC:
+        return "MedusaHC";
     default:
         return "Unknown";
     }

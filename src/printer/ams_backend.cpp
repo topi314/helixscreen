@@ -20,6 +20,7 @@
 #include "ams_backend_snapmaker.h"
 #include "ams_backend_toolchanger.h"
 #include "ams_backend_ace.h"
+#include "ams_backend_medusahc.h"
 #include "filament_database.h"
 #include "moonraker_api.h"
 #include "runtime_config.h"
@@ -298,6 +299,15 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type) {
         return nullptr;
 #endif
 
+    case AmsType::MEDUSA_HC:
+#ifdef HELIX_ENABLE_MOCKS
+        spdlog::warn("[AMS Backend] MedusaHC detected but no API/client provided - using mock");
+        return std::make_unique<AmsBackendMock>(config->mock_ams_gate_count);
+#else
+        spdlog::warn("[AMS Backend] MedusaHC detected but no API/client provided");
+        return nullptr;
+#endif
+
     case AmsType::NONE:
     default:
         spdlog::debug("[AMS Backend] No AMS detected");
@@ -388,6 +398,14 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerA
         }
         spdlog::debug("[AMS Backend] Creating QIDI Box backend (stub)");
         return std::make_unique<AmsBackendQidi>(api, client);
+
+    case AmsType::MEDUSA_HC:
+        if (!api || !client) {
+            spdlog::error("[AMS Backend] MedusaHC requires MoonrakerAPI and MoonrakerClient");
+            return nullptr;
+        }
+        spdlog::debug("[AMS Backend] Creating MedusaHC backend");
+        return std::make_unique<AmsBackendMedusaHc>(api, client);
 
     case AmsType::NONE:
     default:
