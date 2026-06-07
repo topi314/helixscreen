@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.73] - 2026-06-06
+
+### Added
+
+- **Per-printer settings seeding on install** (prestonbrown/helixscreen#986) — the installer seeds device settings and a Klipper config include directly from the selected printer preset, so preset printers come up correctly configured on first boot.
+- **Sovol SV06 Ace preset completed** (prestonbrown/helixscreen#986) — 180° display rotation and filament load/unload macros, with the hardcoded `display.rotate` dropped in favor of the preset-driven value.
+- **Localized Happy Hare MMU manual controls and the live-camera tooltip** across all eight languages (Spanish, Portuguese, German, Italian, Japanese, Russian, French, Chinese), with the CJK fonts regenerated to cover the new glyphs.
+
+### Fixed
+
+- **Snapmaker resume is more reliable** (prestonbrown/helixscreen#991) — the pause cause is now classified (runout, terminal, sdcard-inactive, …) instead of a blunt SD-card gate, filament config is re-asserted before resuming, and a post-resume backstop surfaces the restart-required modal when a resume can't proceed.
+- **AD5X IFS active slot stays unloadable after a runout** (prestonbrown/helixscreen#995).
+- **Self-update downloads the correct release asset** (prestonbrown/helixscreen#993) — fixes the "File is not a zip file" failure when Moonraker's web updater picked the wrong (alphabetically-first) artifact.
+- **DRM dumb-buffer displays recover from a competing master** — DRM master is acquired with a bounded retry, fixing permanent flush failures (blank screen) when another process held master at startup.
+- **Two rare use-after-free crashes fixed** — a toast input-device detach on teardown (click UAF), and macro-overlay widget pointers nulled on destroy.
+
+### Changed
+
+- **Expanded and corrected the user guide** — documented previously-missing settings and features, removed stale content (e.g. a pressure-advance section for a control that no longer exists), corrected sensor-role and tool-mapping descriptions, and added standalone pages (fans, sensors, security, camera, print history). helixscreen.org rebuilds from these automatically.
+
 ## [0.99.72] - 2026-06-05
 
 ### Added
@@ -3923,6 +3943,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.73]: https://github.com/prestonbrown/helixscreen/compare/v0.99.72...v0.99.73
 [0.99.72]: https://github.com/prestonbrown/helixscreen/compare/v0.99.71...v0.99.72
 [0.99.71]: https://github.com/prestonbrown/helixscreen/compare/v0.99.70...v0.99.71
 [0.99.70]: https://github.com/prestonbrown/helixscreen/compare/v0.99.69...v0.99.70

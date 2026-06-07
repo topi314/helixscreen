@@ -153,7 +153,7 @@ curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/script
 
 To install or roll back to a specific release (e.g. a last-known-good version), pass `--version` with the tag:
 ```bash
-curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --version v0.99.70
+curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --version v0.99.73
 ```
 
 Also available through [KIAUH](https://github.com/dw-0/kiauh) as an extension.
