@@ -78,11 +78,6 @@ PathSegment AmsBackendMedusaHc::infer_error_segment() const {
     return PathSegment::NONE;
 }
 
-bool AmsBackendMedusaHc::is_filament_loaded() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return system_info_.filament_loaded;
-}
-
 bool AmsBackendMedusaHc::is_bypass_active() const {
     return false;
 }

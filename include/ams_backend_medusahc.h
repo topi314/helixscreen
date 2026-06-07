@@ -23,7 +23,6 @@ class AmsBackendMedusaHc : public AmsSubscriptionBackend {
     [[nodiscard]] PathSegment get_filament_segment() const override;
     [[nodiscard]] PathSegment get_slot_filament_segment(int slot_index) const override;
     [[nodiscard]] PathSegment infer_error_segment() const override;
-    [[nodiscard]] bool is_filament_loaded() const override;
     [[nodiscard]] bool is_bypass_active() const override;
     [[nodiscard]] std::optional<int> slot_for_extruder(int extruder_idx) const override;
     [[nodiscard]] helix::printer::ToolMappingCapabilities get_tool_mapping_capabilities() const override;
