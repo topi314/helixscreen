@@ -1,9 +1,9 @@
 {
   "preset": "sovol_sv06_ace",
-  "_rotation_note": "Display rotation is intentionally NOT set here. It is unit/user-dependent on the SV06 Ace: the #986 reporter ran HelixScreen upright at rotate=0 (complained only about touch accuracy, not orientation), while other users (D3ATHSTALK3RWS, Discord) needed to set it. The stock firmware's ROTATION_180 does not transfer to HelixScreen's display stack. So rotation stays a user setting in settings.json /display/rotate; don't hardcode it in the preset.",
+  "_rotation_note": "display.rotate intentionally unset: rotation is unit-dependent on this panel, so it stays a user setting (/display/rotate).",
   "input": {
     "calibration": {
-      "_comment": "Known-good touch matrix from issue #123 (user R8CEH). Stopgap seed because the first-run touch-calibration math produces a bad matrix on this panel. Read at runtime from /input/calibration/*. This preset is the SINGLE SOURCE OF TRUTH (#986): the installer pre-seeds the device-level input block from here into settings.json before first launch (so the touch-calibration wizard's should_skip() sees a valid matrix); the rest of this preset (printer.*) is applied by the app's runtime preset loader.",
+      "_comment": "Known-good matrix from #123; seeded into settings.json at install so the first-run wizard is skipped (wizard math is bad on this panel).",
       "valid": true,
       "a": 1.66,
       "b": 0.0,
@@ -16,10 +16,10 @@
   },
   "printer": {
     "leds": {
-      "_selected_strips_comment": "Pre-select the camera light so it is controllable as soon as Klipper exposes 'output_pin cameralight'.",
+      "_comment": "Pre-select the camera light (output_pin cameralight).",
       "selected_strips": ["output_pin cameralight"]
     },
-    "_hardware_comment": "Confirmed stock Klipper object names from published Sovol/R8CEH SV06 Ace configs (#986). The stock printer.cfg uses STANDARD object names ([extruder], [heater_bed], [fan], [heater_fan hotend_fan], [filament_switch_sensor filament_sensor]), which match HelixScreen's built-in defaults -- so preset-mode skipping the heater/fan auto-mapping wizard is safe on this printer.",
+    "_hardware_comment": "Confirmed stock Klipper object names (#986); standard names match HelixScreen defaults, so preset-mode hardware-mapping skip is safe.",
     "heaters": {
       "bed": "heater_bed",
       "hotend": "extruder"
@@ -29,7 +29,7 @@
       "hotend": "heater_fan hotend_fan"
     },
     "filament_sensors": {
-      "_comment": "Stock filament sensor is a switch-type [filament_switch_sensor filament_sensor] (confirmed #986).",
+      "_comment": "Stock switch-type runout sensor (#986).",
       "master_enabled": true,
       "sensors": [
         {
@@ -40,7 +40,7 @@
       ]
     },
     "default_macros": {
-      "_comment": "Stock SV06 Ace exposes only underscore-internal _LOAD_FILAMENT / _UNLOAD_FILAMENT (no public LOAD_FILAMENT). Confirmed (#986, live Macro.cfg) these are self-contained, parameterless, temp-guarded extrude routines, safe to call directly. Merged over HelixScreen's default_macros so the Load/Unload buttons hit the real macros (HelixScreen heats the hotend before invoking; the macros no-op with a warning below min_extrude_temp).",
+      "_comment": "Stock has no public LOAD_FILAMENT; _LOAD_FILAMENT/_UNLOAD_FILAMENT are self-contained and safe to call directly (#986).",
       "load_filament": { "label": "Load", "gcode": "_LOAD_FILAMENT" },
       "unload_filament": { "label": "Unload", "gcode": "_UNLOAD_FILAMENT" }
     }
