@@ -328,10 +328,8 @@ void AmsBackendMedusaHc::apply_status_snapshot(const nlohmann::json& status) {
         }
 
         sync_system_info_locked();
-        if (active_tool >= 0 && active_tool != system_info_.current_tool) {
-            changed = true;
-        }
-    }system_info_.current_tool != previous_
+        changed = changed || (system_info_.current_tool != previous_current_tool);
+    }
 
     if (changed) {
         emit_event(EVENT_STATE_CHANGED);
