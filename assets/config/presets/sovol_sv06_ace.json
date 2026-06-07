@@ -1,12 +1,9 @@
 {
   "preset": "sovol_sv06_ace",
-  "display": {
-    "_comment": "Stock SV06 Ace (480x272 Goodix) is mounted so the stock firmware drives the panel rotated 180 degrees (ROTATION_180 in the stock mksclient/KlipperScreen config, #986); HelixScreen needs the same to render upright. Seeded into settings.json at install time (top-level display block) so the very first boot frame is oriented correctly, before the wizard runs. Pairs with input.calibration below; if touch ends up inverted on a real unit, verify rotation + matrix together.",
-    "rotate": 180
-  },
+  "_rotation_note": "Display rotation is intentionally NOT set here. It is unit/user-dependent on the SV06 Ace: the #986 reporter ran HelixScreen upright at rotate=0 (complained only about touch accuracy, not orientation), while other users (D3ATHSTALK3RWS, Discord) needed to set it. The stock firmware's ROTATION_180 does not transfer to HelixScreen's display stack. So rotation stays a user setting in settings.json /display/rotate; don't hardcode it in the preset.",
   "input": {
     "calibration": {
-      "_comment": "Known-good touch matrix from issue #123 (user R8CEH). Stopgap seed because the first-run touch-calibration math produces a bad matrix on this panel. Read at runtime from /input/calibration/*. This preset is the SINGLE SOURCE OF TRUTH (#986): the installer pre-seeds the device-level input + display blocks from here into settings.json before first launch (so the touch-calibration wizard's should_skip() sees a valid matrix and the first frame is correctly rotated); the rest of this preset (printer.*) is applied by the app's runtime preset loader.",
+      "_comment": "Known-good touch matrix from issue #123 (user R8CEH). Stopgap seed because the first-run touch-calibration math produces a bad matrix on this panel. Read at runtime from /input/calibration/*. This preset is the SINGLE SOURCE OF TRUTH (#986): the installer pre-seeds the device-level input block from here into settings.json before first launch (so the touch-calibration wizard's should_skip() sees a valid matrix); the rest of this preset (printer.*) is applied by the app's runtime preset loader.",
       "valid": true,
       "a": 1.66,
       "b": 0.0,
