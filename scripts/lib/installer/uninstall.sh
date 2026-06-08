@@ -357,6 +357,32 @@ uninstall() {
         fi
     fi
 
+    # Snapmaker U1: re-enable the stock UI we neutralized at install time.
+    # snapmaker-u1-setup-autostart.sh disables the stock UI binary
+    # (chmod a-x /usr/bin/gui) so neither firmware 1.3's /etc/init.d/S99screen
+    # nor 1.4's relocated launcher can start it; it also patches (or creates)
+    # /etc/init.d/S99screen to launch HelixScreen. Reverse both:
+    #   1. Re-enable /usr/bin/gui (chmod +x) so a stock launcher can exec it.
+    #   2. Restore the launcher — from S99screen.stock on 1.3, or by removing
+    #      our HelixScreen-marked S99screen on 1.4 (we created it there).
+    if [ -z "$restored_ui" ] && [ "$platform" = "snapmaker-u1" ]; then
+        if [ -f /usr/bin/gui ] && [ ! -x /usr/bin/gui ]; then
+            log_info "Re-enabling stock UI binary (/usr/bin/gui)"
+            $SUDO chmod +x /usr/bin/gui 2>/dev/null \
+                || log_warn "Could not re-enable /usr/bin/gui — stock UI may not start on next boot"
+        fi
+        if [ -f /etc/init.d/S99screen.stock ]; then
+            log_info "Restoring stock /etc/init.d/S99screen (firmware 1.3)"
+            $SUDO mv /etc/init.d/S99screen.stock /etc/init.d/S99screen \
+                || log_warn "Could not restore /etc/init.d/S99screen — stock UI launcher may be missing"
+        elif [ -f /etc/init.d/S99screen ] && \
+             grep -q HelixScreen /etc/init.d/S99screen 2>/dev/null; then
+            log_info "Removing HelixScreen-created /etc/init.d/S99screen (firmware 1.4)"
+            $SUDO rm -f /etc/init.d/S99screen 2>/dev/null || true
+        fi
+        restored_ui="Snapmaker stock UI (/usr/bin/gui re-enabled)"
+    fi
+
     # Clean up helixscreen cache directories
     for cache_dir in /root/.cache/helix /tmp/helix_thumbs /.cache/helix /data/helixscreen/cache /usr/data/helixscreen/cache; do
         if [ -d "$cache_dir" ] 2>/dev/null; then

@@ -29,6 +29,30 @@ The U1 is a 4-toolhead color printer. Each head has its own nozzle, extruder, he
 
 The U1 does **not** use the standard [viesturz/klipper-toolchanger](https://github.com/viesturz/klipper-toolchanger) module. Instead, it uses native multi-extruder with custom Klipper extensions. Extruders are named `extruder`, `extruder1`, `extruder2`, `extruder3` with custom state fields (`park_pin`, `active_pin`, `activating_move`, `state`). HelixScreen has a dedicated `AmsBackendSnapmaker` that tracks tool state, RFID filament data, and supports tool switching via `T0`–`T3` gcodes.
 
+## Firmware Requirements
+
+HelixScreen targets the community **PAXX Extended Firmware** for the U1 — it provides the SSH access HelixScreen needs to deploy. Stock Snapmaker firmware is not supported.
+
+| Extended Firmware | Status | Notes |
+|-------------------|--------|-------|
+| 1.3.x | **Tested** — primary development target | Ships `/etc/init.d/S99screen`, which launches the stock UI binary `/usr/bin/gui`. |
+| 1.4.x | **Supported, untested** — expected to work | `S99screen` was removed; the stock UI is launched from a relocated path. HelixScreen no longer depends on that script name (see below). |
+
+Source: [paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware).
+
+### How HelixScreen takes over the display
+
+The U1 root filesystem is a read-only SquashFS with a writable OverlayFS upper on `/oem`. `/etc/init.d/S01aoverlayfs` wipes that upper on every boot **unless `/oem/.debug` exists**, so the installer touches `/oem/.debug` to make its changes persist. (This overlay/`.debug` mechanism is byte-identical between firmware 1.3 and 1.4.)
+
+To own the display, the installer:
+
+1. Installs a HelixScreen launcher at `/etc/init.d/S99screen` — patching the stock script on 1.3, creating it on 1.4 — that starts HelixScreen at boot.
+2. **Disables the stock UI binary itself** with `chmod -x /usr/bin/gui`. This is launcher-independent: it does not matter whether the stock UI is started by 1.3's `S99screen` or by 1.4's relocated launcher — with the binary non-executable, nothing can start the stock screen, so HelixScreen owns `/dev/fb0` / DRM. The uninstaller restores the exec bit.
+
+Both changes live in the persistent overlay upper and survive reboot via `/oem/.debug`. A **firmware upgrade** re-flashes the rootfs and removes `/oem/.debug`, so HelixScreen must be reinstalled after upgrading the Extended Firmware.
+
+> **Why the binary kill switch?** Firmware 1.3 launched `/usr/bin/gui` only from `/etc/init.d/S99screen`, so HelixScreen originally took over by hijacking that one script. Firmware 1.4 removed `S99screen` and starts the stock UI from a runtime-generated path that is absent from the flashed image and cannot be patched by name. Disabling the binary is the version-independent fix.
+
 ## Cross-Compilation
 
 The U1 target uses the same aarch64 cross-compiler as the Raspberry Pi, with fully static linking to avoid glibc version dependencies.
@@ -76,7 +100,7 @@ make package-snapmaker-u1
 ### Prerequisites
 
 1. **Snapmaker U1** on the network (Ethernet or WiFi)
-2. **Extended Firmware** installed — provides SSH access. Download from [paxx12/SnapmakerU1-Extended-Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware), flash via USB drive (FAT32, `.bin` file in root)
+2. **Extended Firmware** installed — provides SSH access. Download from [paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware), flash via USB drive (FAT32, `.bin` file in root)
 3. **SSH enabled** — after Extended Firmware is installed, enable SSH via the firmware config web UI:
    ```bash
    # Open http://<printer-ip>/firmware-config/ in a browser, or:
@@ -133,43 +157,41 @@ The deploy target automatically:
 ### What Happens on Deploy
 
 1. DRM keepalive: a background process opens `/dev/dri/card0` to prevent CRTC teardown
-2. Stock UI processes (`gui`, `lmd`) are killed via their SysV init scripts
+2. The stock UI process (`gui`) is killed, and the installer disables its binary (`chmod -x /usr/bin/gui`) so no launcher can relaunch it. `lmd` (the camera/timelapse supervisor) is left running — killing it would break timelapse.
 3. HelixScreen starts as DRM master with double-buffered page flipping
 4. The DRM keepalive process exits once HelixScreen has the DRM device open
 5. The first-run wizard appears (language selection, printer connection setup)
 
 ### Rollback (Restore Stock UI)
 
-To restore the stock Snapmaker touchscreen UI at any time:
+To restore the stock Snapmaker touchscreen UI, run the uninstaller — it re-enables the stock UI binary (`/usr/bin/gui`) and restores the stock `S99screen` launcher (firmware 1.3) or removes the HelixScreen-created one (firmware 1.4):
 
 ```bash
-# Quick rollback — kill HelixScreen, restart stock UI
-ssh root@<printer-ip> "killall helix-screen helix-watchdog; /etc/init.d/S99screen start; /etc/init.d/S90lmd start"
-
-# Or simply reboot — stock UI starts automatically on boot
-ssh root@<printer-ip> reboot
+ssh root@<printer-ip> "curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --uninstall; reboot"
 ```
 
-The stock UI lives on the read-only SquashFS rootfs and cannot be damaged by HelixScreen deployment. HelixScreen files are entirely on `/userdata/` and can be removed cleanly:
+> **A bare `rm -rf /userdata/helixscreen` is no longer sufficient.** The installer disables the stock UI binary (`chmod -x /usr/bin/gui`) so neither firmware's launcher can start it; removing HelixScreen without re-enabling the binary leaves a black screen. If you can't run the uninstaller, revert manually:
+>
+> ```bash
+> ssh root@<printer-ip> "killall helix-screen helix-watchdog 2>/dev/null; chmod +x /usr/bin/gui; rm -rf /userdata/helixscreen; reboot"
+> ```
 
-```bash
-ssh root@<printer-ip> "killall helix-screen helix-watchdog 2>/dev/null; rm -rf /userdata/helixscreen; reboot"
-```
+The stock UI binary lives on the read-only SquashFS rootfs and is only disabled, never deleted — it cannot be damaged by HelixScreen deployment.
 
 ## Reversible Deployment Strategy
 
-HelixScreen can be deployed to the U1 without modifying the stock firmware. The approach is fully reversible at multiple levels.
+HelixScreen can be deployed to the U1 without modifying the read-only base firmware — all changes live in the writable overlay and are fully reversible.
 
 ### Level 1: Manual SSH Deployment (Current, Fully Reversible)
 
 This is the current deployment method used by `make deploy-snapmaker-u1`:
 
-1. Install [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware) for SSH access
+1. Install [PAXX Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware) for SSH access
 2. Enable SSH via firmware config web UI
 3. Deploy via `make deploy-snapmaker-u1 SNAPMAKER_U1_HOST=<ip>`
-4. Platform hooks stop stock UI (`S99screen`, `S90lmd`) and HelixScreen starts on `/dev/fb0`
+4. The installer disables the stock UI binary (`chmod -x /usr/bin/gui`) and installs a HelixScreen launcher at `/etc/init.d/S99screen` (in the writable overlay); HelixScreen starts on `/dev/fb0`. `lmd` (camera/timelapse supervisor) keeps running.
 
-**To revert**: `killall helix-screen; /etc/init.d/S99screen start` — or simply reboot. The stock UI is on the read-only SquashFS rootfs and cannot be damaged. Init scripts are not modified.
+**To revert**: run the uninstaller (re-enables `/usr/bin/gui` and restores the launcher), or manually `chmod +x /usr/bin/gui && rm -rf /userdata/helixscreen`, then reboot. The stock UI binary is on the read-only SquashFS rootfs and is only disabled, never deleted — but note that the init-script changes and the binary's exec bit **are** modified (in the reversible overlay), so a plain reboot alone will not bring the stock UI back.
 
 ### Level 2: SysV Init Override (Persistent, Reversible)
 
@@ -283,7 +305,7 @@ These are resolution-specific issues, not Snapmaker-specific. Any 480x320 device
 ## Known Limitations
 
 - **480x320 UI needs work** -- Multiple panels have layout issues at this resolution (see above).
-- **Extended firmware required** -- SSH access (needed for deployment) requires the community [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware). Stock firmware does not provide SSH.
+- **Extended firmware required** -- SSH access (needed for deployment) requires the community [Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware). Stock firmware does not provide SSH.
 - **Auto-start requires `/oem/.debug`** -- The overlay filesystem is wiped on boot unless `/oem/.debug` exists. This flag must be created once during installation to persist the S99screen patch.
 - **WiFi management** -- Stopping `unisrv` (stock UI) does not affect WiFi — the U1 uses standard `wpa_supplicant` managed by the OS. HelixScreen has its own WiFi manager with `wpa_supplicant` support.
 
@@ -448,7 +470,7 @@ HelixScreen has been tested on a Snapmaker U1 with Extended Firmware. Confirmed 
 
 We welcome additional testers with Snapmaker U1 hardware:
 
-1. Install the [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware) for SSH access
+1. Install the [Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware) for SSH access
 2. Enable SSH: `curl -X POST http://<ip>/firmware-config/api/settings/ssh/true`
 3. Install via one-liner (easiest): `curl -sSL https://releases.helixscreen.org/install.sh | sh`
    - Or build from source: `make snapmaker-u1-docker` then `make deploy-snapmaker-u1-fg SNAPMAKER_U1_HOST=<ip>`
@@ -457,7 +479,7 @@ We welcome additional testers with Snapmaker U1 hardware:
 
 ## Related Resources
 
-- **[Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware)** -- Adds SSH access and community features to the U1
+- **[Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware)** -- Adds SSH access and community features to the U1
 - **[U1 Config Example](https://github.com/JNP-1/Snapmaker-U1-Config)** -- Community reverse-engineered Klipper configuration
 - **[Snapmaker Forum](https://forum.snapmaker.com/c/snapmaker-products/87)** -- Official U1 discussion
 - **[Toolchanger Research](printer-research/SNAPMAKER_U1_RESEARCH.md)** -- Detailed analysis of U1's toolchanger implementation vs. standard Klipper toolchanger module

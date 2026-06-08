@@ -50,7 +50,7 @@ No SSL required — uses plain HTTP. See [Creality K1 Series](#creality-k1-serie
 
 **Flashforge Adventurer 5X:** Install [ZMOD](https://github.com/ghzserg/zmod), which manages HelixScreen installation and updates. See [FlashForge Adventurer 5X](#flashforge-adventurer-5x).
 
-**Snapmaker U1:** Run directly on the printer via SSH (requires [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware)):
+**Snapmaker U1:** Run directly on the printer via SSH (requires [Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware)):
 ```bash
 curl -sSL https://releases.helixscreen.org/install.sh | sh
 ```
@@ -344,7 +344,7 @@ The Snapmaker U1 is an all-in-one printer with a built-in touchscreen. HelixScre
   - Network connection
 
 - **Software:**
-  - [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware) installed (required for SSH access)
+  - [PAXX Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware) installed (required for SSH access). Developed and tested on **1.3.x**; **1.4.x** should also work. Stock Snapmaker firmware is not supported.
   - SSH access (`root@<printer-ip>` or `lava@<printer-ip>`, password: `snapmaker`)
 
 ---
@@ -569,7 +569,9 @@ Use the touchscreen to complete the setup wizard. The printer should auto-detect
 
 ## Snapmaker U1 Installation
 
-> **Requires [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware).** Stock firmware does not provide SSH access. Install Extended Firmware first before proceeding.
+> **Requires [PAXX Extended Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware).** Stock firmware does not provide SSH access. Install Extended Firmware first before proceeding.
+>
+> **Firmware versions:** HelixScreen is developed and tested on Extended Firmware **1.3.x**. **1.4.x** should also work. After you update the Extended Firmware, **reinstall HelixScreen** — a firmware update resets the printer's system files and the stock screen will return until you reinstall.
 
 SSH into the printer:
 
@@ -609,27 +611,35 @@ mkdir -p /userdata/helixscreen && unzip -q helixscreen-snapmaker-u1.zip -d /user
 bash /userdata/helixscreen/scripts/snapmaker-u1-setup-autostart.sh /userdata/helixscreen
 ```
 
-This replaces the stock UI (`unisrv`) on boot with HelixScreen.
+This sets HelixScreen to launch on boot and disables the stock UI program (`/usr/bin/gui`) so HelixScreen owns the screen. (The stock UI program lives in a read-only part of the firmware and is only disabled, never deleted — the uninstaller re-enables it.)
 
 **Step 4: Start HelixScreen**
 
 ```bash
-killall unisrv 2>/dev/null; /userdata/helixscreen/bin/helix-launcher.sh &
+killall gui 2>/dev/null; /userdata/helixscreen/bin/helix-launcher.sh &
 ```
 
 ### Reverting to Stock UI
 
+Run the uninstaller — it re-enables the stock UI and removes HelixScreen:
+
 ```bash
-rm -rf /userdata/helixscreen
+curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --uninstall
 reboot
 ```
 
-The stock UI resumes automatically when HelixScreen is not found.
+If you can't run the uninstaller, revert manually. HelixScreen *disables* the stock UI program rather than deleting it, so re-enable it and remove HelixScreen's files:
+
+```bash
+chmod +x /usr/bin/gui          # re-enable the stock UI program
+rm -rf /userdata/helixscreen   # remove HelixScreen
+reboot
+```
 
 **Notes:**
 - Extended firmware is required — stock firmware does not provide SSH access
 - Display resolution may need manual configuration if the screen appears stretched or misaligned (see [Display Configuration](#display-configuration))
-- The stock UI can be restored at any time by removing `/userdata/helixscreen` and rebooting
+- A firmware update resets the printer's system files and brings the stock screen back — reinstall HelixScreen afterward
 
 ---
 
