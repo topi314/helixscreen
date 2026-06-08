@@ -677,7 +677,7 @@ void AmsPanel::create_slots(int count) {
 
     // Create new slots
     auto result = ams_detail_create_slots(detail_widgets_, slot_widgets_, MAX_VISIBLE_SLOTS,
-                                          unit_index, on_slot_clicked, this);
+                                          unit_index, on_slot_clicked, this, on_slot_long_pressed);
 
     current_slot_count_ = result.slot_count;
 
@@ -708,8 +708,9 @@ void AmsPanel::setup_path_canvas() {
         return;
     }
 
-    // Set slot click callback (panel-specific)
+    // Spool/filament-line taps → context menu; toolhead taps → tool selection
     ui_filament_path_canvas_set_slot_callback(path_canvas_, on_path_slot_clicked, this);
+    ui_filament_path_canvas_set_toolhead_callback(path_canvas_, on_path_toolhead_clicked, this);
 
     // Set selector/hub click callback (opens Happy Hare selector context menu)
     ui_filament_path_canvas_set_hub_callback(path_canvas_, &AmsPanel::on_path_hub_clicked_thunk,
@@ -1146,6 +1147,29 @@ void AmsPanel::on_path_slot_clicked(int slot_index, void* user_data) {
     self->show_context_menu(slot_index, self->path_canvas_, click_pt);
 }
 
+void AmsPanel::on_path_toolhead_clicked(int slot_index, void* user_data) {
+    auto* self = static_cast<AmsPanel*>(user_data);
+    if (!self) {
+        return;
+    }
+
+    int slot_count = lv_subject_get_int(AmsState::instance().get_slot_count_subject());
+    if (slot_index < 0 || slot_index >= slot_count) {
+        return;
+    }
+
+    if (self->sidebar_ && self->sidebar_->try_tool_changer_select(slot_index)) {
+        return;
+    }
+
+    // Non-tool-changer parallel topology: treat like a spool tap
+    lv_point_t click_pt = {0, 0};
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_get_point(indev, &click_pt);
+    }
+    self->show_context_menu(slot_index, self->path_canvas_, click_pt);
+}
+
 void AmsPanel::on_path_hub_clicked_thunk(lv_point_t click_pt, void* user_data) {
     auto* self = static_cast<AmsPanel*>(user_data);
     if (!self) {
@@ -1251,6 +1275,22 @@ void AmsPanel::on_slot_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void AmsPanel::on_slot_long_pressed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[AmsPanel] on_slot_long_pressed");
+    auto* self = static_cast<AmsPanel*>(lv_event_get_user_data(e));
+    if (self) {
+        lv_point_t click_pt = {0, 0};
+        if (lv_indev_t* indev = lv_indev_active()) {
+            lv_indev_get_point(indev, &click_pt);
+        }
+
+        lv_obj_t* slot = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+        auto slot_index = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(slot)));
+        self->handle_slot_long_press(slot_index, click_pt);
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 // ============================================================================
 // Observer Callbacks
 // ============================================================================
@@ -1273,7 +1313,22 @@ void AmsPanel::handle_slot_tap(int slot_index, lv_point_t click_pt) {
         return;
     }
 
-    // Show context menu near the tapped slot
+    // Spool tap → context menu (Load / Unload / Edit). Tool selection is on the
+    // path-canvas toolhead only (see on_path_toolhead_clicked).
+    if (slot_index >= 0 && slot_index < MAX_VISIBLE_SLOTS && slot_widgets_[slot_index]) {
+        show_context_menu(slot_index, slot_widgets_[slot_index], click_pt);
+    }
+}
+
+void AmsPanel::handle_slot_long_press(int slot_index, lv_point_t click_pt) {
+    spdlog::info("[{}] Slot {} long-pressed", get_name(), slot_index);
+
+    int slot_count = lv_subject_get_int(AmsState::instance().get_slot_count_subject());
+    if (slot_index < 0 || slot_index >= slot_count) {
+        return;
+    }
+
+    // Tool changers: tap selects/drops; long-press opens spool info / metadata menu.
     if (slot_index >= 0 && slot_index < MAX_VISIBLE_SLOTS && slot_widgets_[slot_index]) {
         show_context_menu(slot_index, slot_widgets_[slot_index], click_pt);
     }

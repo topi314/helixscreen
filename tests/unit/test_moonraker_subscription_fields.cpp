@@ -11,6 +11,7 @@
 // Each test names the specific parser file it is mirroring; if you add a new
 // field read in that parser, update both the subscription and this test.
 
+#include "ams_types.h"
 #include "moonraker_discovery_sequence.h"
 #include "printer_discovery.h"
 
@@ -542,4 +543,27 @@ TEST_CASE("Subscription: MCU objects narrow to PerformanceSource reads",
         REQUIRE(has_field(subs, "print_stats", "state"));
         REQUIRE(has_field(subs, "virtual_sdcard", "progress"));
     }
+}
+
+TEST_CASE("MedusaHC subscription fields mirror AmsBackendMedusaHc parsers",
+          "[subscription][medusahc]") {
+    DiscoveryFixture fx;
+    fx.add("pin_watch io", {});
+    fx.add("gcode_macro GLOBAL_STATE", {});
+    fx.add("gcode_macro T0", {});
+    fx.add("gcode_macro T1", {});
+
+    PrinterDiscovery hw;
+    hw.parse_objects(fx.all_objects);
+    REQUIRE(hw.mmu_type() == AmsType::MEDUSA_HC);
+
+    json subs = MoonrakerDiscoverySequence::build_subscription_objects(
+        hw, fx.heaters, fx.sensors, fx.fans, fx.leds, fx.afc_objects, fx.filament_sensors,
+        fx.mcus);
+
+    REQUIRE(has_field(subs, "pin_watch io", "current_tool"));
+    REQUIRE(has_field(subs, "gcode_macro GLOBAL_STATE", "variable_max_tool"));
+    REQUIRE(has_field(subs, "gcode_macro T0", "variable_active"));
+    REQUIRE(has_field(subs, "gcode_macro T0", "variable_color"));
+    REQUIRE(has_field(subs, "gcode_macro T1", "variable_active"));
 }

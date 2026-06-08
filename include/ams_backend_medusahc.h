@@ -43,10 +43,12 @@ class AmsBackendMedusaHc : public AmsSubscriptionBackend {
     [[nodiscard]] std::vector<helix::printer::DeviceAction> get_device_actions() const override;
     AmsError execute_device_action(const std::string& action_id,
                                    const std::any& value = {}) override;
+    [[nodiscard]] bool needs_unload_before_load(const AmsSystemInfo& info) const override;
 
   protected:
     void on_started() override;
     void handle_status_update(const nlohmann::json& notification) override;
+    void bootstrap_from_config(const nlohmann::json& config);
     const char* backend_log_tag() const override {
         return "[AMS MedusaHC]";
     }
@@ -56,16 +58,17 @@ class AmsBackendMedusaHc : public AmsSubscriptionBackend {
         bool active = false;
         std::string color_hex;
     };
-
-    void bootstrap_from_config(const nlohmann::json& config);
     void apply_status_snapshot(const nlohmann::json& status);
     void ensure_tool_capacity_locked(int tool_count);
     void sync_system_info_locked();
+    AmsError validate_slot_index_locked(int slot_index) const;
     static bool parse_boolish(const nlohmann::json& value);
     static std::optional<uint32_t> parse_color(const std::string& color);
     static std::optional<int> parse_macro_index(const std::string& key);
 
     std::vector<ToolState> tools_;
+    std::string pin_watch_object_; ///< Klipper object name, e.g. "pin_watch io"
+    int pin_watch_current_tool_ = -1; ///< Authoritative mounted tool from pin_watch (-1=none, -2=error)
     int configured_max_tool_ = -1;
     bool saw_global_state_ = false;
 };

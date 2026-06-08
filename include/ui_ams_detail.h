@@ -58,7 +58,8 @@ struct AmsDetailSlotResult {
 
 AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_widgets[],
                                             int max_slots, int unit_index, lv_event_cb_t click_cb,
-                                            void* user_data);
+                                            void* user_data,
+                                            lv_event_cb_t long_press_cb = nullptr);
 
 /**
  * @brief Destroy all slot widgets in the grid

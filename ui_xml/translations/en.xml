@@ -350,6 +350,8 @@
   <translation tag="Clog Detection" en="Clog Detection"/>
   <translation tag="Clog detection" en="Clog detection"/>
   <translation tag="Close" en="Close"/>
+  <translation tag="Close feeder" en="Close feeder"/>
+  <translation tag="Close feeder failed: {}" en="Close feeder failed: {}"/>
   <translation tag="Closer" en="Closer"/>
   <translation tag="Closer = more squish | Farther = less squish" en="Closer = more squish | Farther = less squish"/>
   <translation tag="Coarse" en="Coarse"/>
@@ -523,6 +525,8 @@
   <translation tag="Draw a ripple at each touch — helps diagnose offsets" en="Draw a ripple at each touch — helps diagnose offsets"/>
   <translation tag="Drive Cal" en="Drive Cal"/>
   <translation tag="Drop shadow strength (0 = disabled)" en="Drop shadow strength (0 = disabled)"/>
+  <translation tag="Drop tool" en="Drop tool"/>
+  <translation tag="Drop tool failed: {}" en="Drop tool failed: {}"/>
   <translation tag="Dryer Controls" en="Dryer Controls"/>
   <translation tag="Drying" en="Drying"/>
   <translation tag="Drying started" en="Drying started"/>
@@ -1134,6 +1138,7 @@
   <translation tag="No spool assigned" en="No spool assigned"/>
   <translation tag="No spools found — tap to retry" en="No spools found — tap to retry"/>
   <translation tag="No timelapse videos found" en="No timelapse videos found"/>
+  <translation tag="No tool mounted" en="No tool mounted"/>
   <translation tag="No vendors found" en="No vendors found"/>
   <translation tag="No webcam detected.\nA webcam is required for timelapse." en="No webcam detected.\nA webcam is required for timelapse."/>
   <translation tag="None" en="None"/>
@@ -1178,6 +1183,8 @@
   <translation tag="One or more tools required by this file have no filament loaded. The print will likely fail. Print anyway?" en="One or more tools required by this file have no filament loaded. The print will likely fail. Print anyway?"/>
   <translation tag="Open" en="Open"/>
   <translation tag="Open Source Licenses" en="Open Source Licenses"/>
+  <translation tag="Open feeder" en="Open feeder"/>
+  <translation tag="Open feeder failed: {}" en="Open feeder failed: {}"/>
   <translation tag="Operation already in progress" en="Operation already in progress"/>
   <translation tag="Operations" en="Operations"/>
   <translation tag="Optimize Your Printing" en="Optimize Your Printing"/>

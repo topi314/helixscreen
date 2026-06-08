@@ -216,6 +216,9 @@ class AmsPanel : public PanelBase {
     // === Event Callbacks (static trampolines) ===
 
     static void on_slot_clicked(lv_event_t* e);
+    static void on_slot_long_pressed(lv_event_t* e);
+
+    void handle_slot_long_press(int slot_index, lv_point_t click_pt);
 
     // === Observer Callbacks ===
     // All observer callbacks migrated to lambda observer factory in init_subjects()
@@ -223,6 +226,7 @@ class AmsPanel : public PanelBase {
     // === Path Canvas Callbacks ===
 
     static void on_path_slot_clicked(int slot_index, void* user_data);
+    static void on_path_toolhead_clicked(int slot_index, void* user_data);
     static void on_path_hub_clicked_thunk(lv_point_t click_pt, void* user_data);
     static void on_bypass_spool_clicked(void* user_data);
 

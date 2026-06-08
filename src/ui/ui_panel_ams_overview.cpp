@@ -630,6 +630,26 @@ void AmsOverviewPanel::on_detail_slot_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void AmsOverviewPanel::on_detail_slot_long_pressed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[AMS Overview] on_detail_slot_long_pressed");
+
+    auto* self = static_cast<AmsOverviewPanel*>(lv_event_get_user_data(e));
+    if (!self) {
+        return;
+    }
+
+    lv_point_t click_pt = {0, 0};
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_get_point(indev, &click_pt);
+    }
+
+    lv_obj_t* slot = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    auto global_index = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(slot)));
+    self->handle_detail_slot_long_press(global_index, click_pt);
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 // ============================================================================
 // Detail View (inline unit zoom)
 // ============================================================================
@@ -873,7 +893,8 @@ void AmsOverviewPanel::create_detail_slots(const AmsUnit& unit) {
     ams_detail_pre_show_env_indicator(detail_widgets_);
 
     auto result = ams_detail_create_slots(detail_widgets_, detail_slot_widgets_, MAX_DETAIL_SLOTS,
-                                          unit_index, on_detail_slot_clicked, this);
+                                          unit_index, on_detail_slot_clicked, this,
+                                          on_detail_slot_long_pressed);
 
     detail_slot_count_ = result.slot_count;
 
@@ -902,6 +923,11 @@ void AmsOverviewPanel::setup_detail_path_canvas(const AmsUnit& unit, const AmsSy
             break;
         }
     }
+
+    ui_filament_path_canvas_set_slot_callback(detail_path_canvas_, on_detail_path_slot_clicked,
+                                             this);
+    ui_filament_path_canvas_set_toolhead_callback(detail_path_canvas_,
+                                                  on_detail_path_toolhead_clicked, this);
 
     ams_detail_setup_path_canvas(detail_path_canvas_, detail_widgets_.slot_grid, unit_index,
                                  true /* hub_only */);
@@ -1089,6 +1115,69 @@ AmsOverviewPanel& get_global_ams_overview_panel() {
 // Slot Context Menu (detail view)
 // ============================================================================
 
+int AmsOverviewPanel::detail_local_to_global_slot(int local_slot_index) const {
+    if (detail_unit_index_ < 0 || local_slot_index < 0) {
+        return -1;
+    }
+
+    auto* backend = AmsState::instance().get_backend();
+    if (!backend) {
+        return -1;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (detail_unit_index_ >= static_cast<int>(info.units.size())) {
+        return -1;
+    }
+
+    return info.units[detail_unit_index_].first_slot_global_index + local_slot_index;
+}
+
+void AmsOverviewPanel::on_detail_path_slot_clicked(int local_slot_index, void* user_data) {
+    auto* self = static_cast<AmsOverviewPanel*>(user_data);
+    if (!self || !self->detail_path_canvas_) {
+        return;
+    }
+
+    int global_slot_index = self->detail_local_to_global_slot(local_slot_index);
+    if (global_slot_index < 0) {
+        return;
+    }
+
+    lv_point_t click_pt = {0, 0};
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_get_point(indev, &click_pt);
+    }
+
+    self->show_detail_context_menu(global_slot_index, self->detail_path_canvas_, click_pt);
+}
+
+void AmsOverviewPanel::on_detail_path_toolhead_clicked(int local_slot_index, void* user_data) {
+    auto* self = static_cast<AmsOverviewPanel*>(user_data);
+    if (!self) {
+        return;
+    }
+
+    int global_slot_index = self->detail_local_to_global_slot(local_slot_index);
+    if (global_slot_index < 0) {
+        return;
+    }
+
+    if (self->sidebar_ && self->sidebar_->try_tool_changer_select(global_slot_index)) {
+        return;
+    }
+
+    if (!self->detail_path_canvas_) {
+        return;
+    }
+
+    lv_point_t click_pt = {0, 0};
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_get_point(indev, &click_pt);
+    }
+    self->show_detail_context_menu(global_slot_index, self->detail_path_canvas_, click_pt);
+}
+
 void AmsOverviewPanel::handle_detail_slot_tap(int global_slot_index, lv_point_t click_pt) {
     spdlog::info("[{}] Detail slot {} tapped", get_name(), global_slot_index);
 
@@ -1113,6 +1202,35 @@ void AmsOverviewPanel::handle_detail_slot_tap(int global_slot_index, lv_point_t 
     lv_obj_t* slot_widget = detail_slot_widgets_[local_index];
     if (!slot_widget)
         return;
+
+    show_detail_context_menu(global_slot_index, slot_widget, click_pt);
+}
+
+void AmsOverviewPanel::handle_detail_slot_long_press(int global_slot_index, lv_point_t click_pt) {
+    if (detail_unit_index_ < 0) {
+        return;
+    }
+
+    auto* backend = AmsState::instance().get_backend();
+    if (!backend) {
+        return;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (detail_unit_index_ >= static_cast<int>(info.units.size())) {
+        return;
+    }
+
+    const auto& unit = info.units[detail_unit_index_];
+    int local_index = global_slot_index - unit.first_slot_global_index;
+    if (local_index < 0 || local_index >= detail_slot_count_) {
+        return;
+    }
+
+    lv_obj_t* slot_widget = detail_slot_widgets_[local_index];
+    if (!slot_widget) {
+        return;
+    }
 
     show_detail_context_menu(global_slot_index, slot_widget, click_pt);
 }

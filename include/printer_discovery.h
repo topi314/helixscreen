@@ -352,12 +352,16 @@ class PrinterDiscovery {
             else if (name == "filament_detect") {
                 has_snapmaker_ = true;
             }
-            // Tool changer detection
+            // // Tool changer detection
+            // else if (name == "toolchanger") {
+            //     has_tool_changer_ = true;
+            // }
+            // MedusaHC detection
             else if (name == "toolchanger") {
-                has_tool_changer_ = true;
+                has_medusa_hc_ = true;
             }
-            // MedusaHC pin-watch tool changer detection
-            else if (name == "pin_watch") {
+            // MedusaHC pin-watch tool changer detection ([pin_watch io], etc.)
+            else if (name.rfind("pin_watch", 0) == 0) {
                 has_mmu_ = true;
                 mmu_type_ = AmsType::MEDUSA_HC;
             }
@@ -455,6 +459,12 @@ class PrinterDiscovery {
                         led_macros_.push_back(upper_macro);
                     }
                 }
+
+                // MedusaHC tool-changer macros (GLOBAL_STATE + Tn)
+                if (is_medusa_tool_macro_name(macro_name)) {
+                    has_mmu_ = true;
+                    mmu_type_ = AmsType::MEDUSA_HC;
+                }
             }
         }
 
@@ -489,40 +499,7 @@ class PrinterDiscovery {
             std::sort(tool_names_.begin(), tool_names_.end());
         }
 
-        // Collect all detected AMS systems
-        detected_ams_systems_.clear();
-
-        // Register the filament management backend. When a real MMU (AFC, Happy
-        // Hare, etc.) is present, it always wins — even on Snapmaker U1 hardware
-        // that also reports filament_detect. The Snapmaker backend is a basic
-        // 4-slot fallback for U1s without an aftermarket MMU. Toolchanger alone
-        // only handles tool switching, not filament management.
-        if (has_mmu_) {
-            if (mmu_type_ == AmsType::HAPPY_HARE) {
-                detected_ams_systems_.push_back({AmsType::HAPPY_HARE, "Happy Hare"});
-            } else if (mmu_type_ == AmsType::AFC) {
-                detected_ams_systems_.push_back({AmsType::AFC, "AFC"});
-            } else if (mmu_type_ == AmsType::AD5X_IFS) {
-                detected_ams_systems_.push_back({AmsType::AD5X_IFS, "AD5X IFS"});
-            } else if (mmu_type_ == AmsType::CFS) {
-                detected_ams_systems_.push_back({AmsType::CFS, "CFS"});
-            } else if (mmu_type_ == AmsType::ACE) {
-                detected_ams_systems_.push_back({AmsType::ACE, "ACE"});
-            } else if (mmu_type_ == AmsType::QIDI_BOX) {
-                // i18n: do not translate - product name
-                detected_ams_systems_.push_back({AmsType::QIDI_BOX, "QIDI Box"});
-            }
-        } else if (has_snapmaker_) {
-            // Native Snapmaker filament system (no aftermarket MMU)
-            detected_ams_systems_.push_back({AmsType::SNAPMAKER, "Snapmaker"});
-            mmu_type_ = AmsType::SNAPMAKER;
-        } else if (mmu_type_ == AmsType::MEDUSA_HC) {
-            detected_ams_systems_.push_back({AmsType::MEDUSA_HC, "MedusaHC"});
-        } else if (has_tool_changer_ && !tool_names_.empty()) {
-            // Standalone tool changer with no MMU — show parallel topology
-            detected_ams_systems_.push_back({AmsType::TOOL_CHANGER, "Tool Changer"});
-            mmu_type_ = AmsType::TOOL_CHANGER;
-        }
+        finalize_detected_ams_systems();
     }
 
     /**
@@ -601,6 +578,8 @@ class PrinterDiscovery {
                 spdlog::debug("[PrinterDiscovery] MedusaHC detected from config: {}", key);
             }
         }
+
+        finalize_detected_ams_systems();
     }
 
     /**
@@ -645,6 +624,7 @@ class PrinterDiscovery {
         has_mmu_ = false;
         has_snapmaker_ = false;
         has_tool_changer_ = false;
+        has_medusa_hc_ = false;
         has_chamber_heater_ = false;
         has_chamber_sensor_ = false;
         chamber_sensor_name_.clear();
@@ -739,6 +719,10 @@ class PrinterDiscovery {
 
     [[nodiscard]] bool has_tool_changer() const {
         return has_tool_changer_;
+    }
+
+    [[nodiscard]] bool has_medusa_hc() const {
+        return has_medusa_hc_;
     }
 
     [[nodiscard]] bool has_chamber_heater() const {
@@ -1283,6 +1267,7 @@ class PrinterDiscovery {
     bool has_mmu_ = false;
     bool has_snapmaker_ = false;
     bool has_tool_changer_ = false;
+    bool has_medusa_hc_ = false;
     bool has_chamber_heater_ = false;
     bool has_chamber_sensor_ = false;
     std::string chamber_sensor_name_;
@@ -1317,6 +1302,56 @@ class PrinterDiscovery {
     std::vector<std::string> mcu_list_;
     std::vector<std::pair<std::string, std::string>> mcu_versions_;
     std::vector<std::string> printer_objects_;
+
+    [[nodiscard]] static bool is_medusa_tool_macro_name(const std::string& macro_name) {
+        if (macro_name == "GLOBAL_STATE") {
+            return true;
+        }
+        if (macro_name.empty() || macro_name[0] != 'T') {
+            return false;
+        }
+        return std::all_of(macro_name.begin() + 1, macro_name.end(),
+                           [](unsigned char c) { return std::isdigit(c) != 0; });
+    }
+
+    void finalize_detected_ams_systems() {
+        detected_ams_systems_.clear();
+
+        // Register the filament management backend. When a real MMU (AFC, Happy
+        // Hare, etc.) is present, it always wins — even on Snapmaker U1 hardware
+        // that also reports filament_detect. The Snapmaker backend is a basic
+        // 4-slot fallback for U1s without an aftermarket MMU. Toolchanger alone
+        // only handles tool switching, not filament management.
+        if (has_mmu_) {
+            if (mmu_type_ == AmsType::HAPPY_HARE) {
+                detected_ams_systems_.push_back({AmsType::HAPPY_HARE, "Happy Hare"});
+            } else if (mmu_type_ == AmsType::AFC) {
+                detected_ams_systems_.push_back({AmsType::AFC, "AFC"});
+            } else if (mmu_type_ == AmsType::AD5X_IFS) {
+                detected_ams_systems_.push_back({AmsType::AD5X_IFS, "AD5X IFS"});
+            } else if (mmu_type_ == AmsType::CFS) {
+                detected_ams_systems_.push_back({AmsType::CFS, "CFS"});
+            } else if (mmu_type_ == AmsType::ACE) {
+                detected_ams_systems_.push_back({AmsType::ACE, "ACE"});
+            } else if (mmu_type_ == AmsType::QIDI_BOX) {
+                // i18n: do not translate - product name
+                detected_ams_systems_.push_back({AmsType::QIDI_BOX, "QIDI Box"});
+            } else if (mmu_type_ == AmsType::MEDUSA_HC) {
+                detected_ams_systems_.push_back({AmsType::MEDUSA_HC, "MedusaHC"});
+            }
+        } else if (has_snapmaker_) {
+            // Native Snapmaker filament system (no aftermarket MMU)
+            detected_ams_systems_.push_back({AmsType::SNAPMAKER, "Snapmaker"});
+            mmu_type_ = AmsType::SNAPMAKER;
+        } else if (has_tool_changer_ && !tool_names_.empty()) {
+            // Standalone tool changer with no MMU — show parallel topology
+            detected_ams_systems_.push_back({AmsType::TOOL_CHANGER, "Tool Changer"});
+            mmu_type_ = AmsType::TOOL_CHANGER;
+        } else if (has_medusa_hc_) {
+            detected_ams_systems_.push_back({AmsType::MEDUSA_HC, "MedusaHC"});
+            mmu_type_ = AmsType::MEDUSA_HC;
+        }
+    }
 };
 
 } // namespace helix

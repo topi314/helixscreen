@@ -52,6 +52,8 @@ void AmsOperationSidebar::register_callbacks_static() {
         {"ams_sidebar_unload_clicked", on_unload_clicked_cb},
         {"ams_sidebar_reset_clicked", on_reset_clicked_cb},
         {"ams_sidebar_check_gates_clicked", on_check_gates_clicked_cb},
+        {"ams_sidebar_open_feeder_clicked", on_open_feeder_clicked_cb},
+        {"ams_sidebar_close_feeder_clicked", on_close_feeder_clicked_cb},
         {"ams_sidebar_settings_clicked", on_settings_clicked_cb},
     });
 }
@@ -114,6 +116,20 @@ void AmsOperationSidebar::on_check_gates_clicked_cb(lv_event_t* e) {
     }
 }
 
+void AmsOperationSidebar::on_open_feeder_clicked_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) {
+        self->handle_open_feeder();
+    }
+}
+
+void AmsOperationSidebar::on_close_feeder_clicked_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) {
+        self->handle_close_feeder();
+    }
+}
+
 void AmsOperationSidebar::on_settings_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[AmsSidebar] on_settings_clicked");
 
@@ -163,6 +179,7 @@ bool AmsOperationSidebar::setup(lv_obj_t* panel) {
     active_ = true;
     sync_reset_button_label();
     update_check_gates_visibility();
+    update_feeder_visibility();
     spdlog::debug("[AmsSidebar] Setup complete");
     return true;
 }
@@ -232,6 +249,7 @@ void AmsOperationSidebar::init_observers() {
                                                   self->update_current_loaded_display();
                                                   self->sync_reset_button_label();
                                                   self->update_check_gates_visibility();
+                                                  self->update_feeder_visibility();
                                               });
 
     // Active backend observer: re-syncs reset button label when the user switches backend tabs
@@ -242,6 +260,7 @@ void AmsOperationSidebar::init_observers() {
                 return;
             self->sync_reset_button_label();
             self->update_check_gates_visibility();
+            self->update_feeder_visibility();
         });
 
     // Bypass spool color observer: refreshes loaded card when external spool changes
@@ -356,6 +375,7 @@ void AmsOperationSidebar::sync_from_state() {
     // Update settings visibility (backend may have changed)
     update_settings_visibility();
     update_check_gates_visibility();
+    update_feeder_visibility();
     sync_reset_button_label();
 }
 
@@ -397,6 +417,25 @@ void AmsOperationSidebar::update_check_gates_visibility() {
         lv_obj_remove_flag(btn, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void AmsOperationSidebar::update_feeder_visibility() {
+    if (!active_ || !sidebar_root_) {
+        return;
+    }
+    lv_obj_t* btn_open = lv_obj_find_by_name(sidebar_root_, "btn_open_feeder");
+    lv_obj_t* btn_close = lv_obj_find_by_name(sidebar_root_, "btn_close_feeder");
+    if (!btn_open || !btn_close) {
+        return;
+    }
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (backend && backend->get_type() == AmsType::MEDUSA_HC) {
+        lv_obj_remove_flag(btn_open, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(btn_close, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(btn_open, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(btn_close, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -724,6 +763,37 @@ void AmsOperationSidebar::handle_unload() {
     }
 }
 
+void AmsOperationSidebar::drop_tool_if_mounted() {
+    spdlog::info("[AmsSidebar] Drop tool requested");
+
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (!backend) {
+        NOTIFY_WARNING(lv_tr("AMS not available"));
+        return;
+    }
+
+    if (!is_tool_changer(backend->get_type())) {
+        return;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (!info.filament_loaded && info.current_tool < 0) {
+        NOTIFY_WARNING(lv_tr("No tool mounted"));
+        return;
+    }
+
+    if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
+        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
+        return;
+    }
+
+    // Tool changers: unmount only — no filament unload step progress.
+    AmsError error = backend->unload_filament();
+    if (error.result != AmsResult::SUCCESS) {
+        NOTIFY_ERROR(lv_tr("Drop tool failed: {}"), error.user_msg);
+    }
+}
+
 void AmsOperationSidebar::handle_reset() {
     spdlog::info("[AmsSidebar] Reset requested");
 
@@ -751,6 +821,48 @@ void AmsOperationSidebar::handle_check_gates() {
     AmsError error = backend->check_all_gates();
     if (error.result != AmsResult::SUCCESS) {
         NOTIFY_ERROR(lv_tr("Check slots failed: {}"), error.user_msg);
+    }
+}
+
+void AmsOperationSidebar::handle_open_feeder() {
+    spdlog::info("[AmsSidebar] Open feeder requested");
+
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (!backend) {
+        NOTIFY_WARNING(lv_tr("AMS not available"));
+        return;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
+        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
+        return;
+    }
+
+    AmsError error = backend->execute_device_action("open_feeder");
+    if (error.result != AmsResult::SUCCESS) {
+        NOTIFY_ERROR(lv_tr("Open feeder failed: {}"), error.user_msg);
+    }
+}
+
+void AmsOperationSidebar::handle_close_feeder() {
+    spdlog::info("[AmsSidebar] Close feeder requested");
+
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (!backend) {
+        NOTIFY_WARNING(lv_tr("AMS not available"));
+        return;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
+        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
+        return;
+    }
+
+    AmsError error = backend->execute_device_action("close_feeder");
+    if (error.result != AmsResult::SUCCESS) {
+        NOTIFY_ERROR(lv_tr("Close feeder failed: {}"), error.user_msg);
     }
 }
 
@@ -832,14 +944,36 @@ int AmsOperationSidebar::get_load_temp_for_slot(int slot_index) {
     return active.material_info.nozzle_min;
 }
 
+bool AmsOperationSidebar::try_tool_changer_select(int slot_index) {
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (!backend || !is_tool_changer(backend->get_type())) {
+        return false;
+    }
+
+    AmsSystemInfo info = backend->get_system_info();
+    if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
+        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
+        return true;
+    }
+
+    // Tap the mounted tool again → park/unmount (toggle).
+    if (info.current_slot >= 0 && info.current_slot == slot_index) {
+        drop_tool_if_mounted();
+        return true;
+    }
+
+    handle_load_with_preheat(slot_index);
+    return true;
+}
+
 void AmsOperationSidebar::handle_load_with_preheat(int slot_index) {
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
         return;
     }
 
-    // Tool changers: just send T{n}
-    if (backend->get_type() == AmsType::TOOL_CHANGER) {
+    // Tool changers (incl. MedusaHC): tool switch only — no load/preheat/swap flow
+    if (is_tool_changer(backend->get_type())) {
         AmsSystemInfo info = backend->get_system_info();
         if (info.current_slot >= 0 && info.current_slot == slot_index) {
             spdlog::debug("[AmsSidebar] Tool {} already active, ignoring load", slot_index);

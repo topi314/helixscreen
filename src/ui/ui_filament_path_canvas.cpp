@@ -235,6 +235,8 @@ struct FilamentPathData {
     // Callbacks
     filament_path_slot_cb_t slot_callback = nullptr;
     void* slot_user_data = nullptr;
+    filament_path_toolhead_cb_t toolhead_callback = nullptr;
+    void* toolhead_user_data = nullptr;
     filament_path_bypass_cb_t bypass_callback = nullptr;
     void* bypass_user_data = nullptr;
     filament_path_buffer_cb_t buffer_callback = nullptr;
@@ -3255,7 +3257,7 @@ static void filament_path_click_cb(lv_event_t* e) {
         int32_t sensor_y = y_off + (int32_t)(height * PARALLEL_SENSOR_Y_RATIO);
         int32_t tool_scale = LV_MAX(6, data->extruder_scale * 2 / 3);
 
-        // Toolhead click area (bottom half)
+        // Toolhead click area (bottom half) — tool selection only, not spool/filament ops
         int32_t hit_radius_y = tool_scale * 4;
         if (abs(point.y - toolhead_y) < hit_radius_y) {
             for (int i = 0; i < data->slot_count; i++) {
@@ -3263,7 +3265,11 @@ static void filament_path_click_cb(lv_event_t* e) {
                 int32_t hit_radius_x = LV_MAX(20, tool_scale * 3);
                 if (abs(point.x - slot_x) < hit_radius_x) {
                     spdlog::debug("[FilamentPath] Toolhead {} clicked (parallel topology)", i);
-                    data->slot_callback(i, data->slot_user_data);
+                    if (data->toolhead_callback) {
+                        data->toolhead_callback(i, data->toolhead_user_data);
+                    } else if (data->slot_callback) {
+                        data->slot_callback(i, data->slot_user_data);
+                    }
                     return;
                 }
             }
@@ -3711,6 +3717,15 @@ void ui_filament_path_canvas_set_slot_callback(lv_obj_t* obj, filament_path_slot
     if (data) {
         data->slot_callback = cb;
         data->slot_user_data = user_data;
+    }
+}
+
+void ui_filament_path_canvas_set_toolhead_callback(lv_obj_t* obj, filament_path_toolhead_cb_t cb,
+                                                   void* user_data) {
+    auto* data = get_data(obj);
+    if (data) {
+        data->toolhead_callback = cb;
+        data->toolhead_user_data = user_data;
     }
 }
 

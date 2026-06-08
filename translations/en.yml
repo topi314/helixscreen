@@ -320,6 +320,8 @@ translations:
   'Check slot failed: {}': 'Check slot failed: {}'
   Check slots: Check slots
   'Check slots failed: {}': 'Check slots failed: {}'
+  Close feeder: Close feeder
+  'Close feeder failed: {}': 'Close feeder failed: {}'
   Check the filament path and try again.: Check the filament path and try again.
   Check your heater's rating (typically 40-60W for hotends): Check your heater's rating (typically 40-60W for hotends)
   Checking: Checking
@@ -1180,6 +1182,8 @@ translations:
   On/Off (state-aware): On/Off (state-aware)
   One or more tools required by this file have no filament loaded. The print will likely fail. Print anyway?: One or more tools required by this file have no filament loaded. The print will likely fail. Print anyway?
   Open: Open
+  Open feeder: Open feeder
+  'Open feeder failed: {}': 'Open feeder failed: {}'
   Open Source Licenses: Open Source Licenses
   Operation already in progress: Operation already in progress
   Operations: Operations
@@ -1861,6 +1865,9 @@ translations:
   Unload: Unload
   Unload Filament: Unload Filament
   'Unload failed: {}': 'Unload failed: {}'
+  Drop tool: Drop tool
+  'Drop tool failed: {}': 'Drop tool failed: {}'
+  No tool mounted: No tool mounted
   Unload macro not configured: Unload macro not configured
   Unload may still be running — response timed out: Unload may still be running — response timed out
   Unloading: Unloading

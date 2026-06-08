@@ -13,6 +13,8 @@
     - ams_sidebar_unload_clicked: Unload button
     - ams_sidebar_reset_clicked: Reset button
     - ams_sidebar_check_gates_clicked: Check slots button (Happy Hare only)
+    - ams_sidebar_open_feeder_clicked: Open feeder (MedusaHC only)
+    - ams_sidebar_close_feeder_clicked: Close feeder (MedusaHC only)
     - ams_sidebar_settings_clicked: Settings button
 
     C++ companion: AmsOperationSidebar (ui_ams_sidebar.h)
@@ -61,21 +63,30 @@
           <event_cb trigger="value_changed" callback="ams_sidebar_bypass_toggled"/>
         </ui_switch>
       </lv_obj>
-      <!-- Unload Button (full width) - hidden for tool changers -->
+      <!-- Unload Button (full width) - hidden for tool changers (use spool context menu) -->
       <ui_button name="btn_unload" width="100%" variant="secondary" icon="tray_arrow_up" text="Unload" translation_tag="Unload">
-        <bind_flag_if_eq subject="ams_type" flag="hidden" ref_value="4"/>
+        <bind_flag_if_eq subject="ams_is_tool_changer" flag="hidden" ref_value="1"/>
         <bind_state_if_eq subject="ams_filament_loaded" state="disabled" ref_value="0"/>
         <event_cb trigger="clicked" callback="ams_sidebar_unload_clicked"/>
       </ui_button>
       <!-- Reset Button (full width) - hidden for tool changers -->
       <ui_button name="btn_reset" width="100%" variant="secondary" icon="refresh" text="Reset" translation_tag="Reset">
-        <bind_flag_if_eq subject="ams_type" flag="hidden" ref_value="4"/>
+        <bind_flag_if_eq subject="ams_is_tool_changer" flag="hidden" ref_value="1"/>
         <event_cb trigger="clicked" callback="ams_sidebar_reset_clicked"/>
       </ui_button>
       <!-- Check Slots (Happy Hare): probe all slot sensors (MMU_CHECK_GATE). Shown only when supported. -->
       <ui_button name="btn_check_gates" width="100%" variant="secondary" icon="refresh"
                  text="Check slots" translation_tag="Check slots" hidden="true">
         <event_cb trigger="clicked" callback="ams_sidebar_check_gates_clicked"/>
+      </ui_button>
+      <!-- Feeder open/close (MedusaHC) — shown via C++ when backend supports it -->
+      <ui_button name="btn_open_feeder" width="100%" variant="secondary" icon="arrow_up"
+                 text="Open feeder" translation_tag="Open feeder" hidden="true">
+        <event_cb trigger="clicked" callback="ams_sidebar_open_feeder_clicked"/>
+      </ui_button>
+      <ui_button name="btn_close_feeder" width="100%" variant="secondary" icon="arrow_down"
+                 text="Close feeder" translation_tag="Close feeder" hidden="true">
+        <event_cb trigger="clicked" callback="ams_sidebar_close_feeder_clicked"/>
       </ui_button>
       <!-- Settings Button (full width) -->
       <ui_button name="btn_settings" width="100%" icon="settings" text="Settings" translation_tag="Settings">

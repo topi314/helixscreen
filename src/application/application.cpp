@@ -170,6 +170,7 @@
 #include "moonraker_performance_source.h"
 #include "performance_state.h"
 #include "plugin_manager.h"
+#include "ams_state.h"
 #include "printer_discovery.h"
 #include "printer_state.h"
 #include "splash_screen.h"
@@ -2413,6 +2414,13 @@ void Application::setup_discovery_callbacks() {
                 hw.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
             crash_handler::breadcrumb::note("disc", "post_init_fans",
                                              static_cast<long>(hw.fans().size()));
+
+            // Configfile parsing (pin_watch, etc.) may register AMS systems that were
+            // not visible in printer.objects.list during the early hardware callback.
+            if (AmsState::instance().backend_count() == 0 && !hw.detected_ams_systems().empty()) {
+                spdlog::info("[Application] Late AMS backend init after configfile discovery");
+                AmsState::instance().init_backend_from_hardware(hw, api, client);
+            }
 
             // Dispatch initial subscription status AFTER init_fans so fan/sensor subjects
             // exist when the status data is processed. The initial status is passed from the

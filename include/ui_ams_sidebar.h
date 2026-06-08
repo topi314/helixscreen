@@ -83,6 +83,13 @@ class AmsOperationSidebar {
     void handle_load_with_preheat(int slot_index);
 
     /**
+     * @brief Tool-changer slot tap: select tool immediately (Tn), no context menu.
+     * @return true if this backend is a tool changer (tap was handled or rejected as busy)
+     */
+    bool try_tool_changer_select(int slot_index);
+    void drop_tool_if_mounted();
+
+    /**
      * @brief Update the loaded card swatch color and info
      */
     void update_current_loaded_display();
@@ -96,6 +103,11 @@ class AmsOperationSidebar {
      * @brief Show/hide Check gates button based on whether the active backend supports it.
      */
     void update_check_gates_visibility();
+
+    /**
+     * @brief Show/hide feeder open/close buttons (MedusaHC).
+     */
+    void update_feeder_visibility();
 
     /**
      * @brief Set btn_reset's label from the active backend (e.g. "Home" for Happy Hare).
@@ -173,6 +185,8 @@ class AmsOperationSidebar {
     void handle_unload();
     void handle_reset();
     void handle_check_gates();
+    void handle_open_feeder();
+    void handle_close_feeder();
     void handle_bypass_toggle();
 
     // Action display (sidebar-relevant parts only)
@@ -186,6 +200,8 @@ class AmsOperationSidebar {
     static void on_unload_clicked_cb(lv_event_t* e);
     static void on_reset_clicked_cb(lv_event_t* e);
     static void on_check_gates_clicked_cb(lv_event_t* e);
+    static void on_open_feeder_clicked_cb(lv_event_t* e);
+    static void on_close_feeder_clicked_cb(lv_event_t* e);
     static void on_settings_clicked_cb(lv_event_t* e);
 };
 

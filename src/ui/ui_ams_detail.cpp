@@ -9,6 +9,7 @@
 #include "ui_utils.h"
 
 #include "ams_state.h"
+#include "ams_types.h"
 #include "printer_detector.h"
 #include "ui/ams_drawing_utils.h"
 
@@ -238,7 +239,7 @@ static void ams_detail_add_slot_press_feedback(lv_obj_t* slot) {
 
 AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_widgets[],
                                             int max_slots, int unit_index, lv_event_cb_t click_cb,
-                                            void* user_data) {
+                                            void* user_data, lv_event_cb_t long_press_cb) {
     AmsDetailSlotResult result;
 
     if (!w.slot_grid)
@@ -281,6 +282,9 @@ AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_
         slot_widgets[i] = slot;
         lv_obj_set_user_data(slot, reinterpret_cast<void*>(static_cast<intptr_t>(global_index)));
         lv_obj_add_event_cb(slot, click_cb, LV_EVENT_CLICKED, user_data);
+        if (long_press_cb) {
+            lv_obj_add_event_cb(slot, long_press_cb, LV_EVENT_LONG_PRESSED, user_data);
+        }
 
         // Add visual press feedback (opacity flash on touch)
         ams_detail_add_slot_press_feedback(slot);
@@ -358,7 +362,7 @@ void ams_detail_update_tray(AmsDetailWidgets& w) {
 
     // Tool changers don't have a physical tray/housing
     auto* backend = AmsState::instance().get_backend(0);
-    if (backend && backend->get_type() == AmsType::TOOL_CHANGER) {
+    if (backend && is_tool_changer(backend->get_type())) {
         lv_obj_add_flag(w.slot_tray, LV_OBJ_FLAG_HIDDEN);
         return;
     }

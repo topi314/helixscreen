@@ -184,6 +184,16 @@ void ui_filament_path_canvas_set_slot_callback(lv_obj_t* obj, filament_path_slot
                                                void* user_data);
 
 /**
+ * @brief Set click callback for toolhead selection (parallel / tool-changer topology)
+ *
+ * When the user taps a per-slot toolhead nozzle area, this callback is invoked.
+ * Spool/filament-line taps continue to use the slot callback.
+ */
+typedef void (*filament_path_toolhead_cb_t)(int slot_index, void* user_data);
+void ui_filament_path_canvas_set_toolhead_callback(lv_obj_t* obj, filament_path_toolhead_cb_t cb,
+                                                   void* user_data);
+
+/**
  * @brief Start segment transition animation
  *
  * Animates the filament tip moving from one segment to another.

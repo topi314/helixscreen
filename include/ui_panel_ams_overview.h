@@ -149,6 +149,12 @@ class AmsOverviewPanel : public PanelBase {
     // === Event Handling ===
     static void on_unit_card_clicked(lv_event_t* e);
     static void on_detail_slot_clicked(lv_event_t* e);
+    static void on_detail_slot_long_pressed(lv_event_t* e);
+    static void on_detail_path_slot_clicked(int local_slot_index, void* user_data);
+    static void on_detail_path_toolhead_clicked(int local_slot_index, void* user_data);
+
+    void handle_detail_slot_long_press(int global_slot_index, lv_point_t click_pt);
+    int detail_local_to_global_slot(int local_slot_index) const;
 };
 
 /**

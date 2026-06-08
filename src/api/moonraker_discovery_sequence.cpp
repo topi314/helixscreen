@@ -20,6 +20,7 @@
 #include "sensor_state.h"
 
 #include <algorithm>
+#include <cctype>
 #include <thread>
 #include <unordered_set>
 
@@ -1153,6 +1154,33 @@ json MoonrakerDiscoverySequence::build_subscription_objects(
         }
     }
 
+    // MedusaHC — pin_watch io.current_tool is authoritative for mounted/docked
+    // state; Tn.variable_active/color are Mainsail-sync side channels. Without
+    // these subscriptions notify_status_update never fires after bootstrap.
+    if (hw.mmu_type() == AmsType::MEDUSA_HC) {
+        static const json pin_watch_fields = json::array({"current_tool"});
+        static const json global_state_fields = json::array({"variable_max_tool"});
+        static const json t_macro_fields =
+            json::array({"variable_active", "variable_color"});
+        constexpr const char* kTnMacroPrefix = "gcode_macro T";
+
+        for (const auto& obj : hw.printer_objects()) {
+            if (obj.rfind("pin_watch", 0) == 0) {
+                subscription_objects[obj] = pin_watch_fields;
+            } else if (obj == "gcode_macro GLOBAL_STATE") {
+                subscription_objects[obj] = global_state_fields;
+            } else if (obj.rfind(kTnMacroPrefix, 0) == 0) {
+                const std::string suffix = obj.substr(std::char_traits<char>::length(kTnMacroPrefix));
+                if (!suffix.empty() &&
+                    std::all_of(suffix.begin(), suffix.end(), [](unsigned char c) {
+                        return std::isdigit(c) != 0;
+                    })) {
+                    subscription_objects[obj] = t_macro_fields;
+                }
+            }
+        }
+    }
+
     // Firmware retraction. PrinterCalibrationState reads the four tunable
     // fields; the rest of the firmware_retraction object is static.
     if (hw.has_firmware_retraction()) {
@@ -1237,6 +1265,9 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     if (hw.has_tool_changer()) {
         spdlog::info("[Moonraker Client] Subscribing to toolchanger + {} tool objects",
                      hw.tool_names().size());
+    }
+    if (hw.mmu_type() == AmsType::MEDUSA_HC) {
+        spdlog::info("[Moonraker Client] Subscribing to MedusaHC pin_watch + Tn macros");
     }
 
     json subscribe_params = {{"objects", subscription_objects}};

@@ -1038,6 +1038,7 @@ class AmsState {
 
     // System-level subjects
     lv_subject_t ams_type_;
+    lv_subject_t ams_is_tool_changer_;
     lv_subject_t ams_action_;
     lv_subject_t current_slot_;
     lv_subject_t pending_target_slot_;

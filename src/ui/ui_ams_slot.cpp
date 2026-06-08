@@ -376,11 +376,19 @@ static void apply_current_slot_highlight(AmsSlotData* data, int current_slot) {
         return;
     }
 
-    // Also check filament_loaded to only highlight when actually loaded
-    lv_subject_t* loaded_subject = AmsState::instance().get_filament_loaded_subject();
-    bool filament_loaded = loaded_subject ? (lv_subject_get_int(loaded_subject) != 0) : false;
-
-    bool is_active = (current_slot == data->slot_index) && filament_loaded;
+    // Filament systems require filament_loaded; tool changers highlight the mounted tool.
+    bool is_active = (current_slot == data->slot_index);
+    if (is_active) {
+        auto* backend = AmsState::instance().get_backend();
+        const bool tool_changer =
+            backend && is_tool_changer(backend->get_type());
+        if (!tool_changer) {
+            lv_subject_t* loaded_subject = AmsState::instance().get_filament_loaded_subject();
+            bool filament_loaded =
+                loaded_subject ? (lv_subject_get_int(loaded_subject) != 0) : false;
+            is_active = filament_loaded;
+        }
+    }
 
     // Apply highlight to spool_container (not container) so it doesn't include label padding area
     lv_obj_t* highlight_target = data->spool_container ? data->spool_container : data->container;
@@ -407,8 +415,8 @@ static void apply_current_slot_highlight(AmsSlotData* data, int current_slot) {
         lv_obj_set_style_shadow_opa(highlight_target, LV_OPA_TRANSP, LV_PART_MAIN);
     }
 
-    spdlog::trace("[AmsSlot] Slot {} active={} (current_slot={}, loaded={})", data->slot_index,
-                  is_active, current_slot, filament_loaded);
+    spdlog::trace("[AmsSlot] Slot {} active={} (current_slot={})", data->slot_index, is_active,
+                  current_slot);
 }
 
 // Forward declaration (defined below in Animation section)
@@ -471,7 +479,7 @@ static void apply_tool_badge(AmsSlotData* data, int mapped_tool, bool is_overrid
 
     // Tool changers: badge is redundant with toolhead label below
     auto* backend = AmsState::instance().get_backend(0);
-    if (backend && backend->get_type() == AmsType::TOOL_CHANGER) {
+    if (backend && is_tool_changer(backend->get_type())) {
         lv_obj_add_flag(data->tool_badge_bg, LV_OBJ_FLAG_HIDDEN);
         return;
     }

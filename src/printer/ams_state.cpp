@@ -203,6 +203,7 @@ void AmsState::init_subjects(bool register_xml) {
 
     // System-level subjects
     INIT_SUBJECT_INT(ams_type, static_cast<int>(AmsType::NONE), subjects_, register_xml);
+    INIT_SUBJECT_INT(ams_is_tool_changer, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(ams_action, static_cast<int>(AmsAction::IDLE), subjects_, register_xml);
     INIT_SUBJECT_INT(current_slot, -1, subjects_, register_xml);
     INIT_SUBJECT_INT(pending_target_slot, -1, subjects_, register_xml);
@@ -683,6 +684,9 @@ void AmsState::clear_backends() {
     if (lv_subject_get_int(&active_backend_) != 0) {
         lv_subject_set_int(&active_backend_, 0);
     }
+    if (lv_subject_get_int(&ams_is_tool_changer_) != 0) {
+        lv_subject_set_int(&ams_is_tool_changer_, 0);
+    }
 }
 
 AmsBackend* AmsState::get_backend() const {
@@ -949,6 +953,10 @@ void AmsState::sync_from_backend() {
     int new_type = static_cast<int>(info.type);
     if (lv_subject_get_int(&ams_type_) != new_type) {
         lv_subject_set_int(&ams_type_, new_type);
+    }
+    int new_tool_changer = is_tool_changer(info.type) ? 1 : 0;
+    if (lv_subject_get_int(&ams_is_tool_changer_) != new_tool_changer) {
+        lv_subject_set_int(&ams_is_tool_changer_, new_tool_changer);
     }
     int new_action = static_cast<int>(info.action);
     if (lv_subject_get_int(&ams_action_) != new_action) {
