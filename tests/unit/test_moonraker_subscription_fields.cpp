@@ -548,10 +548,7 @@ TEST_CASE("Subscription: MCU objects narrow to PerformanceSource reads",
 TEST_CASE("MedusaHC subscription fields mirror AmsBackendMedusaHc parsers",
           "[subscription][medusahc]") {
     DiscoveryFixture fx;
-    fx.add("pin_watch io", {});
-    fx.add("gcode_macro GLOBAL_STATE", {});
-    fx.add("gcode_macro T0", {});
-    fx.add("gcode_macro T1", {});
+    fx.add("medusahc", {});
 
     PrinterDiscovery hw;
     hw.parse_objects(fx.all_objects);
@@ -561,9 +558,7 @@ TEST_CASE("MedusaHC subscription fields mirror AmsBackendMedusaHc parsers",
         hw, fx.heaters, fx.sensors, fx.fans, fx.leds, fx.afc_objects, fx.filament_sensors,
         fx.mcus);
 
-    REQUIRE(has_field(subs, "pin_watch io", "current_tool"));
-    REQUIRE(has_field(subs, "gcode_macro GLOBAL_STATE", "variable_max_tool"));
-    REQUIRE(has_field(subs, "gcode_macro T0", "variable_active"));
-    REQUIRE(has_field(subs, "gcode_macro T0", "variable_color"));
-    REQUIRE(has_field(subs, "gcode_macro T1", "variable_active"));
+    // The whole medusahc object is subscribed (null = all fields).
+    REQUIRE(subs.contains("medusahc"));
+    REQUIRE(subs["medusahc"].is_null());
 }

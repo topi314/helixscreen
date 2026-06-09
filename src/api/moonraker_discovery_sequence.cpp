@@ -1154,31 +1154,12 @@ json MoonrakerDiscoverySequence::build_subscription_objects(
         }
     }
 
-    // MedusaHC — pin_watch io.current_tool is authoritative for mounted/docked
-    // state; Tn.variable_active/color are Mainsail-sync side channels. Without
-    // these subscriptions notify_status_update never fires after bootstrap.
+    // MedusaHC — the [medusahc] Klipper module (Scripts/medusahc.py) is the
+    // single source of truth. Its get_status() exposes current_tool, tool_count,
+    // error/feeder_open flags and per-tool dock + offset fields. Subscribe to the
+    // whole object (nullptr = all fields) since the per-tool field set is dynamic.
     if (hw.mmu_type() == AmsType::MEDUSA_HC) {
-        static const json pin_watch_fields = json::array({"current_tool"});
-        static const json global_state_fields = json::array({"variable_max_tool"});
-        static const json t_macro_fields =
-            json::array({"variable_active", "variable_color"});
-        constexpr const char* kTnMacroPrefix = "gcode_macro T";
-
-        for (const auto& obj : hw.printer_objects()) {
-            if (obj.rfind("pin_watch", 0) == 0) {
-                subscription_objects[obj] = pin_watch_fields;
-            } else if (obj == "gcode_macro GLOBAL_STATE") {
-                subscription_objects[obj] = global_state_fields;
-            } else if (obj.rfind(kTnMacroPrefix, 0) == 0) {
-                const std::string suffix = obj.substr(std::char_traits<char>::length(kTnMacroPrefix));
-                if (!suffix.empty() &&
-                    std::all_of(suffix.begin(), suffix.end(), [](unsigned char c) {
-                        return std::isdigit(c) != 0;
-                    })) {
-                    subscription_objects[obj] = t_macro_fields;
-                }
-            }
-        }
+        subscription_objects["medusahc"] = nullptr;
     }
 
     // Firmware retraction. PrinterCalibrationState reads the four tunable

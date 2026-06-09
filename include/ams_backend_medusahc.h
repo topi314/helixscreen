@@ -48,27 +48,28 @@ class AmsBackendMedusaHc : public AmsSubscriptionBackend {
   protected:
     void on_started() override;
     void handle_status_update(const nlohmann::json& notification) override;
-    void bootstrap_from_config(const nlohmann::json& config);
     const char* backend_log_tag() const override {
         return "[AMS MedusaHC]";
     }
 
   private:
     struct ToolState {
-        bool active = false;
-        std::string color_hex;
+        bool docked = false;     ///< Tool is parked on its base (medusahc.tool{N}_docked)
+        std::string color_hex;   ///< User-assigned slot color (HelixScreen-side, set_slot_info)
     };
     void apply_status_snapshot(const nlohmann::json& status);
+    void apply_medusahc_object_locked(const nlohmann::json& obj, bool& changed);
     void ensure_tool_capacity_locked(int tool_count);
     void sync_system_info_locked();
     AmsError validate_slot_index_locked(int slot_index) const;
     static bool parse_boolish(const nlohmann::json& value);
     static std::optional<uint32_t> parse_color(const std::string& color);
-    static std::optional<int> parse_macro_index(const std::string& key);
+    static std::optional<int> parse_tool_docked_index(const std::string& key);
 
     std::vector<ToolState> tools_;
-    std::string pin_watch_object_; ///< Klipper object name, e.g. "pin_watch io"
-    int pin_watch_current_tool_ = -1; ///< Authoritative mounted tool from pin_watch (-1=none, -2=error)
-    int configured_max_tool_ = -1;
-    bool saw_global_state_ = false;
+    std::string medusahc_state_; ///< medusahc.state: changing/ready/error/uninitialized
+    int current_tool_ = -1; ///< medusahc.current_tool (-1=none on head, -2=sensor error)
+    int target_tool_ = -1;  ///< medusahc.target_tool (in-flight change target)
+    bool error_state_ = false;
+    bool feeder_open_ = false;
 };

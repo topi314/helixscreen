@@ -30,20 +30,18 @@ class RecordingMedusaHcBackend : public AmsBackendMedusaHc {
         return AmsErrorHelper::success();
     }
 
-    using AmsBackendMedusaHc::bootstrap_from_config;
     using AmsBackendMedusaHc::handle_status_update;
 };
 
-namespace {
-json medusahc_test_config(int max_tool) {
-    json cfg = json{{"pin_watch io", json::object()},
-                    {"gcode_macro GLOBAL_STATE", json{{"variable_max_tool", max_tool}}}};
-    for (int i = 0; i <= max_tool; ++i) {
-        cfg["gcode_macro T" + std::to_string(i)] = json::object();
+// Build a notify_status_update payload for the [medusahc] object. `current_tool`
+// uses MedusaHC's convention: -2 sensor error, -1 nothing on head, 0..N-1 mounted.
+json medusahc_status(int tool_count, int current_tool, json extra = json::object()) {
+    json mh = json{{"tool_count", tool_count}, {"current_tool", current_tool}};
+    for (auto it = extra.begin(); it != extra.end(); ++it) {
+        mh[it.key()] = it.value();
     }
-    return cfg;
+    return json{{"medusahc", mh}};
 }
-} // namespace
 } // namespace
 
 TEST_CASE("MedusaHC type identification", "[ams][medusahc]") {
@@ -56,9 +54,9 @@ TEST_CASE("MedusaHC type identification", "[ams][medusahc]") {
     REQUIRE(ams_type_from_string("medusahc") == AmsType::MEDUSA_HC);
 }
 
-TEST_CASE("MedusaHC config discovery", "[ams][medusahc][discovery]") {
+TEST_CASE("MedusaHC config discovery via [medusahc] section", "[ams][medusahc][discovery]") {
     PrinterDiscovery discovery;
-    discovery.parse_config_keys(json{{"pin_watch", json::object()}});
+    discovery.parse_config_keys(json{{"medusahc", json::object()}});
 
     REQUIRE(discovery.has_mmu());
     REQUIRE(discovery.mmu_type() == AmsType::MEDUSA_HC);
@@ -69,24 +67,22 @@ TEST_CASE("MedusaHC config discovery", "[ams][medusahc][discovery]") {
     REQUIRE(systems[0].name == "MedusaHC");
 }
 
-TEST_CASE("MedusaHC objects.list discovery via Tn macros", "[ams][medusahc][discovery]") {
+TEST_CASE("MedusaHC objects.list discovery via medusahc object", "[ams][medusahc][discovery]") {
     PrinterDiscovery discovery;
-    discovery.parse_objects(json::array({"gcode_macro GLOBAL_STATE", "gcode_macro T0",
-                                         "gcode_macro T1", "extruder", "toolhead"}));
+    discovery.parse_objects(json::array({"medusahc", "extruder", "toolhead"}));
+
+    REQUIRE(discovery.has_mmu());
+    REQUIRE(discovery.mmu_type() == AmsType::MEDUSA_HC);
 
     const auto& systems = discovery.detected_ams_systems();
     REQUIRE(systems.size() == 1);
     REQUIRE(systems[0].type == AmsType::MEDUSA_HC);
 }
 
-TEST_CASE("MedusaHC parses gcode_macro Tn status", "[ams][medusahc][status]") {
+TEST_CASE("MedusaHC parses medusahc object status", "[ams][medusahc][status]") {
     RecordingMedusaHcBackend backend;
 
-    backend.handle_status_update(json{
-        {"gcode_macro GLOBAL_STATE", json{{"variable_max_tool", 1}}},
-        {"gcode_macro T0", json{{"variable_active", 1}, {"variable_color", "FF0000"}}},
-        {"gcode_macro T1", json{{"variable_active", 0}, {"variable_color", "00FF00"}}},
-    });
+    backend.handle_status_update(medusahc_status(2, 0));
 
     auto info = backend.get_system_info();
     REQUIRE(info.type == AmsType::MEDUSA_HC);
@@ -102,84 +98,81 @@ TEST_CASE("MedusaHC parses gcode_macro Tn status", "[ams][medusahc][status]") {
     REQUIRE(info.units[0].slots.size() == 2);
     REQUIRE(info.units[0].slots[0].status == SlotStatus::LOADED);
     REQUIRE(info.units[0].slots[1].status == SlotStatus::AVAILABLE);
-    REQUIRE(info.units[0].slots[0].color_rgb == 0xFF0000);
-    REQUIRE(info.units[0].slots[1].color_rgb == 0x00FF00);
 }
 
 TEST_CASE("MedusaHC unwraps notify_status_update params", "[ams][medusahc][status]") {
     RecordingMedusaHcBackend backend;
 
-    backend.handle_status_update(json{
-        {"params",
-         json::array({json{{"gcode_macro T0", json{{"variable_active", 1}, {"variable_color", "AABBCC"}}}},
-                      0})}});
+    backend.handle_status_update(
+        json{{"params", json::array({medusahc_status(2, 1), 0})}});
 
     auto info = backend.get_system_info();
-    REQUIRE(info.total_slots == 1);
-    REQUIRE(info.current_tool == 0);
-    REQUIRE(info.units[0].slots[0].color_rgb == 0xAABBCC);
+    REQUIRE(info.total_slots == 2);
+    REQUIRE(info.current_tool == 1);
+    REQUIRE(info.units[0].slots[1].status == SlotStatus::LOADED);
+}
+
+TEST_CASE("MedusaHC applies incremental field updates", "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+
+    // Full snapshot first (tool_count present).
+    backend.handle_status_update(medusahc_status(3, 0));
+    REQUIRE(backend.get_system_info().current_tool == 0);
+
+    // Subsequent notifications only carry the changed field.
+    backend.handle_status_update(json{{"medusahc", json{{"current_tool", 2}}}});
+    auto info = backend.get_system_info();
+    REQUIRE(info.total_slots == 3);
+    REQUIRE(info.current_tool == 2);
+    REQUIRE(info.units[0].slots[2].status == SlotStatus::LOADED);
+    REQUIRE(info.units[0].slots[0].status == SlotStatus::AVAILABLE);
 }
 
 TEST_CASE("MedusaHC is tool-switch only (no load/swap preheat path)", "[ams][medusahc]") {
     RecordingMedusaHcBackend backend;
-    backend.handle_status_update(json{
-        {"gcode_macro T0", json{{"variable_active", 1}, {"variable_color", ""}}},
-    });
+    backend.handle_status_update(medusahc_status(1, 0));
 
     AmsSystemInfo info = backend.get_system_info();
     REQUIRE_FALSE(backend.needs_unload_before_load(info));
 }
 
-TEST_CASE("MedusaHC uses pin_watch current_tool for active slot", "[ams][medusahc][status]") {
+TEST_CASE("MedusaHC current_tool -1 clears active tool", "[ams][medusahc][status]") {
     RecordingMedusaHcBackend backend;
-    backend.bootstrap_from_config(medusahc_test_config(2));
 
-    backend.handle_status_update(json{
-        {"gcode_macro GLOBAL_STATE", json{{"variable_max_tool", 2}}},
-        {"gcode_macro T0", json{{"variable_active", 0}, {"variable_color", "FF0000"}}},
-        {"gcode_macro T1", json{{"variable_active", 0}, {"variable_color", "00FF00"}}},
-        {"gcode_macro T2", json{{"variable_active", 0}, {"variable_color", "0000FF"}}},
-        {"pin_watch io", json{{"current_tool", 2}}},
-    });
-
-    auto info = backend.get_system_info();
-    REQUIRE(info.current_tool == 2);
-    REQUIRE(info.current_slot == 2);
-    REQUIRE(info.filament_loaded);
-    REQUIRE(info.units[0].slots[2].status == SlotStatus::LOADED);
-    REQUIRE(info.units[0].slots[0].status == SlotStatus::AVAILABLE);
-    REQUIRE(info.units[0].slots[1].status == SlotStatus::AVAILABLE);
-}
-
-TEST_CASE("MedusaHC matches pin_watch object by prefix", "[ams][medusahc][status]") {
-    RecordingMedusaHcBackend backend;
-    backend.bootstrap_from_config(medusahc_test_config(1));
-
-    backend.handle_status_update(json{{"pin_watch io", json{{"current_tool", 1}}}});
-    REQUIRE(backend.get_system_info().current_tool == 1);
-}
-
-TEST_CASE("MedusaHC pin_watch -1 clears active tool highlight state", "[ams][medusahc][status]") {
-    RecordingMedusaHcBackend backend;
-    backend.bootstrap_from_config(medusahc_test_config(1));
-
-    backend.handle_status_update(json{
-        {"gcode_macro T0", json{{"variable_active", 1}, {"variable_color", ""}}},
-        {"pin_watch io", json{{"current_tool", 0}}},
-    });
+    backend.handle_status_update(medusahc_status(2, 0));
     REQUIRE(backend.get_system_info().current_tool == 0);
 
-    backend.handle_status_update(json{{"pin_watch io", json{{"current_tool", -1}}}});
+    backend.handle_status_update(json{{"medusahc", json{{"current_tool", -1}}}});
     auto info = backend.get_system_info();
     REQUIRE(info.current_tool == -1);
     REQUIRE(info.current_slot == -1);
     REQUIRE_FALSE(info.filament_loaded);
 }
 
+TEST_CASE("MedusaHC sensor error (-2) reports no mounted tool", "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+
+    backend.handle_status_update(medusahc_status(2, -2, json{{"error", true}}));
+    auto info = backend.get_system_info();
+    REQUIRE(info.total_slots == 2);
+    REQUIRE(info.current_tool == -1);
+    REQUIRE_FALSE(info.filament_loaded);
+}
+
+TEST_CASE("MedusaHC tracks per-tool dock sensors", "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+
+    backend.handle_status_update(medusahc_status(
+        2, -1, json{{"tool0_docked", true}, {"tool1_docked", false}}));
+    auto info = backend.get_system_info();
+    REQUIRE(info.total_slots == 2);
+    REQUIRE(info.current_tool == -1);
+}
+
 TEST_CASE("MedusaHC unload_filament emits DROP_TOOL", "[ams][medusahc][gcode]") {
     RecordingMedusaHcBackend backend;
     backend.set_running_for_test();
-    backend.bootstrap_from_config(medusahc_test_config(1));
+    backend.handle_status_update(medusahc_status(1, 0));
 
     auto result = backend.unload_filament();
     REQUIRE(result);
@@ -189,7 +182,7 @@ TEST_CASE("MedusaHC unload_filament emits DROP_TOOL", "[ams][medusahc][gcode]") 
 
 TEST_CASE("MedusaHC set_slot_info updates local spool metadata", "[ams][medusahc]") {
     RecordingMedusaHcBackend backend;
-    backend.bootstrap_from_config(medusahc_test_config(1));
+    backend.handle_status_update(medusahc_status(1, -1));
 
     SlotInfo updated;
     updated.color_rgb = 0x112233;
@@ -235,15 +228,55 @@ TEST_CASE("MedusaHC change_tool emits Tn", "[ams][medusahc][gcode]") {
     RecordingMedusaHcBackend backend;
     backend.set_running_for_test();
 
-    backend.handle_status_update(json{
-        {"gcode_macro GLOBAL_STATE", json{{"variable_max_tool", 2}}},
-        {"gcode_macro T0", json{{"variable_active", 0}, {"variable_color", ""}}},
-        {"gcode_macro T1", json{{"variable_active", 0}, {"variable_color", ""}}},
-        {"gcode_macro T2", json{{"variable_active", 0}, {"variable_color", ""}}},
-    });
+    backend.handle_status_update(medusahc_status(3, -1));
 
     auto result = backend.change_tool(2);
     REQUIRE(result);
     REQUIRE(backend.sent_gcodes.size() == 1);
     REQUIRE(backend.sent_gcodes[0] == "T2");
+}
+
+TEST_CASE("MedusaHC action follows medusahc.state (never stuck at selecting)",
+          "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+    backend.set_running_for_test();
+    backend.handle_status_update(medusahc_status(3, 0, json{{"state", "ready"}}));
+
+    REQUIRE(backend.change_tool(2));
+    REQUIRE(backend.get_system_info().action == AmsAction::SELECTING);
+
+    // "changing" keeps the spinner up.
+    backend.handle_status_update(json{{"medusahc", json{{"state", "changing"}}}});
+    REQUIRE(backend.get_system_info().action == AmsAction::SELECTING);
+
+    // Settling to "ready" clears it, even though the change ended on tool 2.
+    backend.handle_status_update(
+        json{{"medusahc", json{{"state", "ready"}, {"current_tool", 2}}}});
+    REQUIRE(backend.get_system_info().action == AmsAction::IDLE);
+}
+
+TEST_CASE("MedusaHC error state clears the in-progress spinner", "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+    backend.set_running_for_test();
+    backend.handle_status_update(medusahc_status(3, -1, json{{"state", "ready"}}));
+
+    REQUIRE(backend.change_tool(1));
+    REQUIRE(backend.get_system_info().action == AmsAction::SELECTING);
+
+    // A failed change ends in error (current_tool stays -1) — must not hang.
+    backend.handle_status_update(
+        json{{"medusahc", json{{"state", "error"}, {"error", true}, {"current_tool", -1}}}});
+    REQUIRE(backend.get_system_info().action == AmsAction::IDLE);
+}
+
+TEST_CASE("MedusaHC reflects externally-initiated change as SELECTING",
+          "[ams][medusahc][status]") {
+    RecordingMedusaHcBackend backend;
+    backend.handle_status_update(medusahc_status(3, 0, json{{"state", "ready"}}));
+    REQUIRE(backend.get_system_info().action == AmsAction::IDLE);
+
+    // A change started from Mainsail/console reports state=changing without us
+    // setting an optimistic action — surface it as SELECTING.
+    backend.handle_status_update(json{{"medusahc", json{{"state", "changing"}}}});
+    REQUIRE(backend.get_system_info().action == AmsAction::SELECTING);
 }

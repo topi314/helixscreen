@@ -352,13 +352,16 @@ class PrinterDiscovery {
             else if (name == "filament_detect") {
                 has_snapmaker_ = true;
             }
-            // // Tool changer detection
-            // else if (name == "toolchanger") {
-            //     has_tool_changer_ = true;
-            // }
-            // MedusaHC detection
+            // Tool changer detection (klipper-toolchanger). MedusaHC layers on top
+            // of this but is detected by its own [medusahc] object below, so a bare
+            // toolchanger is a generic parallel tool changer.
             else if (name == "toolchanger") {
-                has_medusa_hc_ = true;
+                has_tool_changer_ = true;
+            }
+            // MedusaHC Klipper module ([medusahc] config section / objects.list entry)
+            else if (is_medusa_hc_section_key(name)) {
+                has_mmu_ = true;
+                mmu_type_ = AmsType::MEDUSA_HC;
             }
             // MedusaHC pin-watch tool changer detection ([pin_watch io], etc.)
             else if (name.rfind("pin_watch", 0) == 0) {
@@ -570,9 +573,9 @@ class PrinterDiscovery {
                 spdlog::debug("[PrinterDiscovery] screws_tilt_adjust detected from config");
             }
 
-            // MedusaHC exposes its pin_watch section in configfile, which is
-            // the earliest reliable signal that the Tn macro state machine is present.
-            if (key == "pin_watch" || key.rfind("pin_watch ", 0) == 0) {
+            // MedusaHC: [medusahc] Klipper module section and/or [pin_watch io] companion.
+            if (is_medusa_hc_section_key(key) || key == "pin_watch" ||
+                key.rfind("pin_watch ", 0) == 0) {
                 has_mmu_ = true;
                 mmu_type_ = AmsType::MEDUSA_HC;
                 spdlog::debug("[PrinterDiscovery] MedusaHC detected from config: {}", key);
@@ -1303,8 +1306,12 @@ class PrinterDiscovery {
     std::vector<std::pair<std::string, std::string>> mcu_versions_;
     std::vector<std::string> printer_objects_;
 
+    [[nodiscard]] static bool is_medusa_hc_section_key(const std::string& key) {
+        return key == "medusahc" || key.rfind("medusahc ", 0) == 0;
+    }
+
     [[nodiscard]] static bool is_medusa_tool_macro_name(const std::string& macro_name) {
-        if (macro_name == "GLOBAL_STATE") {
+        if (macro_name == "_GLOBAL_STATE" || macro_name == "GLOBAL_STATE") {
             return true;
         }
         if (macro_name.empty() || macro_name[0] != 'T') {

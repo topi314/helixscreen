@@ -17,13 +17,8 @@
 using namespace helix;
 
 namespace {
-constexpr const char* kGlobalStateMacro = "gcode_macro GLOBAL_STATE";
-constexpr const char* kMacroPrefix = "gcode_macro T";
-constexpr const char* kColorVariable = "variable_color";
-constexpr const char* kActiveVariable = "variable_active";
-constexpr const char* kMaxToolVariable = "variable_max_tool";
-constexpr const char* kPinWatchCurrentTool = "current_tool";
-constexpr const char* kPinWatchPrefix = "pin_watch";
+// The [medusahc] Klipper module exposes everything through one status object.
+constexpr const char* kMedusaObject = "medusahc";
 
 std::string slot_color_to_macro_hex(uint32_t color_rgb) {
     std::ostringstream os;
@@ -104,7 +99,7 @@ AmsBackendMedusaHc::get_tool_mapping_capabilities() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return {.supported = system_info_.total_slots > 0,
             .editable = false,
-            .description = "MedusaHC Tn macros"};
+            .description = "MedusaHC tools"};
 }
 
 std::vector<int> AmsBackendMedusaHc::get_tool_mapping() const {
@@ -121,10 +116,6 @@ AmsError AmsBackendMedusaHc::unload_filament(int slot_index) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         system_info_.action = AmsAction::UNLOADING;
-        if (!pin_watch_object_.empty()) {
-            pin_watch_current_tool_ = -1;
-            sync_system_info_locked();
-        }
     }
     emit_event(EVENT_STATE_CHANGED);
     return execute_gcode("DROP_TOOL");
@@ -290,19 +281,28 @@ AmsError AmsBackendMedusaHc::execute_device_action(const std::string& action_id,
 }
 
 void AmsBackendMedusaHc::on_started() {
-    if (!api_) {
-        spdlog::warn("{} No API available for bootstrap snapshot", backend_log_tag());
+    if (!client_) {
+        spdlog::warn("{} No client available for bootstrap snapshot", backend_log_tag());
         return;
     }
 
+    // One-shot query of the medusahc object so we have full state before the
+    // first notify_status_update arrives. nullptr = all fields.
     auto token = lifetime_.token();
-    api_->query_configfile(
-        [this, token](nlohmann::json config) {
-            token.defer("AmsBackendMedusaHc::bootstrap_from_config",
-                        [this, config = std::move(config)]() { bootstrap_from_config(config); });
+    client_->send_jsonrpc(
+        "printer.objects.query", json{{"objects", json{{kMedusaObject, nullptr}}}},
+        [this, token](nlohmann::json response) {
+            token.defer("AmsBackendMedusaHc::bootstrap_status",
+                        [this, response = std::move(response)]() {
+                            if (response.contains("result") &&
+                                response["result"].contains("status") &&
+                                response["result"]["status"].is_object()) {
+                                apply_status_snapshot(response["result"]["status"]);
+                            }
+                        });
         },
         [this](const MoonrakerError& err) {
-            spdlog::warn("{} Config bootstrap failed: {}", backend_log_tag(), err.message);
+            spdlog::debug("{} Initial medusahc query failed: {}", backend_log_tag(), err.message);
         });
 }
 
@@ -319,168 +319,22 @@ void AmsBackendMedusaHc::handle_status_update(const nlohmann::json& notification
     apply_status_snapshot(*status);
 }
 
-void AmsBackendMedusaHc::bootstrap_from_config(const nlohmann::json& config) {
-    if (!config.is_object()) {
-        return;
-    }
-
-    int max_tool = -1;
-    bool saw_global = false;
-    nlohmann::json query_objects = nlohmann::json::object();
-
-    for (const auto& [key, value] : config.items()) {
-        if (key.rfind(kPinWatchPrefix, 0) == 0) {
-            pin_watch_object_ = key;
-            query_objects[key] = nlohmann::json::array({kPinWatchCurrentTool});
-            continue;
-        }
-
-        if (key == kGlobalStateMacro) {
-            saw_global = true;
-            query_objects[key] = nlohmann::json::array({kMaxToolVariable});
-            continue;
-        }
-
-        auto idx = parse_macro_index(key);
-        if (!idx) {
-            continue;
-        }
-
-        max_tool = std::max(max_tool, *idx);
-        query_objects[key] = nlohmann::json::array({kActiveVariable, kColorVariable});
-    }
-
-    int bootstrapped_slots = 0;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        configured_max_tool_ = max_tool;
-        saw_global_state_ = saw_global;
-        ensure_tool_capacity_locked(max_tool >= 0 ? max_tool + 1 : 0);
-        sync_system_info_locked();
-        bootstrapped_slots = system_info_.total_slots;
-    }
-
-    if (bootstrapped_slots > 0) {
-        emit_event(EVENT_STATE_CHANGED);
-    }
-
-    if (query_objects.empty() || !client_) {
-        return;
-    }
-
-    auto token = lifetime_.token();
-    client_->send_jsonrpc(
-        "printer.objects.query", json{{"objects", std::move(query_objects)}},
-        [this, token](nlohmann::json response) {
-            token.defer("AmsBackendMedusaHc::bootstrap_status",
-                        [this, response = std::move(response)]() {
-                            if (response.contains("result") && response["result"].contains("status") &&
-                                response["result"]["status"].is_object()) {
-                                apply_status_snapshot(response["result"]["status"]);
-                            }
-                        });
-        },
-        [this](const MoonrakerError& err) {
-            spdlog::debug("{} Initial macro query failed: {}", backend_log_tag(), err.message);
-        });
-}
-
 void AmsBackendMedusaHc::apply_status_snapshot(const nlohmann::json& status) {
     if (!status.is_object()) {
         return;
     }
 
-    bool changed = false;
-    int observed_max = -1;
-    int previous_current_tool = -1;
+    auto it = status.find(kMedusaObject);
+    if (it == status.end() || !it->is_object()) {
+        return;
+    }
 
+    bool changed = false;
+    int previous_current_tool = -1;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         previous_current_tool = system_info_.current_tool;
-
-        for (const auto& [key, value] : status.items()) {
-            if (key.rfind(kPinWatchPrefix, 0) == 0) {
-                if (pin_watch_object_.empty()) {
-                    pin_watch_object_ = key;
-                }
-                if (value.is_object()) {
-                    auto it = value.find(kPinWatchCurrentTool);
-                    if (it != value.end() && it->is_number_integer()) {
-                        int ct = it->get<int>();
-                        if (pin_watch_current_tool_ != ct) {
-                            pin_watch_current_tool_ = ct;
-                            changed = true;
-                            spdlog::debug("{} pin_watch current_tool → {}", backend_log_tag(),
-                                          ct);
-                        }
-                    }
-                }
-                continue;
-            }
-
-            if (key == kGlobalStateMacro) {
-                if (value.is_object()) {
-                    auto it = value.find(kMaxToolVariable);
-                    if (it != value.end() && it->is_number_integer()) {
-                        observed_max = std::max(observed_max, it->get<int>());
-                        saw_global_state_ = true;
-                    }
-                }
-                continue;
-            }
-
-            auto idx = parse_macro_index(key);
-            if (!idx) {
-                continue;
-            }
-
-            observed_max = std::max(observed_max, *idx);
-            if (!value.is_object()) {
-                continue;
-            }
-
-            ensure_tool_capacity_locked(std::max(static_cast<int>(tools_.size()), *idx + 1));
-
-            auto& tool = tools_[static_cast<size_t>(*idx)];
-            bool tool_changed = false;
-
-            auto active_it = value.find(kActiveVariable);
-            if (active_it != value.end()) {
-                bool active = parse_boolish(*active_it);
-                if (tool.active != active) {
-                    tool.active = active;
-                    tool_changed = true;
-                }
-            }
-
-            auto color_it = value.find(kColorVariable);
-            if (color_it != value.end()) {
-                std::string color;
-                if (color_it->is_string()) {
-                    color = color_it->get<std::string>();
-                } else if (color_it->is_number_integer()) {
-                    std::ostringstream os;
-                    os << std::uppercase << std::hex << color_it->get<int>();
-                    color = os.str();
-                }
-                if (tool.color_hex != color) {
-                    tool.color_hex = std::move(color);
-                    tool_changed = true;
-                }
-            }
-
-            changed = changed || tool_changed;
-        }
-
-        if (observed_max >= 0 && observed_max + 1 > static_cast<int>(tools_.size())) {
-            ensure_tool_capacity_locked(observed_max + 1);
-            changed = true;
-        }
-
-        if (configured_max_tool_ < observed_max) {
-            configured_max_tool_ = observed_max;
-        }
-
+        apply_medusahc_object_locked(*it, changed);
         sync_system_info_locked();
         changed = changed || (system_info_.current_tool != previous_current_tool);
     }
@@ -488,6 +342,80 @@ void AmsBackendMedusaHc::apply_status_snapshot(const nlohmann::json& status) {
     if (changed) {
         emit_event(EVENT_STATE_CHANGED);
         emit_event(EVENT_TOOL_CHANGED);
+    }
+}
+
+void AmsBackendMedusaHc::apply_medusahc_object_locked(const nlohmann::json& obj, bool& changed) {
+    // Subscriptions are incremental — only changed fields arrive. tool_count is
+    // sent on the first (full) snapshot, so grow capacity before per-tool fields.
+    auto count_it = obj.find("tool_count");
+    if (count_it != obj.end() && count_it->is_number_integer()) {
+        int tool_count = count_it->get<int>();
+        if (tool_count > static_cast<int>(tools_.size())) {
+            ensure_tool_capacity_locked(tool_count);
+            changed = true;
+        }
+    }
+
+    auto state_it = obj.find("state");
+    if (state_it != obj.end() && state_it->is_string()) {
+        std::string st = state_it->get<std::string>();
+        if (medusahc_state_ != st) {
+            medusahc_state_ = st;
+            changed = true;
+            spdlog::debug("{} state → {}", backend_log_tag(), medusahc_state_);
+        }
+    }
+
+    auto ct_it = obj.find("current_tool");
+    if (ct_it != obj.end() && ct_it->is_number_integer()) {
+        int ct = ct_it->get<int>();
+        if (current_tool_ != ct) {
+            current_tool_ = ct;
+            changed = true;
+            spdlog::debug("{} current_tool → {}", backend_log_tag(), ct);
+        }
+    }
+
+    auto tt_it = obj.find("target_tool");
+    if (tt_it != obj.end() && tt_it->is_number_integer()) {
+        target_tool_ = tt_it->get<int>();
+    }
+
+    auto err_it = obj.find("error");
+    if (err_it != obj.end()) {
+        bool err = parse_boolish(*err_it);
+        if (error_state_ != err) {
+            error_state_ = err;
+            changed = true;
+        }
+    }
+
+    auto feeder_it = obj.find("feeder_open");
+    if (feeder_it != obj.end()) {
+        bool open = parse_boolish(*feeder_it);
+        if (feeder_open_ != open) {
+            feeder_open_ = open;
+            changed = true;
+        }
+    }
+
+    // Per-tool dock sensors: medusahc.tool{N}_docked
+    for (const auto& [key, value] : obj.items()) {
+        auto idx = parse_tool_docked_index(key);
+        if (!idx) {
+            continue;
+        }
+        if (*idx + 1 > static_cast<int>(tools_.size())) {
+            ensure_tool_capacity_locked(*idx + 1);
+            changed = true;
+        }
+        bool docked = parse_boolish(value);
+        auto& tool = tools_[static_cast<size_t>(*idx)];
+        if (tool.docked != docked) {
+            tool.docked = docked;
+            changed = true;
+        }
     }
 }
 
@@ -532,28 +460,14 @@ void AmsBackendMedusaHc::sync_system_info_locked() {
     unit.connected = true;
     unit.first_slot_global_index = 0;
 
-    // pin_watch io.current_tool is authoritative for MedusaHC; Tn.variable_active is
-    // only a Mainsail/Fluidd UI sync side-effect and may lag or be absent.
-    int active_tool = -1;
-    if (!pin_watch_object_.empty()) {
-        if (pin_watch_current_tool_ >= 0) {
-            active_tool = pin_watch_current_tool_;
-        }
-    } else {
-        for (size_t i = 0; i < tools_.size(); ++i) {
-            if (tools_[i].active && active_tool < 0) {
-                active_tool = static_cast<int>(i);
-            }
-        }
-    }
+    // medusahc.current_tool is authoritative: -2 = sensor error, -1 = nothing on
+    // head, 0..N-1 = mounted tool index.
+    int active_tool = current_tool_ >= 0 ? current_tool_ : -1;
 
     for (size_t i = 0; i < tools_.size(); ++i) {
         auto& tool = tools_[i];
         auto& slot = unit.slots[i];
         const bool is_active = (active_tool >= 0 && static_cast<int>(i) == active_tool);
-        if (!pin_watch_object_.empty()) {
-            tool.active = is_active;
-        }
         slot.slot_index = static_cast<int>(i);
         slot.global_index = static_cast<int>(i);
         slot.mapped_tool = static_cast<int>(i);
@@ -576,8 +490,25 @@ void AmsBackendMedusaHc::sync_system_info_locked() {
     system_info_.current_tool = active_tool;
     system_info_.current_slot = active_tool;
     system_info_.filament_loaded = (active_tool >= 0);
-    if ((system_info_.action == AmsAction::SELECTING && active_tool >= 0) ||
-        (system_info_.action == AmsAction::UNLOADING && active_tool < 0)) {
+
+    // Drive the in-progress action from medusahc.state. The orchestrator reports
+    // "changing" for the whole SET/DROP sequence and "ready"/"error" when it
+    // settles, so any terminal state clears the spinner — never get stuck.
+    // Fall back to the current_tool heuristic only when state hasn't arrived yet
+    // (e.g. an incremental update that carried just current_tool).
+    if (!medusahc_state_.empty()) {
+        if (medusahc_state_ == "changing") {
+            // Keep the optimistic SELECTING/UNLOADING the action setters chose;
+            // if none is in flight, treat it as a tool selection.
+            if (system_info_.action == AmsAction::IDLE) {
+                system_info_.action = AmsAction::SELECTING;
+            }
+        } else {
+            // "ready", "error", "uninitialized" → no longer in progress.
+            system_info_.action = AmsAction::IDLE;
+        }
+    } else if ((system_info_.action == AmsAction::SELECTING && active_tool >= 0) ||
+               (system_info_.action == AmsAction::UNLOADING && active_tool < 0)) {
         system_info_.action = AmsAction::IDLE;
     }
 }
@@ -621,19 +552,25 @@ std::optional<uint32_t> AmsBackendMedusaHc::parse_color(const std::string& color
     }
 }
 
-std::optional<int> AmsBackendMedusaHc::parse_macro_index(const std::string& key) {
-    if (key.rfind(kMacroPrefix, 0) != 0) {
+std::optional<int> AmsBackendMedusaHc::parse_tool_docked_index(const std::string& key) {
+    // Match "tool{N}_docked" → N.
+    constexpr const char* kPrefix = "tool";
+    constexpr const char* kSuffix = "_docked";
+    const size_t prefix_len = std::char_traits<char>::length(kPrefix);
+    const size_t suffix_len = std::char_traits<char>::length(kSuffix);
+    if (key.size() <= prefix_len + suffix_len || key.rfind(kPrefix, 0) != 0) {
         return std::nullopt;
     }
-    std::string suffix = key.substr(std::char_traits<char>::length(kMacroPrefix));
-    if (suffix.empty()) {
+    if (key.compare(key.size() - suffix_len, suffix_len, kSuffix) != 0) {
         return std::nullopt;
     }
-    if (!std::all_of(suffix.begin(), suffix.end(), [](unsigned char c) { return std::isdigit(c); })) {
+    std::string digits = key.substr(prefix_len, key.size() - prefix_len - suffix_len);
+    if (digits.empty() ||
+        !std::all_of(digits.begin(), digits.end(), [](unsigned char c) { return std::isdigit(c); })) {
         return std::nullopt;
     }
     try {
-        return std::stoi(suffix);
+        return std::stoi(digits);
     } catch (...) {
         return std::nullopt;
     }
